@@ -1,86 +1,184 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import joblib
 import json
+import logging
+import math
 import os
+import warnings
 from datetime import datetime, timedelta
 from sklearn.cluster import DBSCAN
+from sklearn.exceptions import InconsistentVersionWarning
+from sklearn.utils.validation import check_is_fitted
 
+logger = logging.getLogger(__name__)
 app = FastAPI(title="Livestock Health Surveillance AI & Decision Support API")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.abspath(os.path.expanduser(os.environ.get("ML_MODEL_DIR", os.path.join(BASE_DIR, "models"))))
+BASE_DIR = Path(__file__).resolve().parent
+
+
+def resolve_model_dir():
+    # Blank overrides use the bundled artifacts; relative overrides are anchored
+    # to this file, never to Render's/process's working directory.
+    configured = (os.environ.get("ML_MODEL_DIR") or "").strip()
+    path = Path(configured).expanduser() if configured else BASE_DIR / "models"
+    return (path if path.is_absolute() else BASE_DIR / path).resolve()
+
+
+MODEL_DIR = resolve_model_dir()
 configured_origins = [
-    origin.strip() for origin in os.environ.get("ML_CORS_ORIGINS", os.environ.get("APP_BASE_URL", "")).split(",")
-    if origin.strip()
+    origin.strip() for origin in (
+        os.environ.get("ML_CORS_ORIGINS") or os.environ.get("APP_BASE_URL") or ""
+    ).split(",") if origin.strip()
 ]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=configured_origins,
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Authorization"],
-)
-
-# Load existing models safely
-def load_models():
-    try:
-        rf_model = joblib.load(os.path.join(MODEL_DIR, "rf_model.pkl"))
-        scaler = joblib.load(os.path.join(MODEL_DIR, "scaler.pkl"))
-        iso_model = joblib.load(os.path.join(MODEL_DIR, "iso_model.pkl"))
-        with open(os.path.join(MODEL_DIR, "metrics.json"), "r", encoding="utf-8") as f:
-            metrics = json.load(f)
-        return rf_model, scaler, iso_model, metrics
-    except Exception as e:
-        print(f"Error loading models: {e}")
-        return None, None, None, None
-
-rf_model, scaler, iso_model, metrics = load_models()
+# Normal application requests go through Flask, so no browser CORS is needed
+# unless an operator explicitly configures trusted origins.
+if configured_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=configured_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "Authorization"],
+    )
 
 FEATURE_COLS = [
     "animal_population", "affected_animals", "new_cases", "deaths",
     "vaccination_coverage", "temperature", "rainfall", "humidity",
     "animal_density", "previous_cases", "cases_growth_rate"
 ]
+OUTBREAK_FEATURE_COLS = ["new_cases", "cases_growth_rate", "deaths"]
 
 
-@app.get("/health")
-@app.get("/api/health")
-async def health():
-    models_ready = all(model is not None for model in (rf_model, scaler, iso_model)) and metrics is not None
-    if not models_ready:
-        raise HTTPException(status_code=503, detail="One or more trained model artifacts are unavailable.")
+def load_models():
+    """Load only the existing trained artifacts, retaining any that are usable."""
+    loaded = []
+    for filename, feature_cols, named_features in (
+        ("rf_model.pkl", FEATURE_COLS, False),
+        ("scaler.pkl", FEATURE_COLS, True),
+        ("iso_model.pkl", OUTBREAK_FEATURE_COLS, True),
+    ):
+        path = MODEL_DIR / filename
+        try:
+            with warnings.catch_warnings():
+                # Unsupported sklearn deserialization must not silently serve
+                # predictions. requirements.txt matches the serialized version.
+                warnings.simplefilter("error", InconsistentVersionWarning)
+                model = joblib.load(path)
+            check_is_fitted(model)
+            if model.n_features_in_ != len(feature_cols):
+                raise ValueError(f"Unexpected feature count in {filename}")
+            if named_features and list(model.feature_names_in_) != feature_cols:
+                raise ValueError(f"Unexpected feature order in {filename}")
+            loaded.append(model)
+        except Exception:
+            logger.exception("Failed to load trained artifact %s", path)
+            loaded.append(None)
+
+    model_metrics = None
+    try:
+        with (MODEL_DIR / "metrics.json").open(encoding="utf-8") as f:
+            candidate = json.load(f)
+        if not isinstance(candidate, dict):
+            raise ValueError("Model metrics must be a JSON object")
+        accuracy = candidate.get("accuracy")
+        if not isinstance(accuracy, (int, float)) or not math.isfinite(accuracy) or not 0 <= accuracy <= 1:
+            raise ValueError("Model metrics must contain a finite accuracy between 0 and 1")
+        # Reject non-standard NaN/Infinity anywhere in the metrics response.
+        json.dumps(candidate, allow_nan=False)
+        model_metrics = candidate
+    except Exception:
+        logger.exception("Failed to load trained artifact %s", MODEL_DIR / "metrics.json")
+
+    return (*loaded, model_metrics)
+
+
+rf_model, scaler, iso_model, metrics = load_models()
+
+
+@app.get("/")
+async def root():
     return {
+        "service": "Pashu-Shield ML Backend",
         "status": "ok",
-        "service": "pashu-shield-ml",
-        "models_ready": True,
-        "model": metrics.get("model"),
+        "message": "ML backend is running",
+        "health": "/health",
     }
 
 
-class PredictRequest(BaseModel):
-    disease: str
-    district: str
-    time_range: str
-    animal_population: float
-    affected_animals: float
-    new_cases: float
-    deaths: float
-    vaccination_coverage: float
+@app.get("/health")
+async def health():
+    # Liveness only: no inference and no disk access on health-check requests.
+    artifacts = {
+        "rf_model.pkl": rf_model is not None,
+        "scaler.pkl": scaler is not None,
+        "iso_model.pkl": iso_model is not None,
+        "metrics.json": metrics is not None,
+    }
+    return {
+        "status": "ok",
+        "service": "pashu-shield-ml",
+        "models_ready": all(artifacts.values()),
+        "model_loaded": all(artifacts[name] for name in ("rf_model.pkl", "scaler.pkl", "iso_model.pkl")),
+        "model": metrics.get("model") if metrics is not None else None,
+        "artifacts_loaded": artifacts,
+        "unavailable_artifacts": [name for name, loaded in artifacts.items() if not loaded],
+    }
+
+
+@app.get("/api/health")
+async def api_health():
+    # Preserve the existing compatibility endpoint's readiness/503 behavior.
+    status = await health()
+    if not status["models_ready"]:
+        raise HTTPException(status_code=503, detail="One or more trained model artifacts are unavailable.")
+    return status
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request, exc):
+    # Invalid JSON numbers (NaN/Infinity) must produce a controlled 422, not
+    # another serialization exception while rendering the validation errors.
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder(
+            {"detail": exc.errors()},
+            custom_encoder={float: lambda value: value if math.isfinite(value) else str(value)},
+        ),
+    )
+
+
+class APIRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, str_strip_whitespace=True)
+
+
+class PredictRequest(APIRequest):
+    disease: str = Field(min_length=1)
+    district: str = Field(min_length=1)
+    time_range: str = Field(min_length=1)
+    animal_population: float = Field(ge=0)
+    affected_animals: float = Field(ge=0)
+    new_cases: float = Field(ge=0)
+    deaths: float = Field(ge=0)
+    vaccination_coverage: float = Field(ge=0, le=1)
     temperature: float
-    rainfall: float
-    humidity: float
-    animal_density: float
-    previous_cases: float
-    cases_growth_rate: float
+    rainfall: float = Field(ge=0)
+    humidity: float = Field(ge=0, le=100)
+    animal_density: float = Field(ge=0)
+    previous_cases: float = Field(ge=0)
+    cases_growth_rate: float = Field(ge=-1)
 
 @app.post("/api/predict")
 async def predict_risk(req: PredictRequest):
-    if rf_model is None:
+    if rf_model is None or scaler is None or metrics is None:
         raise HTTPException(status_code=503, detail="AI model unavailable — prediction cannot be generated.")
     
     # Create feature array
@@ -98,11 +196,21 @@ async def predict_risk(req: PredictRequest):
         "cases_growth_rate": req.cases_growth_rate
     }])
     
-    # Scale input
-    input_scaled = scaler.transform(input_data)
-    
-    # Predict probability
-    prob = rf_model.predict_proba(input_scaled)[0][1]
+    try:
+        # Preserve the trained feature order and the existing preprocessing.
+        input_scaled = scaler.transform(input_data[FEATURE_COLS])
+        if not np.isfinite(input_scaled).all() or np.any(np.abs(input_scaled) > np.finfo(np.float32).max):
+            raise ValueError("Scaled input exceeds the trained model's float32 range")
+        prob = float(rf_model.predict_proba(input_scaled)[0][1])
+        if not math.isfinite(prob) or not 0 <= prob <= 1:
+            raise RuntimeError("Trained risk model returned an invalid probability")
+        predicted_cases = int(req.new_cases * (1 + req.cases_growth_rate))
+    except (ValueError, OverflowError) as exc:
+        logger.warning("Prediction input could not be processed: %s", exc)
+        raise HTTPException(status_code=422, detail="Input values are outside the model's supported numeric range.") from exc
+    except Exception as exc:
+        logger.exception("Trained risk model inference failed")
+        raise HTTPException(status_code=503, detail="Trained risk model inference failed; check ML service logs.") from exc
     risk_score = round(prob * 100, 1)
     
     if risk_score > 60:
@@ -140,7 +248,10 @@ async def predict_risk(req: PredictRequest):
     if not actions:
         actions = ["Routine monitoring", "Promote biosecurity awareness"]
         
-    horizon = int(req.time_range) if req.time_range.isdigit() else 14
+    try:
+        horizon = int(req.time_range) if req.time_range.isdecimal() else 14
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Prediction horizon is outside the supported integer range.") from exc
         
     return {
         "disease": req.disease,
@@ -150,7 +261,7 @@ async def predict_risk(req: PredictRequest):
         "risk_level": risk_level,
         "confidence": metrics["accuracy"],
         "trend": trend,
-        "predicted_cases": int(req.new_cases * (1 + req.cases_growth_rate)),
+        "predicted_cases": predicted_cases,
         "prediction_horizon_days": horizon,
         "top_risk_factors": top_factors,
         "recommended_actions": actions,
@@ -163,11 +274,11 @@ async def model_performance():
         raise HTTPException(status_code=503, detail="Model metrics not found.")
     return metrics
 
-class OutbreakRequest(BaseModel):
-    new_cases: float
-    cases_growth_rate: float
-    deaths: float
-    district: str
+class OutbreakRequest(APIRequest):
+    new_cases: float = Field(ge=0)
+    cases_growth_rate: float = Field(ge=-1)
+    deaths: float = Field(ge=0)
+    district: str = Field(min_length=1)
 
 @app.post("/api/outbreak-detection")
 async def detect_outbreak(req: OutbreakRequest):
@@ -180,12 +291,23 @@ async def detect_outbreak(req: OutbreakRequest):
         "deaths": req.deaths
     }])
     
-    # iso_model returns -1 for anomaly, 1 for normal
-    prediction = iso_model.predict(input_data)[0]
+    try:
+        # IsolationForest uses float32 internally; reject overflowing inputs
+        # before conversion rather than letting them silently become infinity.
+        if np.any(np.abs(input_data.to_numpy()) > np.finfo(np.float32).max):
+            raise ValueError("Input exceeds the trained model's float32 range")
+        # iso_model returns -1 for anomaly, 1 for normal.
+        prediction = iso_model.predict(input_data[OUTBREAK_FEATURE_COLS])[0]
+        score = iso_model.decision_function(input_data[OUTBREAK_FEATURE_COLS])[0]
+        if prediction not in (-1, 1) or not math.isfinite(score):
+            raise RuntimeError("Trained outbreak model returned an invalid result")
+    except (ValueError, OverflowError) as exc:
+        logger.warning("Outbreak input could not be processed: %s", exc)
+        raise HTTPException(status_code=422, detail="Input values are outside the model's supported numeric range.") from exc
+    except Exception as exc:
+        logger.exception("Trained outbreak model inference failed")
+        raise HTTPException(status_code=503, detail="Trained outbreak model inference failed; check ML service logs.") from exc
     is_anomaly = prediction == -1
-    
-    # Compute an anomaly score (decision_function returns negative for anomalies usually)
-    score = iso_model.decision_function(input_data)[0]
     
     severity = "Normal"
     if is_anomaly:
@@ -199,14 +321,16 @@ async def detect_outbreak(req: OutbreakRequest):
         "affected_districts": [req.district] if is_anomaly else []
     }
 
-class ForecastRequest(BaseModel):
+class ForecastRequest(APIRequest):
     historical_cases: list[float]
-    horizon: int
+    horizon: int = Field(ge=1)
 
 @app.post("/api/forecast")
 async def forecast(req: ForecastRequest):
     if not req.historical_cases:
         raise HTTPException(status_code=400, detail="No historical cases provided.")
+    if any(value < 0 for value in req.historical_cases):
+        raise HTTPException(status_code=422, detail="Historical case counts must be nonnegative.")
         
     if len(req.historical_cases) < 2:
         trend = 0
@@ -217,9 +341,15 @@ async def forecast(req: ForecastRequest):
     last_val = req.historical_cases[-1]
     
     base_date = datetime.now()
-    
+    try:
+        base_date + timedelta(days=req.horizon)
+    except OverflowError as exc:
+        raise HTTPException(status_code=422, detail="Forecast horizon exceeds the supported calendar range.") from exc
+
     for i in range(req.horizon):
         next_val = max(0, last_val + trend)
+        if not math.isfinite(next_val):
+            raise HTTPException(status_code=422, detail="Forecast values exceed the supported numeric range.")
         forecast_points.append({
             "date": (base_date + timedelta(days=i+1)).strftime("%Y-%m-%d"),
             "predicted_cases": int(round(next_val))
@@ -244,20 +374,20 @@ DISTRICT_BASE_COORDS = {
     "Ahmednagar": [19.0952, 74.7496],
 }
 
-class CaseItem(BaseModel):
+class CaseItem(APIRequest):
     case_no: Optional[str] = None
-    lat: float
-    lng: float
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
     district: Optional[str] = "Unknown"
     disease: Optional[str] = "Unspecified"
     severity: Optional[str] = "Medium"
     created_at: Optional[str] = None
 
-class ClusterRequest(BaseModel):
+class ClusterRequest(APIRequest):
     districts: Optional[List[str]] = None
     cases: Optional[List[CaseItem]] = None
-    eps_km: Optional[float] = 45.0
-    min_samples: Optional[int] = 2
+    eps_km: Optional[float] = Field(default=45.0, gt=0)
+    min_samples: Optional[int] = Field(default=2, ge=1)
 
 @app.post("/api/cluster")
 async def spatiotemporal_clustering(req: ClusterRequest):
@@ -281,7 +411,14 @@ async def spatiotemporal_clustering(req: ClusterRequest):
             epsilon = (req.eps_km or 45.0) / kms_per_radian
             coords_rad = np.radians(points)
             
-            db = DBSCAN(eps=epsilon, min_samples=(req.min_samples or 2), metric="haversine").fit(coords_rad)
+            try:
+                db = DBSCAN(eps=epsilon, min_samples=(req.min_samples or 2), metric="haversine").fit(coords_rad)
+            except (ValueError, OverflowError) as exc:
+                logger.warning("Clustering input could not be processed: %s", exc)
+                raise HTTPException(status_code=422, detail="Clustering parameters are outside the supported numeric range.") from exc
+            except Exception as exc:
+                logger.exception("DBSCAN clustering failed")
+                raise HTTPException(status_code=503, detail="Clustering failed; check ML service logs.") from exc
             labels = db.labels_
             
             unique_labels = set(labels)
@@ -363,4 +500,4 @@ async def spatiotemporal_clustering(req: ClusterRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))

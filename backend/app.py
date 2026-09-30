@@ -11,6 +11,8 @@ import secrets
 import logging
 from datetime import datetime, timedelta, date
 from functools import wraps
+from ipaddress import ip_address
+from urllib.parse import urlsplit
 from flask import Flask, request, jsonify, g, send_from_directory
 from PIL import Image
 import cv2
@@ -2380,15 +2382,61 @@ def list_diseases():
 
 
 # ------------------------------------------------- AI early warning (govt) --
-ML_BACKEND = os.environ.get("SIH_ML_BACKEND", "http://127.0.0.1:8000")
+def resolve_ml_backend():
+    production = (
+        os.environ.get("FLASK_ENV", "").lower() == "production"
+        or os.environ.get("RENDER", "").lower() == "true"
+    )
+    url = (os.environ.get("SIH_ML_BACKEND") or "").strip().rstrip("/")
+    if not url:
+        if not production:
+            return "http://127.0.0.1:8000"  # Local development only.
+        app.logger.error("SIH_ML_BACKEND is required in production; ML requests will return 503.")
+        return None
+    try:
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme not in ("http", "https") or not parsed.hostname
+            or parsed.path or parsed.query or parsed.fragment
+            or parsed.username or parsed.password
+        ):
+            raise ValueError("Use an HTTP(S) base URL without /api, query parameters, or credentials")
+        # Accessing port also validates malformed explicit port values.
+        parsed.port
+        hostname = parsed.hostname.lower()
+        local_address = hostname == "localhost" or hostname.endswith(".localhost")
+        try:
+            address = ip_address(hostname)
+            local_address = local_address or address.is_loopback or address.is_unspecified
+        except ValueError:
+            pass  # DNS hostname, not an IP address.
+        if production and local_address:
+            raise ValueError("Production ML service must not use a localhost/loopback URL")
+    except ValueError as exc:
+        app.logger.error("Invalid SIH_ML_BACKEND: %s; ML requests will return 503.", exc)
+        return None
+    return url
+
+
+ML_BACKEND = resolve_ml_backend()
 
 
 def _ml_post(path, payload):
+    if not ML_BACKEND:
+        return {"error": "AI service is not configured. Set SIH_ML_BACKEND to the deployed ML service base URL."}, 503
     try:
         resp = requests.post(ML_BACKEND + path, json=payload, timeout=15)
-        return resp.json(), resp.status_code
-    except requests.RequestException:
-        return {"error": "AI service is not running. Start ml-backend (port 8000) and retry."}, 503
+    except requests.RequestException as exc:
+        app.logger.warning("ML service request failed for %s: %s", path, exc)
+        return {"error": "AI service is unavailable. Check SIH_ML_BACKEND and the ML service logs."}, 503
+    try:
+        result = resp.json()
+        if not isinstance(result, dict):
+            raise ValueError("Expected a JSON object")
+    except ValueError as exc:
+        app.logger.warning("Invalid ML service response for %s: %s", path, exc)
+        return {"error": "AI service returned an invalid JSON response."}, 502
+    return result, resp.status_code
 
 
 def district_ai_features(conn, district):
@@ -2515,11 +2563,22 @@ def ai_outbreak():
 @app.get("/api/govt/ai/status")
 @auth_required(roles=["govt"])
 def ai_status():
+    if not ML_BACKEND:
+        return jsonify({"online": False})
     try:
+        readiness = requests.get(ML_BACKEND + "/api/health", timeout=5)
+        readiness.raise_for_status()
+        health_status = readiness.json()
+        if not isinstance(health_status, dict) or not health_status.get("models_ready"):
+            raise ValueError("Trained ML artifacts are not ready")
         resp = requests.get(ML_BACKEND + "/api/model-performance", timeout=5)
+        resp.raise_for_status()
         metrics = resp.json()
+        if not isinstance(metrics, dict) or "accuracy" not in metrics:
+            raise ValueError("Model metrics response is invalid")
         return jsonify({"online": True, **metrics})
-    except (requests.RequestException, ValueError):
+    except (requests.RequestException, ValueError) as exc:
+        app.logger.warning("ML model status check failed: %s", exc)
         return jsonify({"online": False})
 
 

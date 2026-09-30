@@ -23,26 +23,34 @@ If the ML service is already deployed, retain it and record its public HTTPS URL
 https://pashu-shield-ml.onrender.com
 ```
 
-Validate it before connecting the backend:
+Validate it before connecting the backend (replace the placeholder with the actual service URL):
 
 ```bash
-curl -f https://YOUR-ML-SERVICE.onrender.com/health
+ML=https://YOUR-ML-SERVICE.onrender.com
+curl -f "$ML/"
+curl -f "$ML/health"
+curl -f "$ML/api/health"
 ```
 
-The response must report `status: ok` and `models_ready: true`.
+The root returns HTTP 200 with `service: Pashu-Shield ML Backend`, `status: ok`, a running message, and `health: /health`. It does not run inference.
+
+`/health` is a liveness endpoint: HTTP 200 means the web process is alive, **not** that ML is ready. Check `models_ready`, `model_loaded`, `artifacts_loaded`, and `unavailable_artifacts` in its JSON. `/api/health` retains the existing readiness contract: HTTP 200 only when all artifacts are available, otherwise HTTP 503. A working deployment should have both `models_ready: true` and `model_loaded: true`.
 
 For a new service, use:
 
 | Setting | Value |
 |---|---|
 | Root directory | `ml-backend` |
-| Build command | `pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh` |
-| Start command | `./start.sh` |
+| Build command | `pip install -r requirements.txt` |
+| Start command | `uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 120` |
 | Health check | `/health` |
+| Python | `3.11` (as configured in `render.yaml`) |
 
-`start.sh` uses the checked-in model artifacts and only trains when required artifacts are absent. `main.py` resolves the model directory relative to its own location, not the process working directory.
+Render provides `PORT`; do not replace it with a fixed production port. The optional `./start.sh` wrapper executes the same Uvicorn command, resolves its own directory, and requires `PORT` (local example: `PORT=8000 ./ml-backend/start.sh` with Uvicorn on `PATH`). **Neither startup command trains or replaces models.** The explicit training utility is still present but is not a deployment step.
 
-Set `APP_BASE_URL` (or `ML_CORS_ORIGINS`) to the Vercel production origin if direct browser-to-ML access is ever enabled. The current frontend reaches ML through the Flask backend, so backend-to-ML requests do not depend on browser CORS.
+The required original artifacts are `ml-backend/models/rf_model.pkl`, `scaler.pkl`, `iso_model.pkl`, and `metrics.json`. Leave `ML_MODEL_DIR` unset/blank to use them. Relative overrides are resolved against `ml-backend`, not the process working directory; absolute paths are supported. All three serialized estimators record scikit-learn `1.9.1`, which is pinned in ML requirements. Do not upgrade it independently or substitute newly trained models to fix a path error. Artifact failures are logged with the real filename/cause; affected inference endpoints return 503, never fabricated predictions. A failed artifact does not disable other independently loaded models.
+
+No ML CORS variable is required for the current server-to-server topology. Only if direct browser-to-ML access is enabled, set `ML_CORS_ORIGINS` (or `APP_BASE_URL`) to comma-separated trusted frontend origins. Do not use a wildcard for authenticated production access.
 
 ## 2. Flask backend on Render
 
@@ -82,7 +90,7 @@ Generate independent secrets with:
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Do not append `/api` to `SIH_ML_BACKEND`. Do not put either secret in Vercel frontend settings or source code.
+Do not append `/api` to `SIH_ML_BACKEND`. Trailing slashes are normalized. In production (`FLASK_ENV=production` or Render's `RENDER=true`), missing/malformed/loopback ML URLs are logged and ML requests return controlled errors instead of silently connecting to localhost. The rest of the Flask application remains available. Do not put either secret in Vercel frontend settings or source code.
 
 After deployment, validate:
 
@@ -133,14 +141,79 @@ ML=https://YOUR-ML-SERVICE.onrender.com
 BACKEND=https://YOUR-BACKEND.onrender.com
 FRONTEND=https://YOUR-APP.vercel.app
 
+curl -f "$ML/"
 curl -f "$ML/health"
+curl -f "$ML/api/health"
+curl -f "$ML/api/model-performance"
 curl -f "$BACKEND/api/health"
 curl -f "$BACKEND/api/ivr/info"
 curl -f "$FRONTEND/api/health"
 curl -f "$FRONTEND/api/ivr/info"
 ```
 
-The last two requests prove the Vercel-to-Render rewrite works.
+The last two requests prove the Vercel-to-Render rewrite works. All URL values above are placeholders; use the actual service addresses, not the examples.
+
+### Verify every existing ML API with real inference
+
+```bash
+curl -f -X POST "$ML/api/predict" -H 'Content-Type: application/json' -d '{
+  "disease": "FMD", "district": "Pune", "time_range": "14",
+  "animal_population": 10000, "affected_animals": 120,
+  "new_cases": 35, "deaths": 2, "vaccination_coverage": 0.65,
+  "temperature": 30, "rainfall": 12, "humidity": 70,
+  "animal_density": 150, "previous_cases": 20, "cases_growth_rate": 0.75
+}'
+
+curl -f -X POST "$ML/api/outbreak-detection" -H 'Content-Type: application/json' \
+  -d '{"district":"Pune","new_cases":1000,"cases_growth_rate":5,"deaths":100}'
+
+curl -f -X POST "$ML/api/forecast" -H 'Content-Type: application/json' \
+  -d '{"historical_cases":[10,12,18],"horizon":3}'
+
+curl -f -X POST "$ML/api/cluster" -H 'Content-Type: application/json' -d '{
+  "cases": [
+    {"case_no":"VERIFY-1","lat":18.52,"lng":73.85,"district":"Pune","disease":"FMD"},
+    {"case_no":"VERIFY-2","lat":18.53,"lng":73.86,"district":"Pune","disease":"FMD"}
+  ], "eps_km":45, "min_samples":2
+}'
+
+# Missing required fields must return 422, not 500 or a fabricated prediction.
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST "$ML/api/predict" \
+  -H 'Content-Type: application/json' -d '{}'
+```
+
+With the unchanged committed artifacts, the prediction request above was verified locally as:
+
+```json
+{
+  "risk_score": 1.9,
+  "probability": 0.019,
+  "risk_level": "Low Risk",
+  "confidence": 0.864,
+  "predicted_cases": 61,
+  "prediction_horizon_days": 14,
+  "model_version": "v1.0"
+}
+```
+
+This is a subset of the actual response, not a substitute response generated by the server. Independent deserialization of the saved scaler/Random Forest produced the same probability. The outbreak request returned `outbreak_detected: true`, `severity: Moderate`, and `anomaly_score: -0.068` from the saved Isolation Forest. Forecast values were `[21, 23, 26]`; coordinate-based clustering returned one two-case cluster using `DBSCAN (haversine)`.
+
+API paths and response fields are retained. Input validation rejects nonfinite numbers, negative counts, invalid coverage/humidity/coordinates, and nonpositive clustering/forecast parameters with controlled 4xx responses. Empty historical data retains its existing 400 response. Forecasts are not newly limited to an arbitrary one-year horizon; only invalid values and calendar/numeric overflow are rejected. Runtime artifact/inference failures return honest 503 errors and are logged. `/docs` and `/openapi.json` describe the real request schemas.
+
+### Verify the deployed Flask -> ML connection
+
+Using an existing authenticated government account, obtain its bearer token through the normal login flow in your own local environment. Do not put credentials/tokens in source, public frontend variables, or support messages. With that token in your local `GOVT_TOKEN` shell variable:
+
+```bash
+curl -f "$BACKEND/api/govt/ai/status" -H "Authorization: Bearer $GOVT_TOKEN"
+curl -f "$BACKEND/api/govt/ai/predict?district=Pune&disease=FMD" -H "Authorization: Bearer $GOVT_TOKEN"
+curl -f "$BACKEND/api/govt/ai/outbreak?district=Pune" -H "Authorization: Bearer $GOVT_TOKEN"
+curl -f "$BACKEND/api/govt/clusters" -H "Authorization: Bearer $GOVT_TOKEN"
+```
+
+Status must report `online: true`; its HTTP 200 alone is not sufficient. The Flask status endpoint verifies `/api/health` readiness and successful metrics retrieval before claiming online. Prediction must return HTTP 200 with a real probability and `features_used`; outbreak must return HTTP 200 with a boolean `outbreak_detected`. The local verification exercised these authenticated Flask routes against the running ML HTTP service with no inference mocks. Remote connectivity remains unverified until the actual deployed URLs are tested.
+
+For an already-created/manual Render service, explicitly update its root/build/start/health settings to the ML table above; editing `render.yaml` alone may not update that service. Redeploy the repaired code to the existing ML service (do not create a duplicate), set the backend's actual `SIH_ML_BACKEND`, redeploy the backend, and run these checks. A root 200 only proves the route exists, not model readiness, real inference, or deployed backend connectivity.
 
 Test authentication through Vercel:
 
