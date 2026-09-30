@@ -1,20 +1,14 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "🚀 Starting Pashu Shield ML Backend..."
+# Support invocation from outside ml-backend without relying on the caller's cwd.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-# Check if models exist, if not train them
-if [ ! -f "models/rf_model.pkl" ] || [ ! -f "models/scaler.pkl" ] || [ ! -f "models/iso_model.pkl" ]; then
-    echo "📦 Models not found. Training models..."
-    python train_model.py
-    echo "✅ Models trained successfully"
-else
-    echo "✅ Models found, skipping training"
-fi
+# Render supplies PORT. For local execution use, for example, PORT=8000 ./start.sh.
+: "${PORT:?Set PORT (Render provides it automatically)}"
+echo "Starting Pashu-Shield ML Backend on 0.0.0.0:${PORT} using existing trained artifacts."
 
-# Verify model files
-ls -la models/
-
-# Start the FastAPI server
-echo "🌐 Starting Uvicorn server on port ${PORT:-10000}..."
-exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1 --timeout-keep-alive 120
+# Never train or overwrite deployed models on startup. main.py logs artifact
+# failures; health reports them and affected inference endpoints return 503.
+exec uvicorn main:app --host 0.0.0.0 --port "$PORT" --workers 1 --timeout-keep-alive 120
