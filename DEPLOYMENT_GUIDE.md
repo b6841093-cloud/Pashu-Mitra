@@ -1,368 +1,172 @@
-# Pashu Shield — Complete Deployment Guide
+# Pashu-Shield deployment guide
 
-> **Project**: Pashu Shield — Animal Disease Management Platform  
-**Stack**: Static Frontend (Vercel) • Flask API (Render) • ML Service (FastAPI + scikit-learn)  
-**Last Updated**: 2026-09-30
+## Recommended topology
 
----
+```text
+Browser
+  -> Vercel static frontend
+     -> /api/* external rewrite
+        -> Render Flask/Gunicorn backend
+           -> persistent SQLite disk at /var/data
+           -> existing Render FastAPI/Uvicorn ML service
+```
 
-## 🎯 Quick Reference
+Do not deploy the current Flask backend as a Vercel Function. It writes to SQLite, while a Vercel Function has no durable writable application filesystem. The frontend is suitable for Vercel; the Flask backend needs the persistent Render disk configured in `render.yaml`, or a future migration to a managed server database.
 
-| Component | Platform | Root Dir | Framework | Deploy Time |
-|-----------|----------|-----------|-----------|-------------|
-| Frontend | Vercel | `/frontend` | Static (no build) | ~30 sec |
-| Backend API | Render | `backend` | `pip install -r requirements.txt` | ~2-3 min |
-| ML Backend (FastAPI) | Render | ml-backend | `pip install -r requirements.txt` | ~3-5 min (model load) |
+The SIP/RTP PBX is a separate external service. See `voice/README.md`. A deployed web application does not by itself establish PSTN service.
 
----
+## 1. ML service on Render
 
-## 📋 Pre-Deployment Checklist
+If the ML service is already deployed, retain it and record its public HTTPS URL, for example:
 
-### ✅ Pre-Flight Checklist
+```text
+https://pashu-shield-ml.onrender.com
+```
 
-- [ ] **GitHub repo** pushed to `main` branch
-- [ ] **Backend**: `animal_health.db` — **do not commit** (generated at runtime / use Render Disk)
-- [ ] ML models exist in `ml-backend/models/`:
-  - `rf_model.pkl` (RandomForestClassifier)
-  - `scaler.pkl` (StandardScaler)
-  - `iso_model.pkl` (IsolationForest)
-  - `metrics.json`
-- [ ] `.gitignore` excludes: `*.db`, `*.pkl`, `__pycache__/`, `.env`, `.venv/`, `.venv/`
-- [ ] Frontend `app.js` API endpoints point to production URLs (not localhost)
-
----
-
-## 🎯 PART 1: FRONTEND → VERCEL (Static Site)
-
-### Option 1: Vercel CLI (30 seconds)
+Validate it before connecting the backend:
 
 ```bash
-cd /home/user/Pashu-Shield-updated/frontend
-npx vercel
-# Follow prompts:
-#   ? Set up and deploy? [Y/n] Y
-#   ? Which scope? [your-account]
-#   ? Link to existing project? No
-    # Project name: pashu-shield-frontend
-    # Directory: ./
-    # Override settings? No
+curl -f https://YOUR-ML-SERVICE.onrender.com/health
 ```
 
-**That's it.** Vercel detects static site automatically. Your site goes live at `https://pashu-shield-frontend.vercel.app`
+The response must report `status: ok` and `models_ready: true`.
 
----
+For a new service, use:
 
-### Option B: GitHub → Vercel (CI/CD)
+| Setting | Value |
+|---|---|
+| Root directory | `ml-backend` |
+| Build command | `pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh` |
+| Start command | `./start.sh` |
+| Health check | `/health` |
 
-1. **Push to GitHub** (if not done):
-   ```bash
-   cd /home/user/Pashu-Shield-updated
-   git add .
-   git commit -m "Deploy: frontend + backend + ML backend ready"
-   git push origin main
-   ```
+`start.sh` uses the checked-in model artifacts and only trains when required artifacts are absent. `main.py` resolves the model directory relative to its own location, not the process working directory.
 
-2. **Vercel Dashboard** → [vercel.com/new](https://vercel.com/new)
-   - Import GitHub repo: `YOUR_USERNAME/Pashu-Shield-updated`
-   - **Root Directory**: `frontend`
-   - **Framework Preset**: `Other`
-   - **Build Command**: *(leave empty)*
-   - **Output Directory**: `.` (dot)
-   - **Install Command**: *(leave empty)*
+Set `APP_BASE_URL` (or `ML_CORS_ORIGINS`) to the Vercel production origin if direct browser-to-ML access is ever enabled. The current frontend reaches ML through the Flask backend, so backend-to-ML requests do not depend on browser CORS.
 
-5. **Environment Variables** (Vercel Dashboard → Settings → Environment Variables):
-   ```
-   VITE_API_URL=https://pashu-shield-backend.onrender.com
-   VITE_ML_API_URL=https://pashu-shield-ml.onrender.com
-   ```
+## 2. Flask backend on Render
 
-5. **Deploy** → Live in ~30s at `https://pashu-shield-frontend.vercel.app`
+If the ML service already exists, create only the backend service manually instead of applying the full Blueprint and duplicating ML.
 
----
+| Setting | Value |
+|---|---|
+| Runtime | Python |
+| Root directory | `backend` |
+| Build command | `pip install --upgrade pip && pip install -r requirements.txt` |
+| Start command | `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - --error-logfile -` |
+| Health check | `/api/health` |
 
-### Frontend: Vercel Config (Already Created)
+Attach a persistent disk:
 
-**File**: `frontend/vercel.json` — handles:
-- Static file serving (no build step)
-- Aggressive caching for static assets (1 year immutable)
-- Security headers (CSP-ready, CSP-ready)
-- Mumbai region (`bom1`) for low latency in India
+| Setting | Value |
+|---|---|
+| Name | `pashu-shield-sqlite` |
+| Mount path | `/var/data` |
+| Size | 1 GB or larger |
 
-**No build step** — Vercel serves static files directly.
+Required backend environment variables:
 
----
-
-## 🔧 Part 2: Deploy Backend (Flask) to Render
-
-### Option 1: Blueprint Deploy (One-Click)
-
-1. Push repo to GitHub (see above)
-2. Go to [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint**
-4. Connect GitHub repo → Render reads `render.yaml`
-4. Review both services → **Apply**
-5. Render provisions:
-   - `pashu-shield-backend` (Flask on :10000)
-   - `pashu-shield-ml` (internal hostname for backend)
-
-### Backend Environment Variables (Render Dashboard → Service → Environment)
-
-| Key | Value | Notes |
-|-------|-------|-------|
-| `SIH_SECRET_KEY` | *auto-generated* | Render generates secure value |
-| `SIH_ML_BACKEND` | `https://pashu-shield-ml.onrender.com` | **Auto-linked via Blueprint** |
-| `FLASK_ENV` | `production` | |
-| `PORT` | `10000` | Render sets automatically |
-| `DATABASE_URL` | *(see below)* | See **Database** section |
-
----
-
-## 🗄️ Database Strategy (Critical)
-
-**SQLite on Render free tier = ephemeral** (wiped on deploy). Two options:
-
-### Option A: Render Disk (Free Tier Friendly, 1GB)
-Add to `render.yaml` under `pashu-shield-backend`:
-```yaml
-disk:
-  name: data
-  mountPath: /data
-  sizeGB: 1
-```
-Then in `database.py` / `app.py`:
-```python
-import os
-DB_PATH = os.environ.get("DATABASE_PATH", "animal_health.db")
-# Use /data/animal_health.db on Render, local file locally
-DB_PATH = os.environ.get("DATABASE_PATH", "animal_health.db")
+```env
+SIH_SECRET_KEY=<long-random-secret>
+IVR_WEBHOOK_SECRET=<different-long-random-secret>
+SIH_DB_PATH=/var/data/animal_health.db
+SIH_ML_BACKEND=https://YOUR-ML-SERVICE.onrender.com
+IVR_PHONE_NUMBER=7382210251
+IVR_PROVIDER_MODE=MOCK
+IVR_PSTN_CONNECTED=false
 ```
 
-Add to backend env vars:
-```
-DATABASE_PATH=/data/animal_health.db
-```
-
-### Option B: PostgreSQL (Recommended for Production)
-1. Render Dashboard → **New** → **PostgreSQL** → `pashu-shield-db`
-2. Copy **Internal Connection String** → add as `DATABASE_URL`
-3. Update `database.py` to use `DATABASE_URL` (PostgreSQL) with fallback to SQLite
-
----
-
-## 🤖 Part 3: ML Backend — Model Files
-
-### Critical: Model Files in `ml-backend/models/`
-
-**Required files** (must exist at deploy time or be generated by `train_model.py`):
-```
-ml-backend/models/
-├── rf_model.pkl       # RandomForestClassifier (risk prediction)
-├── scaler.pkl         # StandardScaler fitted on training data
-├── iso_model.pkl      # IsolationForest for outbreak detection
-└── metrics.json       # {"accuracy": 0.XX, "f1": 0.XX, ...}
-```
-
-### Option A: Commit Models (if < 100MB total)
-```bash
-git add ml-backend/models/*.pkl ml-backend/models/metrics.json
-git commit -m "Add trained ML models"
-git push
-```
-
-### Option B: Train on Deploy (Recommended for Free Tier)
-Your `train_model.py` should:
-1. Generate synthetic/real training data
-2. Train RandomForest + IsolationForest
-3. Save `.pkl` files + `metrics.json` to `models/`
-
-**The `start.sh` script handles this automatically.**
-
----
-
-## 🔗 Part 4: Wire the Frontend to Production APIs
-
-### In `frontend/app.js` — Replace Hardcoded URLs
-
-Find and replace:
-```javascript
-// BEFORE (localhost)
-const API_BASE = 'http://localhost:5001';
-const ML_API_BASE = 'http://localhost:8000';
-
-// CHANGE TO:
-const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL)
-  ? import.meta.env.VITE_API_URL
-  : 'http://localhost:5001';
-
-const ML_API_BASE = import.meta.env.VITE_ML_API_URL || 'http://localhost:8000';
-```
-
-**Then in Vercel Dashboard → Settings → Environment Variables:**
-```
-VITE_API_URL=https://pashu-shield-backend.onrender.com
-VITE_ML_API_URL=https://pashu-shield-ml.onrender.com
-```
-*(Redeploy frontend after adding these)*
-
----
-
-## 🔐 Environment Variables Summary
-
-| Service | Variable | Value | Where |
-|--------|----------|-------|-------|
-| **Vercel (Frontend)** | `VITE_API_URL` | `https://pashu-shield-backend.onrender.com` | Vercel Dashboard |
-| | `VITE_ML_API_URL` | `https://pashu-shield-ml.onrender.com` | Vercel Dashboard |
-| **Render (Backend)** | `SIH_SECRET_KEY` | *auto-generated* | Render Dashboard |
-| | `SIH_ML_BACKEND` | `https://pashu-shield-ml.onrender.com` | *Auto via Blueprint* |
-| | `FLASK_ENV` | `production` | Render Dashboard |
-| | `DATABASE_PATH` | `/data/animal_health.db` | Render Dashboard (if using Disk) |
-| | `DATABASE_URL` | *PostgreSQL internal URL* | Render Dashboard (if using Postgres) |
-
----
-
-## 🔐 Security Checklist
-
-- [ ] **Never commit** `.env`, `.env.*`, `*.db`, `*.pkl`, `*.db-journal`
-- [ ] `.gitignore` covers: `.env*`, `*.db`, `*.pkl`, `*.db-journal`, `__pycache__/`, `.venv/`
-- [ ] `SIH_SECRET_KEY` **only** in Render env vars (auto-generated)
-- [ ] Frontend env vars **prefixed with `VITE_`** for Vite/Vercel exposure
-- [ ] CORS in `backend/app.py` and `ml-backend/main.py` allows your Vercel domain:
-  ```python
-  # backend/app.py
-  CORS(app, origins=["https://pashu-shield-frontend.vercel.app"])
-  
-  # ml-backend/main.py
-  allow_origins=["https://pashu-shield-frontend.vercel.app"]
-  ```
-
----
-
-## 🔍 Verification Checklist (Post-Deploy)
-
-### Frontend
-```bash
-curl -I https://pashu-shield-frontend.vercel.app
-# Should return 200, check Cache-Control headers
-```
-
-### Backend Health
-```bash
-curl https://pashu-shield-backend.onrender.com/health
-# {"status": "healthy", "service": "backend"}
-curl https://pashu-shield-backend.onrender.com/api/health
-# Or whichever health endpoint you expose
-```
-
-### ML Backend
-```bash
-curl https://pashu-shield-ml.onrender.com/docs
-# Should show FastAPI Swagger UI
-
-curl -X POST https://pashu-shield-ml.onrender.com/api/predict \
-  -H "Content-Type: application/json" \
-  -d '{"disease":"FMD","district":"Pune","time_range":"14","animal_population":1000,"affected_animals":5,"new_cases":2,"deaths":0,"vaccination_coverage":0.7,"temperature":28,"rainfall":120,"humidity":75,"animal_density":50,"previous_cases":10,"cases_growth_rate":0.2}'
-```
-
-### Full Integration Test
-1. Open `https://pashu-shield-frontend.vercel.app`
-2. Register/Login → Create herd/animal → Create case
-3. Request prediction → Verify ML backend responds
-2. Submit lab request → Verify lab workflow
-3. Check notifications appear
-
----
-
-## 🔄 Redeployment Commands
+Generate independent secrets with:
 
 ```bash
-# Frontend (Vercel) - auto on push to main, or:
-cd frontend && vercel --prod
-
-# Backend/ML on Render:
-# Dashboard → Service → Manual Deploy → Deploy latest commit
-# OR push to main → Blueprint auto-deploys (if configured)
-
-# Force redeploy without code change (clear cache)
-# Render Dashboard → Service → Manual Deploy → Clear build cache & deploy
+python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
----
+Do not append `/api` to `SIH_ML_BACKEND`. Do not put either secret in Vercel frontend settings or source code.
 
-## 🔐 Security Hardening (Post-Deploy)
-
-1. **Restrict CORS** to exact Vercel domain:
-   ```python
-   # backend/app.py
-   CORS(app, origins=["https://pashu-shield-frontend.vercel.app"])
-   
-   # ml-backend/main.py
-   allow_origins=["https://pashu-shield-frontend.vercel.app"]
-   ```
-
-2. **Rotate `SIH_SECRET_KEY`** after first deploy (Render → Environment → Regenerate)
-
-3. **Add rate limiting** (Flask-Limiter) and **API key auth** for ML endpoints
-
-5. **Enable HTTPS only** (Render + Vercel enforce this by default)
-
----
-
-## 📞 Quick Debug Commands
+After deployment, validate:
 
 ```bash
-# Check Render service logs
-# Dashboard → Service → Logs (Live tail)
-
-# Test backend health
-curl -s https://pashu-shield-backend.onrender.com/health | jq .
-
-# Test ML prediction
-curl -s -X POST https://pashu-shield-ml.onrender.com/api/predict \
-  -H "Content-Type: application/json" \
-  -d '{"disease":"FMD","district":"Pune","time_range":"14","animal_population":1000,"affected_animals":5,"new_cases":2,"deaths":0,"vaccination_coverage":0.7,"temperature":28,"rainfall":120,"humidity":75,"animal_density":50,"previous_cases":10,"cases_growth_rate":0.2}' | jq .
-
-# Check frontend env vars at runtime
-# Open browser console on Vercel deployment:
-# console.log(import.meta.env.VITE_API_URL)
+curl -f https://YOUR-BACKEND.onrender.com/api/health
+curl -f https://YOUR-BACKEND.onrender.com/api/ivr/info
 ```
 
----
+`/api/ivr/info` must show `7382210251`, `+917382210251`, and `pstn_connected: false` until a real carrier/PBX acceptance test is complete.
 
-## 📞 Emergency Rollback
+### Using the Render Blueprint
+
+The root `render.yaml` defines both backend and ML services. Use it for a fresh two-service deployment. Set the prompted `SIH_ML_BACKEND` to the full public HTTPS URL after the ML service is created. If ML already exists, manual backend creation avoids creating a duplicate service.
+
+SQLite remains a single-host database. Do not scale the backend to independent hosts unless the data layer is migrated to a managed database.
+
+## 3. Static frontend on Vercel
+
+The frontend is plain static HTML/CSS/JavaScript and needs no build framework.
+
+In Vercel:
+
+1. Import the GitHub repository.
+2. Set **Root Directory** to `frontend`.
+3. Set **Framework Preset** to `Other`.
+4. Leave the output directory as `.`.
+5. Deploy.
+
+`frontend/vercel.json` supplies security/cache headers and proxies the frontend's relative `/api/*` requests to Render. Before deploying, replace this default destination if the actual Render backend URL differs:
+
+```json
+{
+  "source": "/api/:path*",
+  "destination": "https://pashu-shield-backend.onrender.com/api/:path*"
+}
+```
+
+No `VITE_API_URL` or `VITE_ML_API_URL` is used: this is not a Vite build. The browser uses same-origin `/api` paths, and Vercel performs the external rewrite. This avoids exposing secrets and avoids browser CORS for normal application requests.
+
+The bundled offline Whisper model and ONNX runtime make the static frontend approximately 82 MB. Monitor the Vercel plan's static deployment and bandwidth limits. The model is fetched only when voice reporting initializes.
+
+## 4. End-to-end validation
+
+Set the deployed URLs and run:
 
 ```bash
-# Vercel: Dashboard → Deployments → "..." → Promote to Production (previous)
-# Render: Dashboard → Service → Manual Deploy → Deploy specific commit
-# Or: git revert <bad-commit> && git push origin main
+ML=https://YOUR-ML-SERVICE.onrender.com
+BACKEND=https://YOUR-BACKEND.onrender.com
+FRONTEND=https://YOUR-APP.vercel.app
+
+curl -f "$ML/health"
+curl -f "$BACKEND/api/health"
+curl -f "$BACKEND/api/ivr/info"
+curl -f "$FRONTEND/api/health"
+curl -f "$FRONTEND/api/ivr/info"
 ```
 
----
+The last two requests prove the Vercel-to-Render rewrite works.
 
-## 📞 Support Contacts
+Test authentication through Vercel:
 
-- **Vercel Issues**: [vercel.com/support](https://vercel.com/support)
-- **Render Support**: [render.com/support](https://render.com/support)
-- **GitHub Issues**: Your repo → Issues
-
----
-
-## 📝 Quick Reference Card
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  PASHU SHIELD — PRODUCTION URLS                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  Frontend:      https://pashu-shield-frontend.vercel.app        │
-│  Backend API:   https://pashu-shield-backend.onrender.com       │
-│  ML API:        https://pashu-shield-ml.onrender.com            │
-│  ML Docs:       https://pashu-shield-ml.onrender.com/docs       │
-├─────────────────────────────────────────────────────────────────┤
-│  GitHub:        https://github.com/YOUR_USERNAME/Pashu-Shield   │
-│  Vercel:        https://vercel.com/dashboard                    │
-│  Render:        https://dashboard.render.com                    │
-└─────────────────────────────────────────────────────────────────┘
+```bash
+curl -f -X POST "$FRONTEND/api/auth/login" \
+  -H 'Content-Type: application/json' \
+  -d '{"identifier":"rajesh@example.com","password":"password123"}'
 ```
 
----
+Then verify in a browser:
 
-**Last Updated**: 2026-09-30  
-**Next Review**: After first production deploy — verify all endpoints, monitor logs for 24h.
+- owner, veterinarian, government, and laboratory login;
+- registration and demo account details;
+- animal, case, prescription, vaccination, laboratory, and notification flows;
+- GIS, weather, analytics, ML prediction, and outbreak detection;
+- manual and offline Whisper reporting; and
+- the native `tel:+917382210251` click-to-call link.
+
+## 5. Security and operational checks
+
+- Never commit `.env`, JWT/HMAC secrets, SIP credentials, or carrier credentials.
+- Keep `IVR_PROVIDER_MODE=MOCK` and `IVR_PSTN_CONNECTED=false` until lawful telecom provisioning and real-phone testing are complete.
+- Point PBX webhooks directly at the Render backend and retain HMAC verification.
+- Back up `/var/data/animal_health.db` and rehearse restoration.
+- Do not use `/tmp` as the production database path.
+- Do not configure browser-facing code with `localhost`.
+- Restrict ML CORS to known production origins if direct browser calls are enabled.
+
+See `DEPLOYMENT.md`, `.env.example`, and `voice/README.md` for the full environment and telecom boundaries.

@@ -1,0 +1,15 @@
+; Example boundary only. Requires a separately deployed, authenticated ARI app
+; named pashu-shield that implements the signed webhook contract in ../README.md.
+[pashu-carrier-inbound]
+exten => 7382210251,1,NoOp(Pashu-Shield inbound call ${UNIQUEID})
+ same => n,Set(CHANNEL(language)=en)
+ same => n,Answer()
+ same => n,Stasis(pashu-shield,inbound,${CALLERID(num)},${UNIQUEID})
+ same => n,Hangup()
+
+; Only the ARI application may originate into this context after the backend
+; has selected an eligible veterinarian. Restrict the dialed value to E.164.
+[pashu-vet-outbound]
+exten => _+X.,1,NoOp(Pashu-Shield veterinarian bridge ${EXTEN})
+ same => n,Dial(PJSIP/${EXTEN}@carrier-trunk,30,b)
+ same => n,Hangup()
