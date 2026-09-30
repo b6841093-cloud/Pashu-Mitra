@@ -5,10 +5,11 @@
   "buildCommand": "echo 'Static site - no build needed'",
   "installCommand": "echo 'No dependencies to install'",
   "framework": null,
+  "outputDirectory": ".",
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://pashu-shield-backend.onrender.com/api/:path*"
+      "destination": "https://pashu-shield-backend-hjgr.onrender.com/api/:path*"
     }
   ],
   "headers": [

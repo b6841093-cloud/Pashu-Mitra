@@ -109,28 +109,79 @@ SQLite remains a single-host database. Do not scale the backend to independent h
 
 ## 3. Static frontend on Vercel
 
-The frontend is plain static HTML/CSS/JavaScript and needs no build framework.
+The frontend is plain static HTML/CSS/JavaScript. Its entry point is `frontend/index.html`; there is no `package.json`, build framework, or generated `public`/`dist` directory. Do not introduce one.
 
-In Vercel:
+For the existing Vercel project, open **Settings → Build and Deployment** and use:
 
-1. Import the GitHub repository.
-2. Set **Root Directory** to `frontend`.
-3. Set **Framework Preset** to `Other`.
-4. Leave the output directory as `.`.
-5. Deploy.
+| Setting | Value |
+|---|---|
+| Root Directory | `frontend` |
+| Framework Preset | `Other` |
+| Build Command | `echo 'Static site - no build needed'` (existing no-op from `vercel.json`) |
+| Install Command | `echo 'No dependencies to install'` (existing no-op from `vercel.json`) |
+| Output Directory | `.` (relative to `frontend`, explicitly set in `vercel.json`) |
+| Frontend environment variables | None required |
 
-`frontend/vercel.json` supplies security/cache headers and proxies the frontend's relative `/api/*` requests to Render. Before deploying, replace this default destination if the actual Render backend URL differs:
+Clear any stale dashboard Output Directory override of `public`, or change it to `.`. Deploy the commit containing this repair; redeploying the original commit `99a5010` will not use the changed configuration. Root Directory is a Vercel project setting, not a `vercel.json` property.
+
+**Why the original build failed:** `buildCommand` is a nonempty echo command, so Vercel selects its static-build handling. With no framework and no explicit `outputDirectory`, that builder defaults to `public`. The echo generates no directory, so the default does not exist. Vercel CLI 61.1.0 reproduces the exact error even with no dashboard output override. The explicit `"outputDirectory": "."` serves the actual frontend files directly instead of creating an artificial build output.
+
+`frontend/vercel.json` retains the existing security/cache headers and `/api/*` rewrite, with the destination corrected to the deployed Flask backend:
 
 ```json
 {
   "source": "/api/:path*",
-  "destination": "https://pashu-shield-backend.onrender.com/api/:path*"
+  "destination": "https://pashu-shield-backend-hjgr.onrender.com/api/:path*"
 }
 ```
 
-No `VITE_API_URL` or `VITE_ML_API_URL` is used: this is not a Vite build. The browser uses same-origin `/api` paths, and Vercel performs the external rewrite. This avoids exposing secrets and avoids browser CORS for normal application requests.
+The actual frontend configuration is `const API = "/api"` in `app.js`. No `API_BASE_URL`, `VITE_*`, or `REACT_APP_*` environment variable is read by this static application. Browser requests remain same-origin; Vercel proxies them to Render with the existing API paths, request bodies, and authentication headers. No backend CORS change is required for this topology. The ML service (`https://pashu-mitra-ml.onrender.com`) remains behind Flask, not exposed as a new frontend dependency.
 
-The bundled offline Whisper model and ONNX runtime make the static frontend approximately 82 MB. Monitor the Vercel plan's static deployment and bandwidth limits. The model is fetched only when voice reporting initializes.
+Routing uses URL fragments (`#/login/owner`, `#/owner/dashboard`, etc.), not the History API. Refreshing these URLs requests `/`, so no catch-all SPA rewrite is needed. Keep `/api/*` as the only rewrite.
+
+Deploying `frontend` at `/` preserves the current paths for `style.css`, `app.js`, `whisper-worker.js`, `/maharashtra_locations.json`, `/maharashtra_state.geojson`, `/models/`, and `/wasm/`. The bundled offline Whisper model and ONNX runtime make the static frontend approximately 82 MB. Monitor the Vercel plan's static deployment and bandwidth limits. The model is fetched only when voice reporting initializes.
+
+### Verify the frontend build and actual deployment
+
+With Vercel CLI access to the existing project, run from the **repository root** (the downloaded project settings select `frontend` as the build root). Link to the existing project, not a new one:
+
+```bash
+npx vercel@61.1.0 link
+npx vercel@61.1.0 pull --yes --environment=production
+npx vercel@61.1.0 build --prod
+
+test -f .vercel/output/static/index.html
+test -f .vercel/output/static/style.css
+test -f .vercel/output/static/app.js
+test -f .vercel/output/static/whisper-worker.js
+test -f .vercel/output/static/maharashtra_state.geojson
+test -f .vercel/output/static/models/Xenova/whisper-tiny/onnx/encoder_model_quantized.onnx
+test -f .vercel/output/static/models/Xenova/whisper-tiny/onnx/decoder_model_merged_quantized.onnx
+test -f .vercel/output/static/wasm/ort-wasm-simd.wasm
+
+node --check frontend/app.js
+node --input-type=module --check < frontend/whisper-worker.js
+```
+
+`.vercel/` contains generated output and downloaded project/environment settings and is ignored by Git. A successful local build does not prove a live deployment. After Git integration deploys the repaired commit (or an authorized CLI deployment), confirm **Ready** in Vercel and test the actual frontend URL:
+
+```bash
+FRONTEND=https://YOUR-ACTUAL-FRONTEND.vercel.app
+curl -f "$FRONTEND/"
+curl -f "$FRONTEND/index.html"
+curl -f "$FRONTEND/style.css"
+curl -f "$FRONTEND/app.js"
+curl -f "$FRONTEND/whisper-worker.js"
+curl -f "$FRONTEND/maharashtra_locations.json"
+curl -f "$FRONTEND/maharashtra_state.geojson"
+curl -fI "$FRONTEND/models/Xenova/whisper-tiny/onnx/encoder_model_quantized.onnx"
+curl -fI "$FRONTEND/models/Xenova/whisper-tiny/onnx/decoder_model_merged_quantized.onnx"
+curl -fI "$FRONTEND/wasm/ort-wasm-simd.wasm"
+curl -f "$FRONTEND/api/health"
+curl -f "$FRONTEND/api/ivr/info"
+```
+
+The API checks must return Flask JSON, not a Render loading page or an HTML fallback. In a browser, refresh `/#/login/owner`, check all four existing login/registration pages and demo details, and inspect Network for failed local assets or any `localhost`/`127.0.0.1` requests. Leaflet CSS/JS/images, OpenStreetMap tiles, and the Transformers library still use their existing external providers. QR images are returned by the backend as PNG data URLs; icons are emoji and fonts are system fonts. There is no bundled or explicitly referenced favicon in the original frontend, so this repair does not add one. Complete the existing feature checks in section 4 before claiming end-to-end production success.
 
 ## 4. End-to-end validation
 
