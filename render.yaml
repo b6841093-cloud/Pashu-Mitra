@@ -1,38 +1,48 @@
 services:
+  # Flask API and the existing static frontend. For a split Vercel frontend,
+  # Vercel proxies /api/* to this service.
   - type: web
     name: pashu-shield-backend
     runtime: python
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - --error-logfile -
     healthCheckPath: /api/health
     disk:
       name: pashu-shield-sqlite
       mountPath: /var/data
       sizeGB: 1
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
       - key: SIH_SECRET_KEY
         generateValue: true
       - key: IVR_WEBHOOK_SECRET
         generateValue: true
       - key: SIH_DB_PATH
         value: /var/data/animal_health.db
+      - key: SIH_ML_BACKEND
+        sync: false
       - key: IVR_PHONE_NUMBER
         value: "7382210251"
       - key: IVR_PROVIDER_MODE
         value: MOCK
       - key: IVR_PSTN_CONNECTED
         value: "false"
-      - key: SIH_ML_BACKEND
-        sync: false
+      - key: FLASK_ENV
+        value: production
 
+  # Existing trained-model API. If this service is already deployed separately,
+  # create only the backend service above and point SIH_ML_BACKEND at its URL.
   - type: web
     name: pashu-shield-ml
     runtime: python
     rootDir: ml-backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh
+    startCommand: ./start.sh
     healthCheckPath: /health
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
       - key: APP_BASE_URL
         sync: false
