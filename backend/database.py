@@ -20,9 +20,37 @@ import secrets
 import hashlib
 import json
 import uuid
+import threading
+from contextlib import contextmanager
 from datetime import datetime, date, timedelta
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "animal_health.db")
+_DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "animal_health.db")
+DB_PATH = os.path.abspath(os.path.expanduser(os.environ.get("SIH_DB_PATH", _DEFAULT_DB_PATH)))
+_INIT_THREAD_LOCK = threading.RLock()
+
+
+@contextmanager
+def _database_init_lock():
+    """Serialize additive migrations across threads and Gunicorn workers."""
+    with _INIT_THREAD_LOCK:
+        lock_path = f"{DB_PATH}.init.lock"
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        lock_file = open(lock_path, "a+")
+        try:
+            try:
+                import fcntl
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            except (ImportError, OSError):
+                # Windows has no fcntl; the process-local lock still protects dev use.
+                pass
+            yield
+        finally:
+            try:
+                import fcntl
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            except (ImportError, OSError):
+                pass
+            lock_file.close()
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -34,6 +62,7 @@ CREATE TABLE IF NOT EXISTS users (
     salt TEXT NOT NULL,
     role TEXT NOT NULL CHECK(role IN ('owner','vet','govt','lab')),
     specialization TEXT,
+    preferred_language TEXT,
     village TEXT,
     block TEXT,
     district TEXT,
@@ -436,6 +465,99 @@ CREATE TABLE IF NOT EXISTS offline_sync_log (
     synced_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Provider-independent helpline/IVR session state. Cases remain the clinical
+-- source of truth; these tables hold channel metadata and an auditable call flow.
+CREATE TABLE IF NOT EXISTS helpline_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id TEXT UNIQUE NOT NULL,
+    provider_call_id TEXT UNIQUE,
+    provider_mode TEXT NOT NULL DEFAULT 'MOCK',
+    caller_number TEXT,
+    farmer_id INTEGER REFERENCES users(id),
+    language TEXT,
+    region_state TEXT,
+    district TEXT,
+    block TEXT,
+    village TEXT,
+    latitude REAL,
+    longitude REAL,
+    location_source TEXT NOT NULL DEFAULT 'UNKNOWN',
+    status TEXT NOT NULL DEFAULT 'INITIATED' CHECK(status IN (
+        'INITIATED','IDENTIFIED','ROUTING','VET_CONNECTED','VET_UNAVAILABLE',
+        'SURVEY_STARTED','SURVEY_COMPLETED','COMPLETED','PARTIAL','ABANDONED','FAILED'
+    )),
+    menu_option TEXT,
+    vet_id INTEGER REFERENCES users(id),
+    routing_status TEXT,
+    fallback_reason TEXT,
+    survey_data TEXT DEFAULT '{}',
+    current_question TEXT,
+    transcript TEXT,
+    summary_json TEXT,
+    case_id INTEGER REFERENCES cases(id),
+    started_at TEXT DEFAULT (datetime('now')),
+    answered_at TEXT,
+    ended_at TEXT,
+    last_activity_at TEXT DEFAULT (datetime('now')),
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS helpline_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_no TEXT UNIQUE NOT NULL,
+    call_id TEXT UNIQUE NOT NULL REFERENCES helpline_calls(call_id),
+    case_id INTEGER REFERENCES cases(id),
+    farmer_id INTEGER REFERENCES users(id),
+    animal_id INTEGER REFERENCES animals(id),
+    assigned_vet_id INTEGER REFERENCES users(id),
+    caller_number TEXT,
+    language TEXT,
+    region_state TEXT,
+    district TEXT,
+    block TEXT,
+    village TEXT,
+    latitude REAL,
+    longitude REAL,
+    location_source TEXT NOT NULL DEFAULT 'UNKNOWN',
+    symptoms TEXT,
+    urgency TEXT,
+    structured_summary TEXT NOT NULL DEFAULT '{}',
+    source TEXT NOT NULL DEFAULT 'HELPLINE',
+    status TEXT NOT NULL DEFAULT 'CREATED',
+    duplicate_of INTEGER REFERENCES helpline_reports(id),
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS vet_availability (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vet_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK(status IN ('AVAILABLE','BUSY','OFFLINE','OUTSIDE_HOURS')),
+    supported_languages TEXT NOT NULL DEFAULT '["en"]',
+    current_call_id TEXT,
+    busy_since TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS ivr_routing_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id TEXT NOT NULL REFERENCES helpline_calls(call_id),
+    vet_id INTEGER REFERENCES users(id),
+    score REAL,
+    outcome TEXT NOT NULL,
+    reason TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS ivr_call_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id TEXT NOT NULL REFERENCES helpline_calls(call_id),
+    event_type TEXT NOT NULL,
+    event_data TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Indexes for high performance
 CREATE INDEX IF NOT EXISTS idx_animal_qr_token ON animal_qr_codes(qr_token);
 CREATE INDEX IF NOT EXISTS idx_animal_qr_animal ON animal_qr_codes(animal_id);
@@ -451,14 +573,25 @@ CREATE INDEX IF NOT EXISTS idx_treatment_case ON treatment_responses(case_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_weather_dist ON weather_observations(district, fetched_at);
+CREATE INDEX IF NOT EXISTS idx_helpline_calls_farmer ON helpline_calls(farmer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_helpline_calls_status ON helpline_calls(status, last_activity_at);
+CREATE INDEX IF NOT EXISTS idx_helpline_calls_phone ON helpline_calls(caller_number, created_at);
+CREATE INDEX IF NOT EXISTS idx_helpline_reports_case ON helpline_reports(case_id);
+CREATE INDEX IF NOT EXISTS idx_helpline_reports_region ON helpline_reports(district, created_at);
+CREATE INDEX IF NOT EXISTS idx_helpline_reports_status ON helpline_reports(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_ivr_events_call ON ivr_call_events(call_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_ivr_routing_call ON ivr_routing_attempts(call_id, created_at);
 """
 
 
 def get_db():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 30000")
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
     return conn
 
 
@@ -518,24 +651,68 @@ def calculate_expected_delivery(species: str, breeding_date_str: str) -> str:
 
 
 def init_db(reset=False):
-    if reset and os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
-    first_time = not os.path.exists(DB_PATH)
-    conn = get_db()
-    conn.executescript(SCHEMA)
-    ensure_animals_columns(conn)
-    migrate_users_role(conn)
-    ensure_new_columns(conn)
+    """Initialize or migrate SQLite without deleting existing application data.
+
+    A filesystem lock serializes schema work across Gunicorn workers. All schema
+    changes are additive except the pre-existing one-time role migration.
+    """
+    with _database_init_lock():
+        if reset and os.path.exists(DB_PATH):
+            os.remove(DB_PATH)
+        first_time = not os.path.exists(DB_PATH)
+        conn = get_db()
+        try:
+            conn.executescript(SCHEMA)
+            ensure_user_columns(conn)
+            ensure_animals_columns(conn)
+            migrate_users_role(conn)
+            ensure_new_columns(conn)
+            conn.commit()
+            if first_time:
+                seed(conn)
+            ensure_govt_and_stock(conn)
+            ensure_campaigns(conn)
+            ensure_lab_user(conn)
+            ensure_qr_for_existing_animals(conn)
+            ensure_extended_seeds(conn)
+            ensure_helpline_defaults(conn)
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def ensure_user_columns(conn):
+    """Add profile fields used to skip already-known IVR questions."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "preferred_language" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN preferred_language TEXT")
     conn.commit()
-    if first_time:
-        seed(conn)
-    ensure_govt_and_stock(conn)
-    ensure_campaigns(conn)
-    ensure_lab_user(conn)
-    ensure_qr_for_existing_animals(conn)
-    ensure_extended_seeds(conn)
+
+
+def ensure_helpline_defaults(conn):
+    """Create availability records and conservative language defaults for seed users."""
+    profile_languages = {
+        "rajesh@example.com": "mr",
+        "sunita@example.com": "hi",
+    }
+    for email, language in profile_languages.items():
+        conn.execute(
+            "UPDATE users SET preferred_language=? WHERE email=? AND preferred_language IS NULL",
+            (language, email),
+        )
+
+    language_defaults = {
+        "vet1@example.com": ["en", "mr", "hi"],
+        "vet2@example.com": ["en", "mr", "hi", "te"],
+    }
+    vets = conn.execute("SELECT id, email, preferred_language FROM users WHERE role='vet'").fetchall()
+    for vet in vets:
+        languages = language_defaults.get(vet["email"], [vet["preferred_language"] or "en"])
+        conn.execute(
+            "INSERT OR IGNORE INTO vet_availability (vet_id, status, supported_languages) VALUES (?,?,?)",
+            (vet["id"], "AVAILABLE", json.dumps(languages)),
+        )
     conn.commit()
-    conn.close()
 
 
 def ensure_campaigns(conn):
@@ -581,15 +758,16 @@ def migrate_users_role(conn):
             salt TEXT NOT NULL,
             role TEXT NOT NULL CHECK(role IN ('owner','vet','govt','lab')),
             specialization TEXT,
+            preferred_language TEXT,
             village TEXT, block TEXT, district TEXT,
             state TEXT DEFAULT 'Maharashtra',
             is_seed INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now'))
         );
         INSERT INTO users_new (id, full_name, mobile, email, password_hash, salt, role,
-                               specialization, village, block, district, state, is_seed, created_at)
+                               specialization, preferred_language, village, block, district, state, is_seed, created_at)
         SELECT id, full_name, mobile, email, password_hash, salt, role,
-               specialization, village, block, district, state, is_seed, created_at
+               specialization, preferred_language, village, block, district, state, is_seed, created_at
         FROM users;
         DROP TABLE users;
         ALTER TABLE users_new RENAME TO users;

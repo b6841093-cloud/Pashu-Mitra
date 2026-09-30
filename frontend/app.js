@@ -11,6 +11,23 @@
 
 const API = "/api";
 const ROLES = ["owner", "vet", "govt", "lab"];
+// Runtime configuration is fetched from /api/ivr/info. This fixed fallback keeps
+// click-to-call available if the info request is temporarily unavailable.
+const DEFAULT_IVR_INFO = {
+  helpline_number: "7382210251",
+  helpline_e164: "+917382210251",
+  display_number: "7382210251",
+  tel_uri: "tel:+917382210251",
+  provider_mode: "MOCK",
+  pstn_connected: false,
+};
+const DEMO_ACCOUNTS = {
+  owner: { username: "rajesh@example.com", password: "password123" },
+  vet: { username: "vet1@example.com", password: "password123" },
+  govt: { username: "govt@example.com", password: "password123" },
+  lab: { username: "lab@example.com", password: "password123" },
+};
+let ivrInfoPromise = null;
 
 const state = {
   token: localStorage.getItem("token") || null,
@@ -132,6 +149,37 @@ async function syncOfflineQueue() {
 }
 window.syncOfflineQueue = syncOfflineQueue;
 window.addEventListener("online", syncOfflineQueue);
+
+async function getIvrInfo() {
+  if (!ivrInfoPromise) {
+    ivrInfoPromise = fetch(API + "/ivr/info")
+      .then(res => res.ok ? res.json() : Promise.reject(new Error("Helpline configuration unavailable")))
+      .catch(() => DEFAULT_IVR_INFO);
+  }
+  return ivrInfoPromise;
+}
+
+function helplineCard(info = DEFAULT_IVR_INFO) {
+  const number = info.helpline_number || DEFAULT_IVR_INFO.helpline_number;
+  const telUri = info.tel_uri || DEFAULT_IVR_INFO.tel_uri;
+  return `
+    <div class="section-card helpline-card">
+      <div class="section-title">☎️ Need Veterinary Help?</div>
+      <div class="small-muted">Pashu-Shield Helpline</div>
+      <div class="helpline-number">${number}</div>
+      <a class="btn btn-primary helpline-call" href="${telUri}" aria-label="Call Pashu-Shield helpline ${number}">☎ CALL NOW</a>
+      <div class="desktop-call-note">On a desktop computer, call this number from your mobile phone.</div>
+    </div>`;
+}
+
+function demoAccountBox(role) {
+  const account = DEMO_ACCOUNTS[role];
+  return `<div class="demo-box">
+    <b>Demo Account</b><br />
+    Username: <b>${account.username}</b><br />
+    Password: <b>${account.password}</b>
+  </div>`;
+}
 
 async function api(path, { method = "GET", body } = {}) {
   const headers = { "Content-Type": "application/json" };
@@ -435,6 +483,7 @@ function loginForm(role) {
     <div class="field"><label>Password</label><input name="password" type="password" required /></div>
     <button class="btn btn-primary" type="submit">${t("btn.login")}</button>
     <div class="auth-switch">${t("auth.newHere")} <a onclick="location.hash='#/register/${role}'">${t("auth.createAccount")}</a></div>
+    ${demoAccountBox(role)}
   </form>`;
 }
 
@@ -456,8 +505,10 @@ function registerForm(role) {
       <div class="field"><label>Block</label><input name="block" /></div>
     </div>
     <div class="field"><label>District</label><input name="district" placeholder="e.g. Pune" required /></div>
+    ${role === "owner" ? `<div class="field"><label>Preferred Helpline Language</label><select name="preferred_language"><option value="">Ask me during a call</option><option value="en">English</option><option value="te">Telugu</option><option value="hi">Hindi</option><option value="mr">Marathi</option></select></div>` : ""}
     <button class="btn btn-primary" type="submit">${t("btn.register")}</button>
     <div class="auth-switch">${t("auth.haveAccount")} <a onclick="location.hash='#/login/${role}'">${t("btn.login")}</a></div>
+    ${demoAccountBox(role)}
   </form>`;
 }
 
@@ -473,7 +524,7 @@ route("#/lab/dashboard", () => labDashboard(), ["lab"]);
 
 async function ownerDashboard() {
   render(`${header("PashuMitra")}<div class="loading">Loading your dashboard…</div>`);
-  const summary = await api("/owner/summary");
+  const [summary, ivrInfo] = await Promise.all([api("/owner/summary"), getIvrInfo()]);
   render(`
     ${header("PashuMitra")}
     <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Welcome back,</div><div style="font-size:19px;font-weight:800">${state.user.full_name} 👋</div></div>
@@ -485,6 +536,7 @@ async function ownerDashboard() {
       ${statCard(summary.prescriptions, "Prescriptions")}
       ${statCard("MH", "State: Maharashtra")}
     </div>
+    ${helplineCard(ivrInfo)}
     <div class="section-card">
       <div class="section-title">Quick Actions</div>
       <div class="icon-grid">
@@ -509,7 +561,10 @@ async function ownerDashboard() {
 
 async function vetDashboard() {
   render(`${header("Vet Dashboard")}<div class="loading">Loading…</div>`);
-  const summary = await api("/vet/summary");
+  const [summary, availabilityRows] = await Promise.all([
+    api("/vet/summary"), api("/vet/availability").catch(() => [])
+  ]);
+  const availability = availabilityRows[0] || { configured_status: "AVAILABLE", effective_status: "AVAILABLE", supported_languages: ["en"] };
   render(`
     ${header("Vet Dashboard")}
     <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Welcome,</div><div style="font-size:19px;font-weight:800">${state.user.full_name} 🩺</div></div>
@@ -522,10 +577,24 @@ async function vetDashboard() {
       ${statCard("MH", "State: Maharashtra")}
     </div>
     <div class="section-card">
+      <div class="section-title">☎️ Helpline Availability</div>
+      <div class="meta" style="margin-bottom:10px">Effective status: <span class="badge ${availability.effective_status === 'AVAILABLE' ? 'badge-green' : 'badge-orange'}">${availability.effective_status}</span></div>
+      <div class="form-row">
+        <div class="field"><label>Call Status</label><select id="vetAvailabilityStatus">
+          ${["AVAILABLE", "BUSY", "OFFLINE"].map(s => `<option ${availability.configured_status === s ? "selected" : ""}>${s}</option>`).join("")}
+        </select></div>
+        <div class="field"><label>Call Languages</label><select id="vetAvailabilityLanguages" multiple size="4">
+          ${[["en","English"],["te","Telugu"],["hi","Hindi"],["mr","Marathi"]].map(([code,label]) => `<option value="${code}" ${(availability.supported_languages || []).includes(code) ? "selected" : ""}>${label}</option>`).join("")}
+        </select></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="saveVetAvailability()">Save Availability</button>
+    </div>
+    <div class="section-card">
       <div class="section-title">Today's Tasks</div>
       <div class="icon-grid">
         ${iconItem("📷", "Scan QR", "#/scan")}
         ${iconItem("📋", "User Reports", "#/vet/reports")}
+        ${iconItem("☎️", "Helpline Reports", "#/vet/helpline")}
         ${iconItem("🩺", "All Cases", "#/vet/cases")}
         ${iconItem("🧪", "Lab Reports", "#/vet/lab-reports")}
         ${iconItem("🔍", "Search Herd/Animal", "#/vet/search")}
@@ -542,6 +611,16 @@ async function vetDashboard() {
   `);
 }
 
+window.saveVetAvailability = async function() {
+  const status = document.getElementById("vetAvailabilityStatus")?.value;
+  const supported_languages = Array.from(document.getElementById("vetAvailabilityLanguages")?.selectedOptions || []).map(o => o.value);
+  try {
+    await api("/vet/availability", { method: "PUT", body: { status, supported_languages } });
+    toast("Helpline availability updated");
+    vetDashboard();
+  } catch (err) { toast(err.message, true); }
+};
+
 async function govtDashboard() {
   render(`${header("Govt Analytics")}<div class="loading">Loading state analytics…</div>`);
   const a = await api("/govt/analytics");
@@ -553,6 +632,16 @@ async function govtDashboard() {
       ${statCard(a.totals.active, "Active Cases")}
       ${statCard(a.totals.animals, "Animals Registered")}
       ${statCard(a.totals.districts, "Districts Reporting")}
+    </div>
+    <div class="section-card">
+      <div class="section-title">☎️ Helpline Reporting</div>
+      <div class="stat-grid" style="margin:0 0 12px">
+        ${statCard(a.helpline.total_calls, "Calls")}
+        ${statCard(a.helpline.vet_connections, "Vet Connections")}
+        ${statCard(a.helpline.reports_created, "Reports")}
+        ${statCard(a.helpline.partial_calls, "Partial")}
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/helpline'">View Helpline Reports</button>
     </div>
     <div class="section-card">
       <div class="section-title">🗺️ GIS Risk Map & Surveillance</div>
@@ -608,6 +697,42 @@ async function labDashboard() {
     ${bottomNav("#/lab/dashboard")}
   `);
 }
+
+// ======================================================== HELPLINE REPORTS ==
+function helplineReportsView(role) {
+  route(`#/${role}/helpline`, async () => {
+    render(`${header("Helpline Reports", { back: true })}<div class="loading">Loading helpline reports…</div>`);
+    const [reports, analytics] = await Promise.all([
+      api("/ivr/reports"), api("/ivr/analytics")
+    ]);
+    render(`
+      ${header("Helpline Reports", { back: true })}
+      <div class="section-card">
+        <div class="section-title">☎️ Pashu-Shield Call Analytics</div>
+        <div class="stat-grid" style="margin:0">
+          ${statCard(analytics.total_calls, "Total Calls")}
+          ${statCard(analytics.vet_connections, "Vet Connected")}
+          ${statCard(analytics.survey_completions, "Surveys Done")}
+          ${statCard(analytics.duplicate_reports, "Duplicates")}
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">Structured Helpline Reports</div>
+        ${reports.length === 0 ? emptyState("No helpline reports yet.") : reports.map(r => `
+          <div class="list-card" ${r.case_id ? `onclick="location.hash='#/${role}/cases/${r.case_id}'"` : "style=\"cursor:default\""}>
+            <div class="row1"><span class="title">${r.report_no}</span><span class="badge ${r.status === 'DUPLICATE_FLAGGED' ? 'badge-orange' : r.status === 'PARTIAL' ? 'badge-blue' : 'badge-green'}">${r.status}</span></div>
+            <div class="meta"><b>Farmer:</b> ${r.farmer_name || "Unlinked caller"} · <b>Animal:</b> ${r.animal_code || r.structured_summary.species || "Not Provided"}</div>
+            <div class="meta"><b>Region:</b> ${r.village || ""}${r.village && r.district ? ", " : ""}${r.district || "Unknown"} · ${r.location_source}</div>
+            <div class="meta"><b>Symptoms:</b> ${r.symptoms || "Not Provided"} · <b>Urgency:</b> ${r.urgency || "Not Provided"}</div>
+            <div class="small-muted">Language: ${r.language || "Unknown"} · Source: ${r.source} · ${fmtDate(r.created_at)}</div>
+          </div>`).join("")}
+      </div>
+      ${bottomNav(homeFor(role))}
+    `);
+  }, [role]);
+}
+helplineReportsView("vet");
+helplineReportsView("govt");
 
 // ======================================================== LABORATORY QUEUE & DETAIL ==
 route("#/lab/queue", async () => {
@@ -2017,17 +2142,18 @@ function getVoiceWorker() {
 }
 function setVoiceStatus(txt) { const el = document.getElementById("voiceStatus"); if (el) el.textContent = txt; }
 function onVoiceMessage(e) {
-  const { status, text, error } = e.data || {};
-  if (status === "ready") setVoiceStatus("AI Speech Model ready. Speak now.");
-  else if (status === "transcribing") setVoiceStatus("Transcribing Marathi/English speech…");
-  else if (status === "done") {
+  const { status, type, text, error } = e.data || {};
+  const eventType = status || type;
+  if (eventType === "ready") setVoiceStatus("AI Speech Model ready. Speak now.");
+  else if (eventType === "progress" || eventType === "transcribing") setVoiceStatus("Transcribing Marathi/English speech…");
+  else if (eventType === "result" || eventType === "done") {
     setVoiceStatus("Transcribed!");
     const tWrap = document.getElementById("voiceTranscriptWrap");
     const tBox = document.getElementById("voiceTranscriptText");
     const symInp = document.getElementById("symptomsInput");
     if (tWrap && tBox) { tWrap.style.display = "block"; tBox.textContent = text; }
     if (symInp && !symInp.value) symInp.value = text;
-  } else if (status === "error") setVoiceStatus("⚠️ Speech Error: " + (error || "failed"));
+  } else if (eventType === "error") setVoiceStatus("⚠️ Speech Error: " + (error || "failed"));
 }
 
 function setupVoiceReport() {
@@ -2047,12 +2173,14 @@ function setupVoiceReport() {
       mediaRec.ondataavailable = ev => chunks.push(ev.data);
       mediaRec.onstop = async () => {
         setVoiceStatus("Processing voice audio…");
-        const blob = new Blob(chunks, { type: "audio/wav" });
+        stream.getTracks().forEach(track => track.stop());
+        const blob = new Blob(chunks, { type: mediaRec.mimeType || "audio/webm" });
         const ab = await blob.arrayBuffer();
         const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
         const decoded = await ctx.decodeAudioData(ab);
         const floatData = decoded.getChannelData(0);
-        getVoiceWorker().postMessage({ audio: floatData });
+        const whisperLanguage = state.lang === "mr" ? "marathi" : "english";
+        getVoiceWorker().postMessage({ type: "transcribe", audio: floatData, language: whisperLanguage });
       };
       mediaRec.start();
       btn.textContent = "⏹️ Stop Recording";
@@ -2134,6 +2262,19 @@ function caseDetailView(role) {
         </div>
         ${c.description ? `<div style="margin-top:10px"><b class="small-muted">Description:</b><div style="font-size:13.5px">${c.description}</div></div>` : ""}
       </div>
+
+      ${c.helpline_report ? `
+        <div class="section-card">
+          <div class="section-title">☎️ Helpline Report ${c.helpline_report.report_no}</div>
+          <div class="detail-grid">
+            <div><b>Source</b>${c.helpline_report.source}</div>
+            <div><b>Report Status</b>${c.helpline_report.status}</div>
+            <div><b>Language</b>${c.helpline_report.language || "Unknown"}</div>
+            <div><b>Location Source</b>${c.helpline_report.location_source}</div>
+            <div><b>Region</b>${c.helpline_report.village || ""}${c.helpline_report.village && c.helpline_report.district ? ", " : ""}${c.helpline_report.district || "Unknown"}</div>
+            <div><b>Urgency</b>${c.helpline_report.urgency || "Not Provided"}</div>
+          </div>
+        </div>` : ""}
 
       <!-- ALLERGY ALERT BANNER IF APPLICABLE -->
       ${allergies.length > 0 ? `

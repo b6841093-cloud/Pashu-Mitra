@@ -9,7 +9,9 @@ import json
 import os
 from datetime import datetime
 
-os.makedirs("models", exist_ok=True)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.abspath(os.path.expanduser(os.environ.get("ML_MODEL_DIR", os.path.join(BASE_DIR, "models"))))
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 print("Generating synthetic demo data...")
 np.random.seed(42)
@@ -99,10 +101,10 @@ iso_model = IsolationForest(contamination=0.05, random_state=42)
 iso_model.fit(df[iso_features])
 
 print("Saving models to disk...")
-joblib.dump(rf, "models/rf_model.pkl")
-joblib.dump(scaler, "models/scaler.pkl")
-joblib.dump(iso_model, "models/iso_model.pkl")
-with open("models/metrics.json", "w") as f:
+joblib.dump(rf, os.path.join(MODEL_DIR, "rf_model.pkl"))
+joblib.dump(scaler, os.path.join(MODEL_DIR, "scaler.pkl"))
+joblib.dump(iso_model, os.path.join(MODEL_DIR, "iso_model.pkl"))
+with open(os.path.join(MODEL_DIR, "metrics.json"), "w", encoding="utf-8") as f:
     json.dump(metrics, f)
 
 print("Training complete!")

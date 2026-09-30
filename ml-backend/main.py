@@ -12,21 +12,27 @@ from sklearn.cluster import DBSCAN
 
 app = FastAPI(title="Livestock Health Surveillance AI & Decision Support API")
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.abspath(os.path.expanduser(os.environ.get("ML_MODEL_DIR", os.path.join(BASE_DIR, "models"))))
+configured_origins = [
+    origin.strip() for origin in os.environ.get("ML_CORS_ORIGINS", os.environ.get("APP_BASE_URL", "")).split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=configured_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Load existing models safely
 def load_models():
     try:
-        rf_model = joblib.load("models/rf_model.pkl")
-        scaler = joblib.load("models/scaler.pkl")
-        iso_model = joblib.load("models/iso_model.pkl")
-        with open("models/metrics.json", "r") as f:
+        rf_model = joblib.load(os.path.join(MODEL_DIR, "rf_model.pkl"))
+        scaler = joblib.load(os.path.join(MODEL_DIR, "scaler.pkl"))
+        iso_model = joblib.load(os.path.join(MODEL_DIR, "iso_model.pkl"))
+        with open(os.path.join(MODEL_DIR, "metrics.json"), "r", encoding="utf-8") as f:
             metrics = json.load(f)
         return rf_model, scaler, iso_model, metrics
     except Exception as e:
@@ -36,10 +42,25 @@ def load_models():
 rf_model, scaler, iso_model, metrics = load_models()
 
 FEATURE_COLS = [
-    "animal_population", "affected_animals", "new_cases", "deaths", 
-    "vaccination_coverage", "temperature", "rainfall", "humidity", 
+    "animal_population", "affected_animals", "new_cases", "deaths",
+    "vaccination_coverage", "temperature", "rainfall", "humidity",
     "animal_density", "previous_cases", "cases_growth_rate"
 ]
+
+
+@app.get("/health")
+@app.get("/api/health")
+async def health():
+    models_ready = all(model is not None for model in (rf_model, scaler, iso_model)) and metrics is not None
+    if not models_ready:
+        raise HTTPException(status_code=503, detail="One or more trained model artifacts are unavailable.")
+    return {
+        "status": "ok",
+        "service": "pashu-shield-ml",
+        "models_ready": True,
+        "model": metrics.get("model"),
+    }
+
 
 class PredictRequest(BaseModel):
     disease: str

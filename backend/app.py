@@ -7,6 +7,8 @@ import sqlite3
 import requests
 import io
 import base64
+import secrets
+import logging
 from datetime import datetime, timedelta, date
 from functools import wraps
 from flask import Flask, request, jsonify, g, send_from_directory
@@ -18,18 +20,35 @@ from sklearn.cluster import DBSCAN
 
 from database import (
     get_db, init_db, hash_password, verify_password, next_code,
-    audit_log, calculate_expected_delivery
+    audit_log, calculate_expected_delivery, DB_PATH
+)
+from case_service import create_case_record
+from ivr_config import LANGUAGE_NAMES, SUPPORTED_LANGUAGES, get_ivr_settings
+from ivr_security import ivr_webhook_required
+from ivr_service import (
+    apply_call_input, call_response, finalize_report, get_call_for_user,
+    handle_call_event, helpline_analytics, list_reports_for_user,
+    list_vet_availability, set_vet_availability, start_inbound_call,
 )
 import weather
 import animal_ai
 
-SECRET_KEY = os.environ.get("SIH_SECRET_KEY", "sih-hackathon-dev-secret-change-me")
+SECRET_KEY = os.environ.get("SIH_SECRET_KEY") or secrets.token_urlsafe(48)
+if not os.environ.get("SIH_SECRET_KEY"):
+    logging.getLogger(__name__).warning(
+        "SIH_SECRET_KEY is not configured; generated an ephemeral development key."
+    )
 TOKEN_EXP_HOURS = 12
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 PORT = int(os.environ.get("PORT", "5001"))
 
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
+# Validate the fixed helpline/provider configuration during process startup.
+get_ivr_settings()
+# Safe under multiple Gunicorn workers: database.init_db uses an inter-process
+# lock and additive/idempotent migrations.
+init_db()
 
 CASE_STATUSES = [
     "NEW", "ASSIGNED", "UNDER INVESTIGATION", "SAMPLE COLLECTED", "LAB PENDING",
@@ -106,6 +125,18 @@ def case_json(conn, row):
     d["herd"] = row_to_dict(herd)
     d["owner"] = row_to_dict(owner)
     d["vet_name"] = vet["full_name"] if vet else None
+    helpline = conn.execute(
+        "SELECT report_no, call_id, language, district, village, location_source, urgency, source, status, duplicate_of, structured_summary "
+        "FROM helpline_reports WHERE case_id=? ORDER BY id DESC LIMIT 1",
+        (d["id"],),
+    ).fetchone()
+    if helpline:
+        d["helpline_report"] = row_to_dict(helpline)
+        d["helpline_report"]["structured_summary"] = json.loads(
+            d["helpline_report"]["structured_summary"] or "{}"
+        )
+    else:
+        d["helpline_report"] = None
     return d
 
 
@@ -170,12 +201,49 @@ def check_allergy_conflict(medicine_name: str, active_allergies: list) -> dict |
 def no_cache_static(resp):
     if request.path in ("/", "/index.html") or request.path.endswith((".js", ".css")):
         resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy", "microphone=(self), camera=(self), geolocation=(self)")
     return resp
 
 
 @app.route("/")
 def index():
     return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+@app.get("/api/health")
+def health():
+    try:
+        conn = get_db()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        database_ok = True
+    except sqlite3.Error:
+        database_ok = False
+    return jsonify({
+        "status": "ok" if database_ok else "degraded",
+        "service": "pashu-shield-backend",
+        "database": "ok" if database_ok else "unavailable",
+        "provider_mode": get_ivr_settings().provider_mode,
+    }), 200 if database_ok else 503
+
+
+@app.get("/api/ivr/info")
+def ivr_info():
+    settings = get_ivr_settings()
+    return jsonify({
+        "helpline_number": settings.phone_number,
+        "helpline_e164": settings.helpline_e164,
+        "display_number": settings.display_number,
+        "tel_uri": settings.tel_uri,
+        "provider_mode": settings.provider_mode,
+        "pstn_connected": settings.pstn_connected,
+        "supported_languages": [
+            {"code": code, "name": LANGUAGE_NAMES[code]} for code in SUPPORTED_LANGUAGES
+        ],
+    })
 
 
 # ------------------------------------------------------------------ auth --
@@ -192,6 +260,9 @@ def register():
         return jsonify({"error": "Password must be at least 6 characters"}), 400
     if data["role"] not in ("owner", "vet", "govt", "lab"):
         return jsonify({"error": "Invalid role"}), 400
+    preferred_language = (data.get("preferred_language") or "").strip().lower() or None
+    if preferred_language and preferred_language not in SUPPORTED_LANGUAGES:
+        return jsonify({"error": "Preferred language must be en, te, hi, or mr"}), 400
 
     conn = get_db()
     try:
@@ -203,10 +274,10 @@ def register():
 
         pw_hash, salt = hash_password(data["password"])
         cur = conn.execute(
-            "INSERT INTO users (full_name, mobile, email, password_hash, salt, role, specialization, village, block, district, state) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO users (full_name, mobile, email, password_hash, salt, role, specialization, preferred_language, village, block, district, state) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (data["full_name"], data["mobile"], data["email"], pw_hash, salt, data["role"],
-             data.get("specialization"), data.get("village"), data.get("block"),
+             data.get("specialization"), preferred_language, data.get("village"), data.get("block"),
              data.get("district"), data.get("state", "Maharashtra")),
         )
         user_id = cur.lastrowid
@@ -716,80 +787,196 @@ def create_case():
         conn.close()
         return jsonify({"error": "Animal not found"}), 404
 
-    district = animal["district"] or "PUN"
-    case_no = next_code(conn, "CASE", "cases", "case_no", district=district[:3].upper())
-    vet_id = data.get("vet_id") or None
-    cur = conn.execute(
-        "INSERT INTO cases (case_no, animal_id, herd_id, owner_id, vet_id, symptoms, disease_suspected, severity, description, reported_through, status) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (case_no, animal["id"], animal["herd_id"], g.user["uid"], vet_id,
-         data.get("symptoms"), data.get("disease_suspected"), data.get("severity", "Medium"),
-         data.get("description"), data.get("reported_through", "Mobile App"), "NEW"),
+    source = data.get("reported_through", "Mobile App")
+    case = create_case_record(
+        conn,
+        animal=animal,
+        owner_id=g.user["uid"],
+        data=data,
+        source=source,
+        actor_name=g.user["name"],
+        actor_role=g.user["role"],
+        actor_id=g.user["uid"],
+        assigned_vet_id=data.get("vet_id") or None,
     )
-    case_id = cur.lastrowid
-    conn.execute("INSERT INTO case_updates (case_id, status, note, updated_by) VALUES (?,?,?,?)",
-                 (case_id, "NEW", "Case reported by owner", g.user["name"]))
-    conn.execute("UPDATE animals SET status='Under Observation' WHERE id=?", (animal["id"],))
-
-    if vet_id:
-        notify(conn, vet_id, f"New case assigned: {case_no} for {animal['animal_code']}", "case")
-    else:
-        vets = conn.execute("SELECT id FROM users WHERE role='vet' AND district=?", (district,)).fetchall()
-        for v in vets:
-            notify(conn, v["id"], f"New report in your district: {case_no}", "case")
-
-    audit_log(conn, "CREATE_CASE", "case", case_id, actor_id=g.user["uid"],
-              actor_name=g.user["name"], actor_role=g.user["role"],
-              details={"case_no": case_no, "animal_code": animal["animal_code"]})
     conn.commit()
-    case = conn.execute("SELECT * FROM cases WHERE id=?", (case_id,)).fetchone()
+    result = case_json(conn, case)
     conn.close()
-    return jsonify(case_json(get_db(), case)), 201
+    return jsonify(result), 201
+
+
+@app.post("/api/ivr/calls/inbound")
+@ivr_webhook_required
+def ivr_inbound_call():
+    data = request.get_json(force=True) or {}
+    conn = get_db()
+    try:
+        return jsonify(start_inbound_call(conn, data)), 201
+    except (ValueError, RuntimeError) as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.post("/api/ivr/calls/<call_id>/input")
+@ivr_webhook_required
+def ivr_call_input(call_id):
+    data = request.get_json(force=True) or {}
+    conn = get_db()
+    try:
+        return jsonify(apply_call_input(conn, call_id, data))
+    except LookupError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.post("/api/ivr/calls/<call_id>/events")
+@ivr_webhook_required
+def ivr_call_event(call_id):
+    data = request.get_json(force=True) or {}
+    conn = get_db()
+    try:
+        return jsonify(handle_call_event(conn, call_id, data))
+    except LookupError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 400
+    finally:
+        conn.close()
 
 
 @app.post("/api/ivr/report")
+@ivr_webhook_required
 def ivr_report():
+    """Backward-compatible completed-survey ingestion through the new IVR flow."""
     data = request.get_json(force=True) or {}
-    caller_mobile = data.get("mobile")
-    transcript = data.get("transcript") or data.get("symptoms") or ""
-    if not caller_mobile:
+    if not (data.get("caller_number") or data.get("mobile")):
         return jsonify({"error": "caller mobile is required"}), 400
-
     conn = get_db()
-    owner = conn.execute("SELECT * FROM users WHERE mobile=?", (caller_mobile,)).fetchone()
-    if not owner:
-        h, s = hash_password(secrets.token_hex(8))
-        cur = conn.execute(
-            "INSERT INTO users (full_name, mobile, email, password_hash, salt, role, village, district, is_seed) "
-            "VALUES (?,?,?,?,?,?,?,?,0)",
-            (f"Caller {caller_mobile[-4:]}", caller_mobile, f"caller_{caller_mobile}@ivr.local", h, s, "owner",
-             data.get("village", "Unknown"), data.get("district", "Pune")),
-        )
-        owner = conn.execute("SELECT * FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
+    try:
+        started = start_inbound_call(conn, {
+            "caller_number": data.get("caller_number") or data.get("mobile"),
+            "provider_call_id": data.get("provider_call_id"),
+        })
+        call_id = started["call_id"]
+        call = conn.execute("SELECT * FROM helpline_calls WHERE call_id=?", (call_id,)).fetchone()
+        language = call["language"] or (data.get("language") or "").lower()
+        if language not in SUPPORTED_LANGUAGES:
+            return jsonify({"error": "language is required for an unidentified-language caller"}), 400
+        district = call["district"] or data.get("district")
+        village = call["village"] or data.get("village")
+        if not district and not village:
+            return jsonify({"error": "district or village is required when region is unknown"}), 400
 
-    animal = conn.execute("SELECT * FROM animals WHERE owner_id=? ORDER BY id DESC LIMIT 1", (owner["id"],)).fetchone()
-    if not animal:
-        code = next_code(conn, "MH", "animals", "animal_code", district=(owner["district"] or "PUN")[:3].upper())
-        cur = conn.execute(
-            "INSERT INTO animals (animal_code, owner_id, species, status) VALUES (?,?,?,'Under Observation')",
-            (code, owner["id"], data.get("species", "Cattle")),
+        survey = json.loads(call["survey_data"] or "{}")
+        for field in (
+            "animal_id", "animal_name", "species", "breed", "age", "sex", "symptoms",
+            "duration", "severity", "affected_count", "vaccination_status",
+            "previous_treatment", "medicines_used", "farmer_observations",
+            "veterinarian_observations", "veterinarian_advice", "follow_up",
+            "additional_information", "urgency",
+        ):
+            if data.get(field) not in (None, ""):
+                survey[field] = data[field]
+        transcript = data.get("transcript") or ""
+        conn.execute(
+            """
+            UPDATE helpline_calls SET language=?, district=?, village=?, block=COALESCE(block, ?),
+              region_state=COALESCE(region_state, ?),
+              location_source=CASE WHEN location_source='UNKNOWN' THEN 'FARMER_PROVIDED' ELSE location_source END,
+              menu_option='2', status='SURVEY_COMPLETED', survey_data=?, transcript=?,
+              current_question=NULL, last_activity_at=datetime('now'), updated_at=datetime('now')
+            WHERE call_id=?
+            """,
+            (language, district, village, data.get("block"), data.get("state"),
+             json.dumps(survey, ensure_ascii=False), transcript, call_id),
         )
-        animal = conn.execute("SELECT * FROM animals WHERE id=?", (cur.lastrowid,)).fetchone()
+        conn.commit()
+        report = finalize_report(conn, call_id)
+        conn.execute(
+            "UPDATE helpline_calls SET status='COMPLETED', ended_at=datetime('now'), updated_at=datetime('now') WHERE call_id=?",
+            (call_id,),
+        )
+        conn.commit()
+        case = None
+        if report.get("case_id"):
+            row = conn.execute("SELECT * FROM cases WHERE id=?", (report["case_id"],)).fetchone()
+            case = case_json(conn, row)
+        return jsonify({"ok": True, "call_id": call_id, "report": report, "case": case}), 201
+    except (ValueError, RuntimeError) as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 400
+    finally:
+        conn.close()
 
-    case_no = next_code(conn, "CASE", "cases", "case_no")
-    cur = conn.execute(
-        "INSERT INTO cases (case_no, animal_id, herd_id, owner_id, symptoms, severity, description, reported_through, status) "
-        "VALUES (?,?,?,?,?,?,?,?,'NEW')",
-        (case_no, animal["id"], animal["herd_id"], owner["id"], transcript, "Medium",
-         f"IVR Call Transcript: {transcript}", "IVR"),
-    )
-    case_id = cur.lastrowid
-    conn.execute("INSERT INTO case_updates (case_id, status, note, updated_by) VALUES (?,?,?,?)",
-                 (case_id, "NEW", "Reported via Automated Voice/IVR", "IVR Bot"))
-    conn.commit()
-    case = conn.execute("SELECT * FROM cases WHERE id=?", (case_id,)).fetchone()
-    conn.close()
-    return jsonify({"ok": True, "case_no": case_no, "case": case_json(get_db(), case)}), 201
+
+@app.get("/api/ivr/reports")
+@auth_required(roles=["owner", "vet", "govt"])
+def ivr_reports():
+    conn = get_db()
+    try:
+        return jsonify(list_reports_for_user(conn, g.user["role"], g.user["uid"]))
+    finally:
+        conn.close()
+
+
+@app.get("/api/ivr/calls/<call_id>")
+@auth_required(roles=["owner", "vet", "govt"])
+def ivr_call_detail(call_id):
+    conn = get_db()
+    try:
+        return jsonify(get_call_for_user(conn, call_id, g.user["role"], g.user["uid"]))
+    except LookupError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except PermissionError as exc:
+        return jsonify({"error": str(exc)}), 403
+    finally:
+        conn.close()
+
+
+@app.get("/api/ivr/analytics")
+@auth_required(roles=["govt", "vet"])
+def ivr_analytics():
+    conn = get_db()
+    try:
+        return jsonify(helpline_analytics(conn))
+    finally:
+        conn.close()
+
+
+@app.get("/api/vet/availability")
+@auth_required(roles=["vet", "govt"])
+def get_vet_availability():
+    conn = get_db()
+    try:
+        rows = list_vet_availability(conn)
+        if g.user["role"] == "vet":
+            rows = [row for row in rows if row["vet_id"] == g.user["uid"]]
+        return jsonify(rows)
+    finally:
+        conn.close()
+
+
+@app.put("/api/vet/availability")
+@auth_required(roles=["vet"])
+def update_vet_availability():
+    data = request.get_json(force=True) or {}
+    conn = get_db()
+    try:
+        return jsonify(set_vet_availability(
+            conn, g.user["uid"], data.get("status"), data.get("supported_languages")
+        ))
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"error": str(exc)}), 400
+    finally:
+        conn.close()
 
 
 @app.get("/api/cases")
@@ -1914,12 +2101,14 @@ def govt_analytics():
     for r in stock_rows:
         stock_by_dist.setdefault(r["district"], []).append({"vaccine": r["vaccine"], "doses": r["doses_available"]})
 
+    helpline = helpline_analytics(conn)
     conn.close()
     return jsonify({
         "totals": {"cases": tot_cases, "active": tot_active, "animals": tot_animals, "districts": districts},
         "cases_by_district": [{"label": r["d"], "value": r["c"]} for r in cbd],
         "disease_spread": [{"label": r["d"], "value": r["c"]} for r in ds],
         "vaccine_stock": stock_by_dist,
+        "helpline": helpline,
     })
 
 
@@ -2047,6 +2236,7 @@ def govt_geo():
                COUNT(c.id) AS cases,
                SUM(CASE WHEN c.status NOT IN ('CLOSED','RECOVERED') THEN 1 ELSE 0 END) AS active,
                SUM(CASE WHEN LOWER(COALESCE(c.severity,'')) IN ('high','critical') THEN 1 ELSE 0 END) AS high_severity,
+               SUM(CASE WHEN c.reported_through IN ('HELPLINE','IVR') THEN 1 ELSE 0 END) AS helpline_cases,
                COUNT(DISTINCT c.animal_id) AS affected_animals
         FROM animals a LEFT JOIN cases c ON c.animal_id = a.id
         GROUP BY LOWER(district)
@@ -2087,6 +2277,7 @@ def govt_geo():
             "cases": cases,
             "active": r["active"] or 0,
             "high_severity": high,
+            "helpline_cases": r["helpline_cases"] or 0,
             "affected_animals": affected,
             "animal_population": pop.get(name, 0),
             "risk_level": risk,
@@ -2684,7 +2875,6 @@ def sync_queue():
 
 
 if __name__ == "__main__":
-    init_db()
-    print("Database ready at", os.path.join(os.path.dirname(__file__), "animal_health.db"))
+    print("Database ready at", DB_PATH)
     print(f"Starting app on http://0.0.0.0:{PORT}")
-    app.run(host="0.0.0.0", port=PORT, debug=True)
+    app.run(host="0.0.0.0", port=PORT, debug=os.environ.get("FLASK_DEBUG") == "1")

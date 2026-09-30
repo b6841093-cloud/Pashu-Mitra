@@ -1,3 +1,14 @@
 __pycache__/
-*.pyc
+.venv/
+*.py[cod]
 .DS_Store
+.env
+.env.*
+!.env.example
+*.db-wal
+*.db-shm
+*.init.lock
+*.log
+.coverage
+htmlcov/
+.pytest_cache/
