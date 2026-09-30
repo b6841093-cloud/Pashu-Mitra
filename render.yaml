@@ -1,19 +1,40 @@
 services:
+  # Backend API (Flask) - Main application server
   - type: web
     name: pashu-shield-backend
     runtime: python
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - --error-logfile -
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
       - key: SIH_SECRET_KEY
         generateValue: true
       - key: SIH_ML_BACKEND
-        sync: false
+        fromService:
+          type: web
+          name: pashu-shield-ml
+          property: hostport
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: "10000"
 
+  # ML Backend (FastAPI) - AI/ML inference service
   - type: web
     name: pashu-shield-ml
     runtime: python
     rootDir: ml-backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh
+    startCommand: ./start.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: PORT
+        value: "10000"
+    # ML service needs more memory for model loading
+    # Uncomment below if you need more resources (requires paid plan)
+    # resources:
+    #   limits:
+    #     memory: 1GB
