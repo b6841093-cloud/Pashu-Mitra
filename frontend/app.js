@@ -32,7 +32,7 @@ let ivrInfoPromise = null;
 const state = {
   token: localStorage.getItem("token") || null,
   user: JSON.parse(localStorage.getItem("user") || "null"),
-  lang: localStorage.getItem("pm_lang") || "en",
+  lang: ["en", "mr", "hi", "te"].includes(localStorage.getItem("pm_lang")) ? localStorage.getItem("pm_lang") : "en",
   route: "#/",
 };
 
@@ -63,6 +63,135 @@ const I18N = {
     "auth.choose": "Choose your portal", "auth.newHere": "New here?",
     "auth.haveAccount": "Already registered?", "auth.createAccount": "Create an account",
     "lang.label": "Language",
+    "farmer.app_name": "Pashu-Mitra",
+    "farmer.home": "Home", "farmer.dashboard_title": "Your Farm",
+    "farmer.welcome_back": "Welcome back,", "farmer.home_prompt": "What would you like to do?",
+    "farmer.my_livestock": "My Livestock", "farmer.add_animal": "Add Animal", "farmer.add_herd": "Add Herd",
+    "farmer.my_animals": "My Animals", "farmer.my_herds": "My Herds",
+    "farmer.report_problem": "Report a Problem", "farmer.cases": "Cases",
+    "farmer.health_treatment": "Health", "farmer.notifications": "Notifications", "farmer.profile": "My Profile",
+    "farmer.language": "Language", "farmer.what_to_do": "Choose an action",
+    "farmer.animal": "Animal", "farmer.animal_id": "Animal ID", "farmer.animal_name": "Animal Name",
+    "farmer.animal_type": "Animal Type", "farmer.breed": "Breed", "farmer.age": "Age",
+    "farmer.years": "years", "farmer.health_status": "Health", "farmer.status": "Status",
+    "farmer.herd": "Herd", "farmer.herd_name": "Herd", "farmer.animal_count": "animals",
+    "farmer.active_cases": "Open health cases", "farmer.no_active_cases": "No open health cases",
+    "farmer.no_animals": "No animals yet", "farmer.no_animals_hint": "Add your first animal to see it here.",
+    "farmer.no_herds": "No herds yet", "farmer.no_herds_hint": "Add a herd to group your animals.",
+    "farmer.loading": "Loading…", "farmer.loading_dashboard": "Loading your home…",
+    "farmer.loading_livestock": "Loading your livestock…", "farmer.loading_animal": "Loading animal details…",
+    "farmer.loading_herd": "Loading herd details…", "farmer.loading_cases": "Loading your cases…",
+    "farmer.loading_treatment": "Loading treatment…", "farmer.loading_notifications": "Loading notifications…",
+    "farmer.open_details": "View details", "farmer.location": "Location", "farmer.back_to_livestock": "Back to My Livestock",
+    "farmer.healthy": "Healthy", "farmer.under_treatment": "Under treatment", "farmer.under_observation": "Under observation", "farmer.deceased": "Deceased",
+    "farmer.sick": "Sick", "farmer.at_risk": "Needs attention", "farmer.low_risk": "Low risk",
+    "farmer.moderate_risk": "Some risk", "farmer.high_risk": "High risk", "farmer.critical": "Urgent",
+    "farmer.unknown": "Not available", "farmer.healthy_message": "No current health problem reported.",
+    "farmer.animal_information": "Animal details", "farmer.herd_information": "Herd details",
+    "farmer.herd_animals": "Animals in this herd", "farmer.health_and_treatment": "Health and treatment",
+    "farmer.treatment_history": "Treatment updates", "farmer.case_history": "Health reports",
+    "farmer.vaccination_history": "Vaccination history", "farmer.test_results": "Test results",
+    "farmer.no_treatments": "No treatment updates yet.", "farmer.no_cases": "No health reports yet.",
+    "farmer.no_lab_reports": "No test results yet.", "farmer.no_vaccinations": "No vaccination records yet.",
+    "farmer.no_herd_animals": "No animals are linked to this herd yet.",
+    "farmer.reported": "Reported", "farmer.severity": "How serious is it?", "farmer.diagnosis": "Veterinarian's findings",
+    "farmer.vet": "Veterinarian", "farmer.instructions": "Instructions", "farmer.follow_up": "Follow-up",
+    "farmer.due": "Due", "farmer.given_on": "Given on", "farmer.medicine": "Medicine",
+    "farmer.dosage": "Dose", "farmer.frequency": "How often", "farmer.duration": "For how long",
+    "farmer.prescribed_by": "Prescribed by", "farmer.report_case": "Report a problem",
+    "farmer.qr_tag": "Animal QR tag", "farmer.mark_deceased": "Mark as deceased", "farmer.delete_animal": "Delete animal",
+    "farmer.select": "Select", "farmer.choose_animal": "Choose your animal", "farmer.cattle": "Cow / Cattle",
+    "farmer.buffalo": "Buffalo", "farmer.goat": "Goat", "farmer.sheep": "Sheep", "farmer.other": "Other",
+    "farmer.gender": "Gender", "farmer.female": "Female", "farmer.male": "Male",
+    "farmer.optional": "optional", "farmer.no_herd": "No herd", "farmer.select_herd": "Select a herd",
+    "farmer.age_placeholder": "Age in years", "farmer.breed_placeholder": "Enter breed",
+    "farmer.full_name": "Full name", "farmer.mobile": "Mobile number", "farmer.village": "Village",
+    "farmer.block": "Block", "farmer.district": "District", "farmer.create_herd": "Create Herd",
+    "farmer.register_animal": "Save Animal", "farmer.creating_herd": "Creating herd…",
+    "farmer.animal_registered": "Animal {code} added successfully.", "farmer.herd_created": "Herd {code} created successfully.",
+    "farmer.validation_required": "Please fill in this field.", "farmer.validation_email": "Please enter a valid email address.",
+    "farmer.validation_min_length": "Please enter at least {count} characters.",
+    "farmer.generic_error": "Something went wrong. Please try again.", "farmer.connection_error": "Could not connect. Check your internet and try again.",
+    "farmer.invalid_animal_type": "Please choose an animal type.", "farmer.invalid_herd": "That herd could not be found. Please choose again.",
+    "farmer.save_animal_error": "Could not save the animal. Check the details and try again.",
+    "farmer.animal_not_found": "Animal not found.", "farmer.herd_not_found": "Herd not found.",
+    "farmer.access_error": "You do not have permission to view this information.",
+    "farmer.report_title": "Report a health problem", "farmer.describe_symptoms": "Tell us what is wrong",
+    "farmer.report_help": "Choose the animal and describe what you have noticed. A veterinarian will help.",
+    "farmer.voice_report": "Describe by voice", "farmer.tap_to_speak": "Tap to speak",
+    "farmer.stop_recording": "Stop recording", "farmer.press_mic": "Press the microphone and describe the problem.",
+    "farmer.transcribed_voice": "Voice transcription", "farmer.processing_voice": "Preparing your voice message…",
+    "farmer.symptoms": "What signs have you noticed?", "farmer.symptoms_placeholder": "For example: fever, not eating, or swelling",
+    "farmer.severity_low": "Mild", "farmer.severity_medium": "Moderate", "farmer.severity_high": "Serious",
+    "farmer.severity_critical": "Emergency", "farmer.additional_details": "Anything else we should know?",
+    "farmer.details_placeholder": "When did this start? Is another animal affected?",
+    "farmer.submit_report": "Send Report", "farmer.report_sent": "Your report was sent. Reference: {code}",
+    "farmer.my_cases": "My Reports", "farmer.case_detail": "Report details", "farmer.case_number": "Reference number",
+    "farmer.report_date": "Reported on", "farmer.case_status_new": "New", "farmer.case_status_assigned": "Veterinarian assigned",
+    "farmer.case_status_investigation": "Being checked", "farmer.case_status_sample": "Sample collected",
+    "farmer.case_status_lab": "Test in progress", "farmer.case_status_diagnosed": "Checked",
+    "farmer.case_status_treatment": "Treatment", "farmer.case_status_follow_up": "Follow-up",
+    "farmer.case_status_recovered": "Recovered", "farmer.case_status_closed": "Closed",
+    "farmer.case_status_completed": "Completed", "farmer.case_updates": "Updates",
+    "farmer.how_is_animal": "How is your animal now?", "farmer.recovery_status": "How is your animal feeling?",
+    "farmer.improving": "Getting better", "farmer.same": "No change", "farmer.worse": "Getting worse",
+    "farmer.notes": "Notes", "farmer.notes_placeholder": "Share any changes you have noticed.",
+    "farmer.submit_feedback": "Send update", "farmer.feedback_thanks": "Thank you. Your update was sent.",
+    "farmer.no_prescriptions": "No medicines have been prescribed yet.", "farmer.no_notifications": "You are all caught up.",
+    "farmer.new": "New", "farmer.notification_case": "Health report", "farmer.notification_lab": "Test result",
+    "farmer.notification_prescription": "Medicine", "farmer.notification_vaccination": "Vaccination",
+    "farmer.notification_alert": "Health alert", "farmer.notification_info": "Notice",
+    "farmer.notification_case_new": "New health report {case} for animal {animal}.",
+    "farmer.notification_case_update": "Health report {case} updated: {status}.",
+    "farmer.notification_lab_ready": "Test result {report} is ready for report {case}.",
+    "farmer.notification_prescription_issued": "Medicine instructions are ready for report {case}.",
+    "farmer.notification_vaccination_due": "Vaccination is due for animal {animal}. Please arrange a visit.",
+    "farmer.notification_farm_alert": "Health alert: {disease} reported near {district}. {action}",
+    "farmer.notification_vet_on_way": "Dr. {name} is on the way to help with report {case}.",
+    "farmer.notification_vet_arrived": "Dr. {name} has arrived for report {case}.",
+    "farmer.notification_test_requested": "A test has been requested for report {case}.",
+    "farmer.notification_lab_problem": "The test for animal {animal} could not be completed: {reason}",
+    "farmer.notification_case_recovered": "Report {case} has been marked as recovered by Dr. {name}.",
+    "farmer.notification_auto_escalation": "Urgent: report {case} needs immediate attention.",
+    "farmer.mobile_label": "Mobile", "farmer.email": "Email", "farmer.specialization": "Specialization",
+    "farmer.current_language": "Current language", "farmer.logout": "Log out", "farmer.user": "User",
+    "farmer.helpline_title": "Need help for an animal?", "farmer.helpline_name": "Pashu-Shield helpline",
+    "farmer.call_now": "Call now", "farmer.desktop_call_note": "Use your mobile phone to call this number.",
+    "farmer.not_found": "Page not found.", "farmer.go_home": "Go to Home", "farmer.error": "Something went wrong.",
+    "farmer.offline_queued": "No internet. Your request is saved and will send when you reconnect.",
+    "farmer.delete_confirm": "Delete animal {code}? Its health reports and treatment records will also be removed.",
+    "farmer.animal_deleted": "Animal {code} deleted.", "farmer.deceased_prompt": "Enter the reason for marking animal {code} as deceased:",
+    "farmer.animal_marked_deceased": "Animal {code} marked as deceased.", "farmer.cancel": "Cancel",
+    "farmer.tracking_title": "Veterinarian visit", "farmer.tracking_report_placed": "Report sent",
+    "farmer.tracking_vet_accepted": "Veterinarian accepted", "farmer.tracking_on_way": "On the way",
+    "farmer.tracking_arrived": "Arrived", "farmer.tracking_visit_done": "Visit complete",
+    "farmer.eta": "Estimated arrival", "farmer.minutes": "minutes", "farmer.assigned": "Assigned",
+    "farmer.response_improved": "Getting better", "farmer.response_unchanged": "No change",
+    "farmer.response_worsened": "Getting worse", "farmer.response_recovered": "Recovered",
+    "farmer.response_adverse_reaction": "Reaction to medicine", "farmer.response_treatment_discontinued": "Treatment stopped",
+    "farmer.response_follow_up_required": "Follow-up needed",
+    "farmer.no_cases_home": "No reports yet.", "farmer.error_report_animal": "Choose an animal before sending the report.",
+    "farmer.offline_count": "saved actions waiting to send · Tap to sync", "farmer.sync_success": "Saved actions sent successfully.",
+    "farmer.farmer_portal": "Farmer portal", "farmer.demo_account": "Demo account", "farmer.username": "Username",
+    "farmer.password": "Password", "farmer.email_or_mobile": "Email or mobile number", "farmer.confirm_password": "Confirm password",
+    "farmer.positive": "Positive", "farmer.negative": "Negative", "farmer.pending": "Pending", "farmer.result": "Result",
+    "farmer.download": "Download", "farmer.print": "Print tag", "farmer.close": "Close",
+    "farmer.preferred_helpline_language": "Preferred language for calls", "farmer.ask_language_call": "Ask me during a call",
+    "farmer.welcome_toast": "Welcome back, {name}!", "farmer.account_created": "Account created for {name}!", "farmer.logout_success": "You have logged out.",
+    "farmer.voice_ready": "Ready. Speak now.", "farmer.voice_transcribing": "Listening to your message…", "farmer.voice_transcribed_status": "Your message is ready.",
+    "farmer.voice_processing": "Preparing your voice message…", "farmer.voice_recording": "Recording… Please describe the problem.",
+    "farmer.voice_error": "Could not understand the recording. Please try again.", "farmer.microphone_denied": "Microphone permission was not allowed.",
+    "farmer.login_invalid": "The email, mobile number, or password is incorrect.", "farmer.account_exists": "An account with this email or mobile already exists.",
+    "farmer.passwords_mismatch": "The passwords do not match.", "farmer.password_short": "Use at least 6 characters for the password.",
+    "farmer.login_required": "Enter your email or mobile number and password.", "farmer.portal_mismatch": "Please use the correct portal for this account.",
+    "farmer.register_error": "Please check the information and try again.",
+    "farmer.notification_settings": "Notification settings", "farmer.push_notifications": "Push notifications",
+    "farmer.push_available": "Turn on push notifications to receive alerts about reports, test results, and health updates.",
+    "farmer.push_unavailable": "Push notifications are not set up on this device. You will still receive in-app notifications.",
+    "farmer.push_admin": "Push notifications are not set up on this server. In-app notifications will still work.",
+    "farmer.enable_push": "Turn on notifications", "farmer.push_unsupported": "Push notifications are not supported on this device.",
+    "farmer.push_permission_denied": "Notification permission was not given. Check your device settings.",
+    "farmer.push_enabled": "Notifications are turned on.", "farmer.push_failed": "Could not turn on notifications. Please try again.",
   },
   mr: {
     "app.tagline": "पशुधन रोग अहवाल आणि पशुवैद्यकीय सेवा — महाराष्ट्र",
@@ -83,6 +212,135 @@ const I18N = {
     "auth.choose": "तुमचे पोर्टल निवडा", "auth.newHere": "नवीन आहात?",
     "auth.haveAccount": "आधीच नोंदणी केली आहे?", "auth.createAccount": "खाते तयार करा",
     "lang.label": "भाषा",
+    "farmer.app_name": "पशुमित्र",
+    "farmer.home": "मुख्यपृष्ठ", "farmer.dashboard_title": "तुमचे शेत",
+    "farmer.welcome_back": "पुन्हा स्वागत आहे,", "farmer.home_prompt": "तुम्हाला काय करायचे आहे?",
+    "farmer.my_livestock": "माझे पशुधन", "farmer.add_animal": "प्राणी जोडा", "farmer.add_herd": "कळप जोडा",
+    "farmer.my_animals": "माझे प्राणी", "farmer.my_herds": "माझे कळप",
+    "farmer.report_problem": "समस्या कळवा", "farmer.cases": "प्रकरणे",
+    "farmer.health_treatment": "आरोग्य", "farmer.notifications": "सूचना", "farmer.profile": "माझे प्रोफाइल",
+    "farmer.language": "भाषा", "farmer.what_to_do": "कृती निवडा",
+    "farmer.animal": "प्राणी", "farmer.animal_id": "प्राणी क्रमांक", "farmer.animal_name": "प्राण्याचे नाव",
+    "farmer.animal_type": "प्राण्याचा प्रकार", "farmer.breed": "जात", "farmer.age": "वय",
+    "farmer.years": "वर्षे", "farmer.health_status": "आरोग्य", "farmer.status": "स्थिती",
+    "farmer.herd": "कळप", "farmer.herd_name": "कळप", "farmer.animal_count": "प्राणी",
+    "farmer.active_cases": "सुरू असलेली आरोग्य प्रकरणे", "farmer.no_active_cases": "सध्या कोणतेही आरोग्य प्रकरण सुरू नाही",
+    "farmer.no_animals": "अजून प्राणी नाहीत", "farmer.no_animals_hint": "तुमचा पहिला प्राणी येथे पाहण्यासाठी जोडा.",
+    "farmer.no_herds": "अजून कळप नाहीत", "farmer.no_herds_hint": "प्राण्यांना एकत्र ठेवण्यासाठी कळप जोडा.",
+    "farmer.loading": "लोड होत आहे…", "farmer.loading_dashboard": "तुमचे मुख्यपृष्ठ उघडत आहे…",
+    "farmer.loading_livestock": "तुमचे पशुधन उघडत आहे…", "farmer.loading_animal": "प्राण्याची माहिती उघडत आहे…",
+    "farmer.loading_herd": "कळपाची माहिती उघडत आहे…", "farmer.loading_cases": "तुमची प्रकरणे उघडत आहेत…",
+    "farmer.loading_treatment": "उपचाराची माहिती उघडत आहे…", "farmer.loading_notifications": "सूचना उघडत आहेत…",
+    "farmer.open_details": "माहिती पहा", "farmer.location": "ठिकाण", "farmer.back_to_livestock": "माझ्या पशुधनाकडे परत",
+    "farmer.healthy": "निरोगी", "farmer.under_treatment": "उपचार सुरू", "farmer.under_observation": "निरीक्षण सुरू", "farmer.deceased": "मृत",
+    "farmer.sick": "आजारी", "farmer.at_risk": "लक्ष देणे आवश्यक", "farmer.low_risk": "कमी धोका",
+    "farmer.moderate_risk": "मध्यम धोका", "farmer.high_risk": "जास्त धोका", "farmer.critical": "तातडीचे",
+    "farmer.unknown": "माहिती उपलब्ध नाही", "farmer.healthy_message": "सध्या आरोग्याची कोणतीही समस्या नोंदलेली नाही.",
+    "farmer.animal_information": "प्राण्याची माहिती", "farmer.herd_information": "कळपाची माहिती",
+    "farmer.herd_animals": "या कळपातील प्राणी", "farmer.health_and_treatment": "आरोग्य आणि उपचार",
+    "farmer.treatment_history": "उपचारातील बदल", "farmer.case_history": "आरोग्य अहवाल",
+    "farmer.vaccination_history": "लसीकरणाचा इतिहास", "farmer.test_results": "तपासणीचे निकाल",
+    "farmer.no_treatments": "उपचाराबाबत अजून माहिती नाही.", "farmer.no_cases": "आरोग्य अहवाल नाहीत.",
+    "farmer.no_lab_reports": "तपासणीचे निकाल नाहीत.", "farmer.no_vaccinations": "लसीकरणाची नोंद नाही.",
+    "farmer.no_herd_animals": "या कळपात अजून कोणताही प्राणी जोडलेला नाही.",
+    "farmer.reported": "कळवले", "farmer.severity": "समस्या किती गंभीर आहे?", "farmer.diagnosis": "पशुवैद्यकांचे निरीक्षण",
+    "farmer.vet": "पशुवैद्यक", "farmer.instructions": "सूचना", "farmer.follow_up": "पुढील भेट",
+    "farmer.due": "देय", "farmer.given_on": "दिल्याची तारीख", "farmer.medicine": "औषध",
+    "farmer.dosage": "मात्रा", "farmer.frequency": "किती वेळा", "farmer.duration": "किती दिवस",
+    "farmer.prescribed_by": "औषध दिले", "farmer.report_case": "समस्या कळवा",
+    "farmer.qr_tag": "प्राण्याचा QR टॅग", "farmer.mark_deceased": "मृत म्हणून नोंदवा", "farmer.delete_animal": "प्राणी हटवा",
+    "farmer.select": "निवडा", "farmer.choose_animal": "तुमचा प्राणी निवडा", "farmer.cattle": "गाय / बैल",
+    "farmer.buffalo": "म्हैस", "farmer.goat": "शेळी", "farmer.sheep": "मेंढी", "farmer.other": "इतर",
+    "farmer.gender": "लिंग", "farmer.female": "मादी", "farmer.male": "नर",
+    "farmer.optional": "ऐच्छिक", "farmer.no_herd": "कळप नाही", "farmer.select_herd": "कळप निवडा",
+    "farmer.age_placeholder": "वय वर्षांत", "farmer.breed_placeholder": "जात लिहा",
+    "farmer.full_name": "पूर्ण नाव", "farmer.mobile": "मोबाईल क्रमांक", "farmer.village": "गाव",
+    "farmer.block": "तालुका", "farmer.district": "जिल्हा", "farmer.create_herd": "कळप तयार करा",
+    "farmer.register_animal": "प्राणी जतन करा", "farmer.creating_herd": "कळप तयार होत आहे…",
+    "farmer.animal_registered": "प्राणी {code} यशस्वीरीत्या जोडला.", "farmer.herd_created": "कळप {code} तयार झाला.",
+    "farmer.validation_required": "कृपया हे रकाना भरा.", "farmer.validation_email": "कृपया योग्य ईमेल पत्ता लिहा.",
+    "farmer.validation_min_length": "कृपया किमान {count} अक्षरे लिहा.",
+    "farmer.generic_error": "काहीतरी चूक झाली. कृपया पुन्हा प्रयत्न करा.", "farmer.connection_error": "जोडणी होत नाही. इंटरनेट तपासून पुन्हा प्रयत्न करा.",
+    "farmer.invalid_animal_type": "कृपया प्राण्याचा प्रकार निवडा.", "farmer.invalid_herd": "हा कळप सापडला नाही. कृपया पुन्हा निवडा.",
+    "farmer.save_animal_error": "प्राणी जतन झाला नाही. माहिती तपासून पुन्हा प्रयत्न करा.",
+    "farmer.animal_not_found": "प्राणी सापडला नाही.", "farmer.herd_not_found": "कळप सापडला नाही.",
+    "farmer.access_error": "ही माहिती पाहण्याची तुम्हाला परवानगी नाही.",
+    "farmer.report_title": "आरोग्याची समस्या कळवा", "farmer.describe_symptoms": "काय त्रास आहे ते सांगा",
+    "farmer.report_help": "प्राणी निवडा आणि तुम्हाला काय दिसले ते सांगा. पशुवैद्यक मदत करतील.",
+    "farmer.voice_report": "बोलून सांगा", "farmer.tap_to_speak": "बोलण्यासाठी दाबा",
+    "farmer.stop_recording": "रेकॉर्डिंग थांबवा", "farmer.press_mic": "मायक्रोफोन दाबून समस्या सांगा.",
+    "farmer.transcribed_voice": "आवाजातून लिहिलेले", "farmer.processing_voice": "तुमचा आवाज समजून घेत आहोत…",
+    "farmer.symptoms": "काय लक्षणे दिसत आहेत?", "farmer.symptoms_placeholder": "उदा. ताप, चारा न खाणे किंवा सूज",
+    "farmer.severity_low": "किरकोळ", "farmer.severity_medium": "मध्यम", "farmer.severity_high": "गंभीर",
+    "farmer.severity_critical": "तातडीची", "farmer.additional_details": "आणखी काही सांगायचे आहे का?",
+    "farmer.details_placeholder": "हे कधी सुरू झाले? दुसरा प्राणीही आजारी आहे का?",
+    "farmer.submit_report": "अहवाल पाठवा", "farmer.report_sent": "तुमचा अहवाल पाठवला. क्रमांक: {code}",
+    "farmer.my_cases": "माझे अहवाल", "farmer.case_detail": "अहवालाची माहिती", "farmer.case_number": "संदर्भ क्रमांक",
+    "farmer.report_date": "कळविल्याची तारीख", "farmer.case_status_new": "नवीन", "farmer.case_status_assigned": "पशुवैद्यक नेमले",
+    "farmer.case_status_investigation": "तपासणी सुरू", "farmer.case_status_sample": "नमुना घेतला",
+    "farmer.case_status_lab": "तपासणी सुरू", "farmer.case_status_diagnosed": "तपासणी पूर्ण",
+    "farmer.case_status_treatment": "उपचार सुरू", "farmer.case_status_follow_up": "पुढील तपासणी",
+    "farmer.case_status_recovered": "बरे झाले", "farmer.case_status_closed": "पूर्ण झाले",
+    "farmer.case_status_completed": "पूर्ण झाले", "farmer.case_updates": "अहवालातील बदल",
+    "farmer.how_is_animal": "तुमचा प्राणी आता कसा आहे?", "farmer.recovery_status": "प्राण्याला कसे वाटत आहे?",
+    "farmer.improving": "बरे वाटत आहे", "farmer.same": "फरक नाही", "farmer.worse": "त्रास वाढत आहे",
+    "farmer.notes": "नोंदी", "farmer.notes_placeholder": "तुम्हाला दिसलेले बदल सांगा.",
+    "farmer.submit_feedback": "माहिती पाठवा", "farmer.feedback_thanks": "धन्यवाद. तुमची माहिती पाठवली.",
+    "farmer.no_prescriptions": "अजून औषध दिलेले नाही.", "farmer.no_notifications": "सध्या नवीन सूचना नाहीत.",
+    "farmer.new": "नवीन", "farmer.notification_case": "आरोग्य अहवाल", "farmer.notification_lab": "तपासणीचा निकाल",
+    "farmer.notification_prescription": "औषध", "farmer.notification_vaccination": "लसीकरण",
+    "farmer.notification_alert": "आरोग्य सूचना", "farmer.notification_info": "सूचना",
+    "farmer.notification_case_new": "प्राणी {animal} साठी नवीन आरोग्य अहवाल: {case}.",
+    "farmer.notification_case_update": "आरोग्य अहवाल {case} बदलला: {status}.",
+    "farmer.notification_lab_ready": "अहवाल {case} साठी तपासणीचा निकाल {report} तयार आहे.",
+    "farmer.notification_prescription_issued": "अहवाल {case} साठी औषधाच्या सूचना उपलब्ध आहेत.",
+    "farmer.notification_vaccination_due": "प्राणी {animal} चे लसीकरण बाकी आहे. कृपया भेटीची व्यवस्था करा.",
+    "farmer.notification_farm_alert": "आरोग्य सूचना: {district} जवळ {disease} आढळला. {action}",
+    "farmer.notification_vet_on_way": "डॉ. {name} प्रकरण {case} साठी मदतीला येत आहेत.",
+    "farmer.notification_vet_arrived": "डॉ. {name} प्रकरण {case} साठी पोहोचले आहेत.",
+    "farmer.notification_test_requested": "प्रकरण {case} साठी तपासणी मागवली आहे.",
+    "farmer.notification_lab_problem": "प्राणी {animal} ची तपासणी पूर्ण होऊ शकली नाही: {reason}",
+    "farmer.notification_case_recovered": "डॉ. {name} यांनी प्रकरण {case} बरे झाल्याचे नोंदवले.",
+    "farmer.notification_auto_escalation": "तातडीचे: अहवाल {case} कडे लगेच लक्ष देणे आवश्यक आहे.",
+    "farmer.mobile_label": "मोबाईल", "farmer.email": "ईमेल", "farmer.specialization": "विशेषता",
+    "farmer.current_language": "सध्याची भाषा", "farmer.logout": "बाहेर पडा", "farmer.user": "वापरकर्ता",
+    "farmer.helpline_title": "प्राण्यासाठी मदत हवी आहे?", "farmer.helpline_name": "पशु-शील्ड मदत क्रमांक",
+    "farmer.call_now": "आता कॉल करा", "farmer.desktop_call_note": "या क्रमांकावर मोबाईलवरून कॉल करा.",
+    "farmer.not_found": "पान सापडले नाही.", "farmer.go_home": "मुख्यपृष्ठावर जा", "farmer.error": "काहीतरी चूक झाली.",
+    "farmer.offline_queued": "इंटरनेट नाही. विनंती जतन केली आहे; इंटरनेट आल्यावर पाठवली जाईल.",
+    "farmer.delete_confirm": "प्राणी {code} हटवायचा? त्याचे आरोग्य अहवाल आणि उपचार नोंदीही हटतील.",
+    "farmer.animal_deleted": "प्राणी {code} हटवला.", "farmer.deceased_prompt": "प्राणी {code} मृत म्हणून नोंदवण्याचे कारण लिहा:",
+    "farmer.animal_marked_deceased": "प्राणी {code} मृत म्हणून नोंदवला.", "farmer.cancel": "रद्द करा",
+    "farmer.tracking_title": "पशुवैद्यकांची भेट", "farmer.tracking_report_placed": "अहवाल पाठवला",
+    "farmer.tracking_vet_accepted": "पशुवैद्यकांनी स्वीकारला", "farmer.tracking_on_way": "येत आहेत",
+    "farmer.tracking_arrived": "पोहोचले", "farmer.tracking_visit_done": "भेट पूर्ण",
+    "farmer.eta": "अंदाजे पोहोचण्याची वेळ", "farmer.minutes": "मिनिटे", "farmer.assigned": "नेमले",
+    "farmer.response_improved": "बरे वाटत आहे", "farmer.response_unchanged": "फरक नाही",
+    "farmer.response_worsened": "त्रास वाढत आहे", "farmer.response_recovered": "बरे झाले",
+    "farmer.response_adverse_reaction": "औषधाची प्रतिक्रिया", "farmer.response_treatment_discontinued": "उपचार थांबवले",
+    "farmer.response_follow_up_required": "पुढील तपासणी आवश्यक",
+    "farmer.no_cases_home": "अजून कोणताही अहवाल नाही.", "farmer.error_report_animal": "अहवाल पाठवण्यापूर्वी प्राणी निवडा.",
+    "farmer.offline_count": "जतन केलेल्या कृती पाठवायच्या आहेत · पाठवण्यासाठी दाबा", "farmer.sync_success": "जतन केलेल्या कृती यशस्वीरीत्या पाठवल्या.",
+    "farmer.farmer_portal": "शेतकरी पोर्टल", "farmer.demo_account": "डेमो खाते", "farmer.username": "वापरकर्ता नाव",
+    "farmer.password": "पासवर्ड", "farmer.email_or_mobile": "ईमेल किंवा मोबाईल क्रमांक", "farmer.confirm_password": "पासवर्ड पुन्हा लिहा",
+    "farmer.positive": "सकारात्मक", "farmer.negative": "नकारात्मक", "farmer.pending": "प्रलंबित", "farmer.result": "निकाल",
+    "farmer.download": "डाउनलोड करा", "farmer.print": "टॅग छापा", "farmer.close": "बंद करा",
+    "farmer.preferred_helpline_language": "कॉलसाठी पसंतीची भाषा", "farmer.ask_language_call": "कॉलवर मला विचारा",
+    "farmer.welcome_toast": "पुन्हा स्वागत आहे, {name}!", "farmer.account_created": "{name} यांचे खाते तयार झाले!", "farmer.logout_success": "तुम्ही बाहेर पडलात.",
+    "farmer.voice_ready": "तयार आहे. आता बोला.", "farmer.voice_transcribing": "तुमचे बोलणे ऐकत आहोत…", "farmer.voice_transcribed_status": "तुमचा संदेश तयार आहे.",
+    "farmer.voice_processing": "तुमचा आवाज तयार करत आहोत…", "farmer.voice_recording": "रेकॉर्डिंग सुरू… समस्या स्पष्ट सांगा.",
+    "farmer.voice_error": "आवाज समजला नाही. कृपया पुन्हा प्रयत्न करा.", "farmer.microphone_denied": "मायक्रोफोन वापरण्याची परवानगी मिळाली नाही.",
+    "farmer.login_invalid": "ईमेल, मोबाईल क्रमांक किंवा पासवर्ड चुकीचा आहे.", "farmer.account_exists": "या ईमेल किंवा मोबाईल क्रमांकाचे खाते आधीच आहे.",
+    "farmer.passwords_mismatch": "दोन्ही पासवर्ड जुळत नाहीत.", "farmer.password_short": "पासवर्डमध्ये किमान ६ अक्षरे असावीत.",
+    "farmer.login_required": "ईमेल किंवा मोबाईल क्रमांक आणि पासवर्ड लिहा.", "farmer.portal_mismatch": "या खात्यासाठी योग्य पोर्टल निवडा.",
+    "farmer.register_error": "माहिती तपासून पुन्हा प्रयत्न करा.",
+    "farmer.notification_settings": "सूचना सेटिंग्ज", "farmer.push_notifications": "पुश सूचना",
+    "farmer.push_available": "अहवाल, तपासणीचे निकाल आणि आरोग्याची माहिती मिळवण्यासाठी पुश सूचना सुरू करा.",
+    "farmer.push_unavailable": "या उपकरणावर पुश सूचना सुरू केलेल्या नाहीत. अॅपमधील सूचना मिळत राहतील.",
+    "farmer.push_admin": "या सर्व्हरवर पुश सूचना सुरू केलेल्या नाहीत. अॅपमधील सूचना मिळत राहतील.",
+    "farmer.enable_push": "सूचना सुरू करा", "farmer.push_unsupported": "या उपकरणावर पुश सूचना उपलब्ध नाहीत.",
+    "farmer.push_permission_denied": "सूचनांची परवानगी दिली नाही. उपकरणाच्या सेटिंग्ज तपासा.",
+    "farmer.push_enabled": "सूचना सुरू झाल्या.", "farmer.push_failed": "सूचना सुरू करता आल्या नाहीत. पुन्हा प्रयत्न करा.",
   },
   hi: {
     "app.tagline": "पशुधन रोग रिपोर्टिंग और पशु चिकित्सा सेवा — महाराष्ट्र",
@@ -103,6 +361,135 @@ const I18N = {
     "auth.choose": "अपना पोर्टल चुनें", "auth.newHere": "यहां नए हैं?",
     "auth.haveAccount": "पहले से पंजीकृत?", "auth.createAccount": "खाता बनाएं",
     "lang.label": "भाषा",
+    "farmer.app_name": "पशु-मित्र",
+    "farmer.home": "होम", "farmer.dashboard_title": "आपका पशु-आँगन",
+    "farmer.welcome_back": "वापस स्वागत है,", "farmer.home_prompt": "आप क्या करना चाहते हैं?",
+    "farmer.my_livestock": "मेरे पशु", "farmer.add_animal": "पशु जोड़ें", "farmer.add_herd": "झुंड जोड़ें",
+    "farmer.my_animals": "मेरे पशु", "farmer.my_herds": "मेरे झुंड",
+    "farmer.report_problem": "समस्या बताएं", "farmer.cases": "रिपोर्ट",
+    "farmer.health_treatment": "स्वास्थ्य", "farmer.notifications": "सूचनाएं", "farmer.profile": "मेरी प्रोफ़ाइल",
+    "farmer.language": "भाषा", "farmer.what_to_do": "एक काम चुनें",
+    "farmer.animal": "पशु", "farmer.animal_id": "पशु आईडी", "farmer.animal_name": "पशु का नाम",
+    "farmer.animal_type": "पशु का प्रकार", "farmer.breed": "नस्ल", "farmer.age": "उम्र",
+    "farmer.years": "साल", "farmer.health_status": "सेहत", "farmer.status": "स्थिति",
+    "farmer.herd": "झुंड", "farmer.herd_name": "झुंड", "farmer.animal_count": "पशु",
+    "farmer.active_cases": "खुले स्वास्थ्य मामले", "farmer.no_active_cases": "कोई स्वास्थ्य मामला खुला नहीं है",
+    "farmer.no_animals": "अभी कोई पशु नहीं", "farmer.no_animals_hint": "पहला पशु जोड़ें, वह यहां दिखाई देगा।",
+    "farmer.no_herds": "अभी कोई झुंड नहीं", "farmer.no_herds_hint": "अपने पशुओं को समूह में रखने के लिए झुंड जोड़ें।",
+    "farmer.loading": "लोड हो रहा है…", "farmer.loading_dashboard": "आपका होम खुल रहा है…",
+    "farmer.loading_livestock": "आपके पशु लोड हो रहे हैं…", "farmer.loading_animal": "पशु की जानकारी लोड हो रही है…",
+    "farmer.loading_herd": "झुंड की जानकारी लोड हो रही है…", "farmer.loading_cases": "आपकी रिपोर्ट लोड हो रही हैं…",
+    "farmer.loading_treatment": "इलाज की जानकारी लोड हो रही है…", "farmer.loading_notifications": "सूचनाएं लोड हो रही हैं…",
+    "farmer.open_details": "जानकारी देखें", "farmer.location": "जगह", "farmer.back_to_livestock": "मेरे पशुओं पर वापस जाएं",
+    "farmer.healthy": "स्वस्थ", "farmer.under_treatment": "इलाज चल रहा है", "farmer.under_observation": "निगरानी जारी", "farmer.deceased": "मृत",
+    "farmer.sick": "बीमार", "farmer.at_risk": "ध्यान देने की जरूरत", "farmer.low_risk": "कम जोखिम",
+    "farmer.moderate_risk": "मध्यम जोखिम", "farmer.high_risk": "ज्यादा जोखिम", "farmer.critical": "तुरंत ध्यान दें",
+    "farmer.unknown": "जानकारी उपलब्ध नहीं", "farmer.healthy_message": "अभी कोई स्वास्थ्य समस्या दर्ज नहीं है।",
+    "farmer.animal_information": "पशु की जानकारी", "farmer.herd_information": "झुंड की जानकारी",
+    "farmer.herd_animals": "इस झुंड के पशु", "farmer.health_and_treatment": "स्वास्थ्य और इलाज",
+    "farmer.treatment_history": "इलाज की जानकारी", "farmer.case_history": "स्वास्थ्य रिपोर्ट",
+    "farmer.vaccination_history": "टीकाकरण का इतिहास", "farmer.test_results": "जांच के नतीजे",
+    "farmer.no_treatments": "अभी इलाज की कोई जानकारी नहीं।", "farmer.no_cases": "अभी कोई स्वास्थ्य रिपोर्ट नहीं।",
+    "farmer.no_lab_reports": "अभी जांच के नतीजे नहीं हैं।", "farmer.no_vaccinations": "टीकाकरण की जानकारी नहीं है।",
+    "farmer.no_herd_animals": "इस झुंड में अभी कोई पशु नहीं जोड़ा गया है।",
+    "farmer.reported": "बताया गया", "farmer.severity": "समस्या कितनी गंभीर है?", "farmer.diagnosis": "पशु चिकित्सक की जांच",
+    "farmer.vet": "पशु चिकित्सक", "farmer.instructions": "निर्देश", "farmer.follow_up": "अगली जांच",
+    "farmer.due": "देय", "farmer.given_on": "दिया गया", "farmer.medicine": "दवा",
+    "farmer.dosage": "खुराक", "farmer.frequency": "कितनी बार", "farmer.duration": "कितने दिन",
+    "farmer.prescribed_by": "दवा लिखने वाले", "farmer.report_case": "समस्या बताएं",
+    "farmer.qr_tag": "पशु का QR टैग", "farmer.mark_deceased": "मृत दर्ज करें", "farmer.delete_animal": "पशु हटाएं",
+    "farmer.select": "चुनें", "farmer.choose_animal": "अपना पशु चुनें", "farmer.cattle": "गाय / बैल",
+    "farmer.buffalo": "भैंस", "farmer.goat": "बकरी", "farmer.sheep": "भेड़", "farmer.other": "अन्य",
+    "farmer.gender": "लिंग", "farmer.female": "मादा", "farmer.male": "नर",
+    "farmer.optional": "वैकल्पिक", "farmer.no_herd": "कोई झुंड नहीं", "farmer.select_herd": "झुंड चुनें",
+    "farmer.age_placeholder": "उम्र साल में", "farmer.breed_placeholder": "नस्ल लिखें",
+    "farmer.full_name": "पूरा नाम", "farmer.mobile": "मोबाइल नंबर", "farmer.village": "गांव",
+    "farmer.block": "ब्लॉक", "farmer.district": "जिला", "farmer.create_herd": "झुंड बनाएं",
+    "farmer.register_animal": "पशु सहेजें", "farmer.creating_herd": "झुंड बनाया जा रहा है…",
+    "farmer.animal_registered": "पशु {code} सफलतापूर्वक जोड़ा गया।", "farmer.herd_created": "झुंड {code} बन गया।",
+    "farmer.validation_required": "कृपया यह जानकारी भरें।", "farmer.validation_email": "कृपया सही ईमेल पता लिखें।",
+    "farmer.validation_min_length": "कम से कम {count} अक्षर लिखें।",
+    "farmer.generic_error": "कुछ गलत हुआ। कृपया फिर कोशिश करें।", "farmer.connection_error": "कनेक्शन नहीं हो पा रहा। इंटरनेट जांचकर फिर कोशिश करें।",
+    "farmer.invalid_animal_type": "कृपया पशु का प्रकार चुनें।", "farmer.invalid_herd": "यह झुंड नहीं मिला। कृपया फिर चुनें।",
+    "farmer.save_animal_error": "पशु सहेजा नहीं जा सका। जानकारी जांचकर फिर कोशिश करें।",
+    "farmer.animal_not_found": "पशु नहीं मिला।", "farmer.herd_not_found": "झुंड नहीं मिला।",
+    "farmer.access_error": "आपको यह जानकारी देखने की अनुमति नहीं है।",
+    "farmer.report_title": "स्वास्थ्य समस्या बताएं", "farmer.describe_symptoms": "क्या परेशानी है, बताएं",
+    "farmer.report_help": "पशु चुनें और जो बदलाव दिखे वह बताएं। पशु चिकित्सक मदद करेंगे।",
+    "farmer.voice_report": "बोलकर बताएं", "farmer.tap_to_speak": "बोलने के लिए दबाएं",
+    "farmer.stop_recording": "रिकॉर्डिंग रोकें", "farmer.press_mic": "माइक दबाकर समस्या बताएं।",
+    "farmer.transcribed_voice": "आवाज से लिखा गया", "farmer.processing_voice": "आपकी आवाज समझी जा रही है…",
+    "farmer.symptoms": "क्या लक्षण दिखे?", "farmer.symptoms_placeholder": "जैसे: बुखार, खाना न खाना या सूजन",
+    "farmer.severity_low": "हल्की", "farmer.severity_medium": "मध्यम", "farmer.severity_high": "गंभीर",
+    "farmer.severity_critical": "आपातकाल", "farmer.additional_details": "क्या कुछ और बताना चाहेंगे?",
+    "farmer.details_placeholder": "यह कब शुरू हुआ? क्या कोई और पशु भी बीमार है?",
+    "farmer.submit_report": "रिपोर्ट भेजें", "farmer.report_sent": "आपकी रिपोर्ट भेजी गई। संदर्भ: {code}",
+    "farmer.my_cases": "मेरी रिपोर्ट", "farmer.case_detail": "रिपोर्ट की जानकारी", "farmer.case_number": "संदर्भ नंबर",
+    "farmer.report_date": "बताने की तारीख", "farmer.case_status_new": "नई", "farmer.case_status_assigned": "पशु चिकित्सक तय हुए",
+    "farmer.case_status_investigation": "जांच जारी", "farmer.case_status_sample": "नमूना लिया गया",
+    "farmer.case_status_lab": "जांच जारी", "farmer.case_status_diagnosed": "जांच पूरी",
+    "farmer.case_status_treatment": "इलाज चल रहा है", "farmer.case_status_follow_up": "दोबारा जांच",
+    "farmer.case_status_recovered": "ठीक हो गया", "farmer.case_status_closed": "बंद",
+    "farmer.case_status_completed": "पूरा हुआ", "farmer.case_updates": "रिपोर्ट में बदलाव",
+    "farmer.how_is_animal": "आपका पशु अब कैसा है?", "farmer.recovery_status": "पशु कैसा महसूस कर रहा है?",
+    "farmer.improving": "बेहतर हो रहा है", "farmer.same": "कोई बदलाव नहीं", "farmer.worse": "और खराब हो रहा है",
+    "farmer.notes": "जानकारी", "farmer.notes_placeholder": "आपने जो बदलाव देखे, बताएं।",
+    "farmer.submit_feedback": "जानकारी भेजें", "farmer.feedback_thanks": "धन्यवाद। आपकी जानकारी भेज दी गई।",
+    "farmer.no_prescriptions": "अभी कोई दवा नहीं लिखी गई है।", "farmer.no_notifications": "अभी कोई नई सूचना नहीं है।",
+    "farmer.new": "नई", "farmer.notification_case": "स्वास्थ्य रिपोर्ट", "farmer.notification_lab": "जांच का नतीजा",
+    "farmer.notification_prescription": "दवा", "farmer.notification_vaccination": "टीकाकरण",
+    "farmer.notification_alert": "स्वास्थ्य सूचना", "farmer.notification_info": "सूचना",
+    "farmer.notification_case_new": "पशु {animal} के लिए नई स्वास्थ्य रिपोर्ट: {case}।",
+    "farmer.notification_case_update": "स्वास्थ्य रिपोर्ट {case} में बदलाव: {status}।",
+    "farmer.notification_lab_ready": "रिपोर्ट {case} के लिए जांच का नतीजा {report} तैयार है।",
+    "farmer.notification_prescription_issued": "रिपोर्ट {case} के लिए दवा के निर्देश तैयार हैं।",
+    "farmer.notification_vaccination_due": "पशु {animal} का टीकाकरण बाकी है। कृपया समय तय करें।",
+    "farmer.notification_farm_alert": "स्वास्थ्य सूचना: {district} के पास {disease} की जानकारी मिली। {action}",
+    "farmer.notification_vet_on_way": "डॉ. {name} रिपोर्ट {case} में मदद के लिए आ रहे हैं।",
+    "farmer.notification_vet_arrived": "डॉ. {name} रिपोर्ट {case} के लिए पहुंच गए हैं।",
+    "farmer.notification_test_requested": "रिपोर्ट {case} के लिए जांच मांगी गई है।",
+    "farmer.notification_lab_problem": "पशु {animal} की जांच पूरी नहीं हो सकी: {reason}",
+    "farmer.notification_case_recovered": "डॉ. {name} ने रिपोर्ट {case} को ठीक हुआ दर्ज किया है।",
+    "farmer.notification_auto_escalation": "जरूरी: रिपोर्ट {case} पर तुरंत ध्यान देना चाहिए।",
+    "farmer.mobile_label": "मोबाइल", "farmer.email": "ईमेल", "farmer.specialization": "विशेषता",
+    "farmer.current_language": "अभी की भाषा", "farmer.logout": "लॉगआउट", "farmer.user": "उपयोगकर्ता",
+    "farmer.helpline_title": "पशु के लिए मदद चाहिए?", "farmer.helpline_name": "पशु-शील्ड हेल्पलाइन",
+    "farmer.call_now": "अभी कॉल करें", "farmer.desktop_call_note": "इस नंबर पर अपने मोबाइल से कॉल करें।",
+    "farmer.not_found": "पेज नहीं मिला।", "farmer.go_home": "होम पर जाएं", "farmer.error": "कुछ गलत हुआ।",
+    "farmer.offline_queued": "इंटरनेट नहीं है। अनुरोध सहेजा गया है; इंटरनेट जुड़ने पर भेजा जाएगा।",
+    "farmer.delete_confirm": "पशु {code} हटाएं? उसकी स्वास्थ्य रिपोर्ट और इलाज की जानकारी भी हट जाएगी।",
+    "farmer.animal_deleted": "पशु {code} हटा दिया गया।", "farmer.deceased_prompt": "पशु {code} को मृत दर्ज करने का कारण लिखें:",
+    "farmer.animal_marked_deceased": "पशु {code} को मृत दर्ज किया गया।", "farmer.cancel": "रद्द करें",
+    "farmer.tracking_title": "पशु चिकित्सक की मुलाकात", "farmer.tracking_report_placed": "रिपोर्ट भेजी गई",
+    "farmer.tracking_vet_accepted": "पशु चिकित्सक ने स्वीकार किया", "farmer.tracking_on_way": "रास्ते में हैं",
+    "farmer.tracking_arrived": "पहुंच गए", "farmer.tracking_visit_done": "मुलाकात पूरी",
+    "farmer.eta": "पहुंचने का अनुमान", "farmer.minutes": "मिनट", "farmer.assigned": "तय किए गए",
+    "farmer.response_improved": "बेहतर हो रहा है", "farmer.response_unchanged": "कोई बदलाव नहीं",
+    "farmer.response_worsened": "और खराब हो रहा है", "farmer.response_recovered": "ठीक हो गया",
+    "farmer.response_adverse_reaction": "दवा की प्रतिक्रिया", "farmer.response_treatment_discontinued": "इलाज रोक दिया गया",
+    "farmer.response_follow_up_required": "दोबारा जांच जरूरी",
+    "farmer.no_cases_home": "अभी कोई रिपोर्ट नहीं है।", "farmer.error_report_animal": "रिपोर्ट भेजने से पहले पशु चुनें।",
+    "farmer.offline_count": "सहेजी गई रिपोर्ट भेजें · भेजने के लिए दबाएं", "farmer.sync_success": "सहेजी गई रिपोर्ट सफलतापूर्वक भेजी गईं।",
+    "farmer.farmer_portal": "किसान पोर्टल", "farmer.demo_account": "डेमो खाता", "farmer.username": "उपयोगकर्ता नाम",
+    "farmer.password": "पासवर्ड", "farmer.email_or_mobile": "ईमेल या मोबाइल नंबर", "farmer.confirm_password": "पासवर्ड की पुष्टि करें",
+    "farmer.positive": "सकारात्मक", "farmer.negative": "नकारात्मक", "farmer.pending": "लंबित", "farmer.result": "नतीजा",
+    "farmer.download": "डाउनलोड करें", "farmer.print": "टैग प्रिंट करें", "farmer.close": "बंद करें",
+    "farmer.preferred_helpline_language": "कॉल के लिए पसंदीदा भाषा", "farmer.ask_language_call": "कॉल के दौरान पूछें",
+    "farmer.welcome_toast": "वापस स्वागत है, {name}!", "farmer.account_created": "{name} का खाता बन गया!", "farmer.logout_success": "आप लॉगआउट हो गए हैं.",
+    "farmer.voice_ready": "तैयार है। अब बोलें।", "farmer.voice_transcribing": "आपकी बात सुन रहे हैं…", "farmer.voice_transcribed_status": "आपका संदेश तैयार है।",
+    "farmer.voice_processing": "आपकी आवाज तैयार हो रही है…", "farmer.voice_recording": "रिकॉर्ड हो रहा है… कृपया समस्या बताएं।",
+    "farmer.voice_error": "आवाज समझ नहीं आई। कृपया फिर कोशिश करें।", "farmer.microphone_denied": "माइक्रोफोन की अनुमति नहीं मिली।",
+    "farmer.login_invalid": "ईमेल, मोबाइल नंबर या पासवर्ड सही नहीं है।", "farmer.account_exists": "इस ईमेल या मोबाइल नंबर से खाता पहले से है।",
+    "farmer.passwords_mismatch": "दोनों पासवर्ड मेल नहीं खाते।", "farmer.password_short": "पासवर्ड में कम से कम 6 अक्षर रखें।",
+    "farmer.login_required": "अपना ईमेल या मोबाइल नंबर और पासवर्ड लिखें।", "farmer.portal_mismatch": "इस खाते के लिए सही पोर्टल चुनें।",
+    "farmer.register_error": "जानकारी जांचकर फिर कोशिश करें।",
+    "farmer.notification_settings": "सूचना सेटिंग", "farmer.push_notifications": "पुश सूचनाएं",
+    "farmer.push_available": "रिपोर्ट, जांच के नतीजे और स्वास्थ्य की जानकारी पाने के लिए पुश सूचनाएं चालू करें।",
+    "farmer.push_unavailable": "इस डिवाइस पर पुश सूचनाएं चालू नहीं हैं। ऐप में सूचनाएं मिलती रहेंगी।",
+    "farmer.push_admin": "इस सर्वर पर पुश सूचनाएं चालू नहीं हैं। ऐप में सूचनाएं मिलती रहेंगी।",
+    "farmer.enable_push": "सूचनाएं चालू करें", "farmer.push_unsupported": "इस डिवाइस पर पुश सूचनाएं उपलब्ध नहीं हैं।",
+    "farmer.push_permission_denied": "सूचना की अनुमति नहीं मिली। डिवाइस की सेटिंग जांचें।",
+    "farmer.push_enabled": "सूचनाएं चालू हो गई हैं।", "farmer.push_failed": "सूचनाएं चालू नहीं हो पाईं। फिर कोशिश करें।",
   },
   te: {
     "app.tagline": "పశువుల వ్యాధి నివేదిక & పశు వైద్య సేవ — మహారాష్ట్ర",
@@ -123,16 +510,277 @@ const I18N = {
     "auth.choose": "మీ పోర్టల్ ఎంచుకోండి", "auth.newHere": "కొత్తగా వచ్చారా?",
     "auth.haveAccount": "ఇప్పటికే నమోదు చేసుకున్నారా?", "auth.createAccount": "ఖాతా సృష్టించండి",
     "lang.label": "భాష",
+    "farmer.app_name": "పశు-మిత్ర",
+    "farmer.home": "హోమ్", "farmer.dashboard_title": "మీ పశువుల వివరాలు",
+    "farmer.welcome_back": "తిరిగి స్వాగతం,", "farmer.home_prompt": "మీరు ఏమి చేయాలనుకుంటున్నారు?",
+    "farmer.my_livestock": "నా పశువులు", "farmer.add_animal": "పశువును చేర్చండి", "farmer.add_herd": "మందను చేర్చండి",
+    "farmer.my_animals": "నా జంతువులు", "farmer.my_herds": "నా పశువుల మందలు",
+    "farmer.report_problem": "సమస్యను తెలియజేయండి", "farmer.cases": "నివేదికలు",
+    "farmer.health_treatment": "ఆరోగ్యం", "farmer.notifications": "సూచనలు", "farmer.profile": "నా వివరాలు",
+    "farmer.language": "భాష", "farmer.what_to_do": "ఒక చర్యను ఎంచుకోండి",
+    "farmer.animal": "జంతువు", "farmer.animal_id": "జంతువు సంఖ్య", "farmer.animal_name": "జంతువు పేరు",
+    "farmer.animal_type": "జంతువు రకం", "farmer.breed": "జాతి", "farmer.age": "వయస్సు",
+    "farmer.years": "సంవత్సరాలు", "farmer.health_status": "ఆరోగ్యం", "farmer.status": "స్థితి",
+    "farmer.herd": "మంద", "farmer.herd_name": "మంద", "farmer.animal_count": "జంతువులు",
+    "farmer.active_cases": "పరిష్కారం కాని ఆరోగ్య సమస్యలు", "farmer.no_active_cases": "ప్రస్తుతం ఆరోగ్య సమస్యలు లేవు",
+    "farmer.no_animals": "ఇంకా జంతువులు లేవు", "farmer.no_animals_hint": "మీ మొదటి జంతువును చేర్చితే ఇక్కడ కనిపిస్తుంది.",
+    "farmer.no_herds": "ఇంకా మందలు లేవు", "farmer.no_herds_hint": "మీ జంతువులను ఒకచోట ఉంచడానికి మందను చేర్చండి.",
+    "farmer.loading": "లోడ్ అవుతోంది…", "farmer.loading_dashboard": "మీ హోమ్ తెరుచుకుంటోంది…",
+    "farmer.loading_livestock": "మీ పశువుల వివరాలు తెరుచుకుంటున్నాయి…", "farmer.loading_animal": "జంతువు వివరాలు తెరుచుకుంటున్నాయి…",
+    "farmer.loading_herd": "మంద వివరాలు తెరుచుకుంటున్నాయి…", "farmer.loading_cases": "మీ నివేదికలు తెరుచుకుంటున్నాయి…",
+    "farmer.loading_treatment": "చికిత్స వివరాలు తెరుచుకుంటున్నాయి…", "farmer.loading_notifications": "సూచనలు తెరుచుకుంటున్నాయి…",
+    "farmer.open_details": "వివరాలు చూడండి", "farmer.location": "ప్రాంతం", "farmer.back_to_livestock": "నా పశువుల వద్దకు తిరిగి వెళ్లండి",
+    "farmer.healthy": "ఆరోగ్యంగా ఉంది", "farmer.under_treatment": "చికిత్సలో ఉంది", "farmer.under_observation": "పరిశీలనలో ఉంది", "farmer.deceased": "మరణించింది",
+    "farmer.sick": "అనారోగ్యంగా ఉంది", "farmer.at_risk": "శ్రద్ధ అవసరం", "farmer.low_risk": "తక్కువ ప్రమాదం",
+    "farmer.moderate_risk": "మధ్యస్థ ప్రమాదం", "farmer.high_risk": "ఎక్కువ ప్రమాదం", "farmer.critical": "అత్యవసరం",
+    "farmer.unknown": "వివరాలు అందుబాటులో లేవు", "farmer.healthy_message": "ప్రస్తుతం ఆరోగ్య సమస్య ఏదీ నమోదు కాలేదు.",
+    "farmer.animal_information": "జంతువు వివరాలు", "farmer.herd_information": "మంద వివరాలు",
+    "farmer.herd_animals": "ఈ మందలోని జంతువులు", "farmer.health_and_treatment": "ఆరోగ్యం మరియు చికిత్స",
+    "farmer.treatment_history": "చికిత్స వివరాలు", "farmer.case_history": "ఆరోగ్య నివేదికలు",
+    "farmer.vaccination_history": "టీకాల చరిత్ర", "farmer.test_results": "పరీక్ష ఫలితాలు",
+    "farmer.no_treatments": "చికిత్స వివరాలు ఇంకా లేవు.", "farmer.no_cases": "ఆరోగ్య నివేదికలు ఇంకా లేవు.",
+    "farmer.no_lab_reports": "పరీక్ష ఫలితాలు ఇంకా లేవు.", "farmer.no_vaccinations": "టీకాల వివరాలు లేవు.",
+    "farmer.no_herd_animals": "ఈ మందకు ఇంకా జంతువులు జత చేయలేదు.",
+    "farmer.reported": "తెలియజేసినది", "farmer.severity": "సమస్య ఎంత తీవ్రంగా ఉంది?", "farmer.diagnosis": "పశువైద్యుని పరిశీలన",
+    "farmer.vet": "పశువైద్యుడు", "farmer.instructions": "సూచనలు", "farmer.follow_up": "తదుపరి పరీక్ష",
+    "farmer.due": "తేదీ", "farmer.given_on": "ఇచ్చిన తేదీ", "farmer.medicine": "మందు",
+    "farmer.dosage": "మోతాదు", "farmer.frequency": "ఎన్ని సార్లు", "farmer.duration": "ఎన్ని రోజులు",
+    "farmer.prescribed_by": "మందు రాసినవారు", "farmer.report_case": "సమస్యను తెలియజేయండి",
+    "farmer.qr_tag": "జంతువు QR గుర్తు", "farmer.mark_deceased": "మరణించినట్లు నమోదు చేయండి", "farmer.delete_animal": "జంతువును తొలగించండి",
+    "farmer.select": "ఎంచుకోండి", "farmer.choose_animal": "మీ జంతువును ఎంచుకోండి", "farmer.cattle": "ఆవు / ఎద్దు",
+    "farmer.buffalo": "గేదె", "farmer.goat": "మేక", "farmer.sheep": "గొర్రె", "farmer.other": "ఇతర",
+    "farmer.gender": "లింగం", "farmer.female": "ఆడ", "farmer.male": "మగ",
+    "farmer.optional": "ఐచ్ఛికం", "farmer.no_herd": "మంద లేదు", "farmer.select_herd": "మందను ఎంచుకోండి",
+    "farmer.age_placeholder": "వయస్సు (సంవత్సరాల్లో)", "farmer.breed_placeholder": "జాతిని నమోదు చేయండి",
+    "farmer.full_name": "పూర్తి పేరు", "farmer.mobile": "మొబైల్ నంబరు", "farmer.village": "గ్రామం",
+    "farmer.block": "మండలం", "farmer.district": "జిల్లా", "farmer.create_herd": "మందను సృష్టించండి",
+    "farmer.register_animal": "జంతువును భద్రపరచండి", "farmer.creating_herd": "మందను సృష్టిస్తోంది…",
+    "farmer.animal_registered": "జంతువు {code} విజయవంతంగా చేర్చబడింది.", "farmer.herd_created": "మంద {code} సృష్టించబడింది.",
+    "farmer.validation_required": "దయచేసి ఈ వివరాన్ని నమోదు చేయండి.", "farmer.validation_email": "దయచేసి సరైన ఈమెయిల్ చిరునామా నమోదు చేయండి.",
+    "farmer.validation_min_length": "దయచేసి కనీసం {count} అక్షరాలు నమోదు చేయండి.",
+    "farmer.generic_error": "ఏదో తప్పు జరిగింది. మళ్లీ ప్రయత్నించండి.", "farmer.connection_error": "కనెక్ట్ కాలేదు. ఇంటర్నెట్‌ను పరిశీలించి మళ్లీ ప్రయత్నించండి.",
+    "farmer.invalid_animal_type": "దయచేసి జంతువు రకాన్ని ఎంచుకోండి.", "farmer.invalid_herd": "ఆ మంద కనిపించలేదు. మళ్లీ ఎంచుకోండి.",
+    "farmer.save_animal_error": "జంతువును భద్రపరచలేకపోయాం. వివరాలను పరిశీలించి మళ్లీ ప్రయత్నించండి.",
+    "farmer.animal_not_found": "జంతువు కనిపించలేదు.", "farmer.herd_not_found": "మంద కనిపించలేదు.",
+    "farmer.access_error": "ఈ సమాచారాన్ని చూడటానికి మీకు అనుమతి లేదు.",
+    "farmer.report_title": "ఆరోగ్య సమస్యను తెలియజేయండి", "farmer.describe_symptoms": "ఏమి సమస్యో చెప్పండి",
+    "farmer.report_help": "జంతువును ఎంచుకుని మీరు గమనించిన విషయాన్ని చెప్పండి. పశువైద్యుడు సహాయం చేస్తారు.",
+    "farmer.voice_report": "మాట్లాడి చెప్పండి", "farmer.tap_to_speak": "మాట్లాడటానికి నొక్కండి",
+    "farmer.stop_recording": "రికార్డింగ్ ఆపండి", "farmer.press_mic": "మైక్రోఫోన్‌ను నొక్కి సమస్యను వివరించండి.",
+    "farmer.transcribed_voice": "మాటలను రాసినది", "farmer.processing_voice": "మీ మాటలను అర్థం చేసుకుంటోంది…",
+    "farmer.symptoms": "ఏ లక్షణాలు గమనించారు?", "farmer.symptoms_placeholder": "ఉదా: జ్వరం, మేత తినకపోవడం లేదా వాపు",
+    "farmer.severity_low": "తక్కువ", "farmer.severity_medium": "మధ్యస్థం", "farmer.severity_high": "తీవ్రమైనది",
+    "farmer.severity_critical": "అత్యవసరం", "farmer.additional_details": "ఇంకా ఏమైనా చెప్పాలా?",
+    "farmer.details_placeholder": "ఇది ఎప్పుడు మొదలైంది? మరొక జంతువుకూ ఇదే సమస్య ఉందా?",
+    "farmer.submit_report": "నివేదిక పంపండి", "farmer.report_sent": "మీ నివేదిక పంపబడింది. సూచన సంఖ్య: {code}",
+    "farmer.my_cases": "నా నివేదికలు", "farmer.case_detail": "నివేదిక వివరాలు", "farmer.case_number": "సూచన సంఖ్య",
+    "farmer.report_date": "తెలియజేసిన తేదీ", "farmer.case_status_new": "కొత్తది", "farmer.case_status_assigned": "పశువైద్యుడు నియమించబడ్డారు",
+    "farmer.case_status_investigation": "పరిశీలిస్తున్నారు", "farmer.case_status_sample": "నమూనా సేకరించారు",
+    "farmer.case_status_lab": "పరీక్ష జరుగుతోంది", "farmer.case_status_diagnosed": "పరిశీలన పూర్తయింది",
+    "farmer.case_status_treatment": "చికిత్స జరుగుతోంది", "farmer.case_status_follow_up": "తదుపరి పరిశీలన",
+    "farmer.case_status_recovered": "కోలుకుంది", "farmer.case_status_closed": "ముగిసింది",
+    "farmer.case_status_completed": "పూర్తయింది", "farmer.case_updates": "నివేదికలో మార్పులు",
+    "farmer.how_is_animal": "మీ జంతువు ఇప్పుడు ఎలా ఉంది?", "farmer.recovery_status": "జంతువు ఎలా ఉంది?",
+    "farmer.improving": "మెరుగవుతోంది", "farmer.same": "మార్పు లేదు", "farmer.worse": "మరింత క్షీణిస్తోంది",
+    "farmer.notes": "గమనికలు", "farmer.notes_placeholder": "మీరు గమనించిన మార్పులను తెలియజేయండి.",
+    "farmer.submit_feedback": "వివరాలు పంపండి", "farmer.feedback_thanks": "ధన్యవాదాలు. మీ వివరాలు పంపబడ్డాయి.",
+    "farmer.no_prescriptions": "ఇంకా మందులు సూచించలేదు.", "farmer.no_notifications": "కొత్త సూచనలు ఏవీ లేవు.",
+    "farmer.new": "కొత్తది", "farmer.notification_case": "ఆరోగ్య నివేదిక", "farmer.notification_lab": "పరీక్ష ఫలితం",
+    "farmer.notification_prescription": "మందు", "farmer.notification_vaccination": "టీకా",
+    "farmer.notification_alert": "ఆరోగ్య హెచ్చరిక", "farmer.notification_info": "సూచన",
+    "farmer.notification_case_new": "జంతువు {animal} కోసం కొత్త ఆరోగ్య నివేదిక: {case}.",
+    "farmer.notification_case_update": "ఆరోగ్య నివేదిక {case}లో మార్పు: {status}.",
+    "farmer.notification_lab_ready": "నివేదిక {case} కోసం పరీక్ష ఫలితం {report} సిద్ధంగా ఉంది.",
+    "farmer.notification_prescription_issued": "నివేదిక {case} కోసం మందుల సూచనలు సిద్ధంగా ఉన్నాయి.",
+    "farmer.notification_vaccination_due": "జంతువు {animal}కు టీకా వేయాలి. దయచేసి సమయం ఏర్పాటు చేయండి.",
+    "farmer.notification_farm_alert": "ఆరోగ్య హెచ్చరిక: {district} దగ్గర {disease} గుర్తించారు. {action}",
+    "farmer.notification_vet_on_way": "నివేదిక {case} కోసం డా. {name} సహాయం చేయడానికి వస్తున్నారు.",
+    "farmer.notification_vet_arrived": "నివేదిక {case} కోసం డా. {name} చేరుకున్నారు.",
+    "farmer.notification_test_requested": "నివేదిక {case} కోసం పరీక్ష కోరారు.",
+    "farmer.notification_lab_problem": "జంతువు {animal} పరీక్ష పూర్తి కాలేదు: {reason}",
+    "farmer.notification_case_recovered": "నివేదిక {case} కోలుకున్నట్లు డా. {name} నమోదు చేశారు.",
+    "farmer.notification_auto_escalation": "అత్యవసరం: నివేదిక {case}పై వెంటనే శ్రద్ధ అవసరం.",
+    "farmer.mobile_label": "మొబైల్", "farmer.email": "ఈమెయిల్", "farmer.specialization": "ప్రత్యేకత",
+    "farmer.current_language": "ప్రస్తుత భాష", "farmer.logout": "లాగ్ అవుట్", "farmer.user": "వినియోగదారు",
+    "farmer.helpline_title": "జంతువుకు సహాయం కావాలా?", "farmer.helpline_name": "పశు-షీల్డ్ సహాయ నంబరు",
+    "farmer.call_now": "ఇప్పుడే కాల్ చేయండి", "farmer.desktop_call_note": "ఈ నంబరుకు మీ మొబైల్ నుంచి కాల్ చేయండి.",
+    "farmer.not_found": "పేజీ కనిపించలేదు.", "farmer.go_home": "హోమ్‌కు వెళ్లండి", "farmer.error": "ఏదో తప్పు జరిగింది.",
+    "farmer.offline_queued": "ఇంటర్నెట్ లేదు. మీ అభ్యర్థన భద్రపరిచాం; తిరిగి కనెక్ట్ అయినప్పుడు పంపబడుతుంది.",
+    "farmer.delete_confirm": "జంతువు {code}ను తొలగించాలా? దాని ఆరోగ్య నివేదికలు, చికిత్స వివరాలు కూడా తొలగిపోతాయి.",
+    "farmer.animal_deleted": "జంతువు {code} తొలగించబడింది.", "farmer.deceased_prompt": "జంతువు {code}ను మరణించినట్లు నమోదు చేయడానికి కారణం రాయండి:",
+    "farmer.animal_marked_deceased": "జంతువు {code} మరణించినట్లు నమోదు చేయబడింది.", "farmer.cancel": "రద్దు చేయండి",
+    "farmer.tracking_title": "పశువైద్యుని సందర్శన", "farmer.tracking_report_placed": "నివేదిక పంపబడింది",
+    "farmer.tracking_vet_accepted": "పశువైద్యుడు అంగీకరించారు", "farmer.tracking_on_way": "వస్తున్నారు",
+    "farmer.tracking_arrived": "చేరుకున్నారు", "farmer.tracking_visit_done": "సందర్శన పూర్తయింది",
+    "farmer.eta": "చేరుకునే అంచనా సమయం", "farmer.minutes": "నిమిషాలు", "farmer.assigned": "నియమించబడ్డారు",
+    "farmer.response_improved": "మెరుగవుతోంది", "farmer.response_unchanged": "మార్పు లేదు",
+    "farmer.response_worsened": "మరింత క్షీణిస్తోంది", "farmer.response_recovered": "కోలుకుంది",
+    "farmer.response_adverse_reaction": "మందుకు ప్రతిచర్య", "farmer.response_treatment_discontinued": "చికిత్స ఆపివేశారు",
+    "farmer.response_follow_up_required": "తదుపరి పరిశీలన అవసరం",
+    "farmer.no_cases_home": "ఇంకా నివేదికలు లేవు.", "farmer.error_report_animal": "నివేదిక పంపే ముందు జంతువును ఎంచుకోండి.",
+    "farmer.offline_count": "భద్రపరిచిన అభ్యర్థనలు పంపాలి · పంపడానికి నొక్కండి", "farmer.sync_success": "భద్రపరిచిన అభ్యర్థనలు విజయవంతంగా పంపబడ్డాయి.",
+    "farmer.farmer_portal": "రైతు పోర్టల్", "farmer.demo_account": "డెమో ఖాతా", "farmer.username": "వినియోగదారు పేరు",
+    "farmer.password": "పాస్‌వర్డ్", "farmer.email_or_mobile": "ఈమెయిల్ లేదా మొబైల్ నంబరు", "farmer.confirm_password": "పాస్‌వర్డ్‌ను నిర్ధారించండి",
+    "farmer.positive": "అనుకూలం", "farmer.negative": "ప్రతికూలం", "farmer.pending": "పరిశీలనలో ఉంది", "farmer.result": "ఫలితం",
+    "farmer.download": "డౌన్‌లోడ్ చేయండి", "farmer.print": "ట్యాగ్ ముద్రించండి", "farmer.close": "మూసివేయండి",
+    "farmer.preferred_helpline_language": "కాల్‌కు ఇష్టమైన భాష", "farmer.ask_language_call": "కాల్ సమయంలో అడగండి",
+    "farmer.welcome_toast": "తిరిగి స్వాగతం, {name}!", "farmer.account_created": "{name} కోసం ఖాతా సృష్టించబడింది!", "farmer.logout_success": "మీరు లాగ్ అవుట్ అయ్యారు.",
+    "farmer.voice_ready": "సిద్ధంగా ఉంది. ఇప్పుడు మాట్లాడండి.", "farmer.voice_transcribing": "మీ మాటలను వింటోంది…", "farmer.voice_transcribed_status": "మీ సందేశం సిద్ధంగా ఉంది.",
+    "farmer.voice_processing": "మీ మాటలను సిద్ధం చేస్తోంది…", "farmer.voice_recording": "రికార్డింగ్ జరుగుతోంది… సమస్యను వివరించండి.",
+    "farmer.voice_error": "మీ మాటలు అర్థం కాలేదు. మళ్లీ ప్రయత్నించండి.", "farmer.microphone_denied": "మైక్రోఫోన్ అనుమతి ఇవ్వలేదు.",
+    "farmer.login_invalid": "ఈమెయిల్, మొబైల్ నంబరు లేదా పాస్‌వర్డ్ సరైనది కాదు.", "farmer.account_exists": "ఈమెయిల్ లేదా మొబైల్ నంబరుతో ఖాతా ఇప్పటికే ఉంది.",
+    "farmer.passwords_mismatch": "రెండు పాస్‌వర్డ్‌లు సరిపోలలేదు.", "farmer.password_short": "పాస్‌వర్డ్‌లో కనీసం 6 అక్షరాలు ఉండాలి.",
+    "farmer.login_required": "మీ ఈమెయిల్ లేదా మొబైల్ నంబరు, పాస్‌వర్డ్ నమోదు చేయండి.", "farmer.portal_mismatch": "ఈ ఖాతాకు సరైన పోర్టల్‌ను ఎంచుకోండి.",
+    "farmer.register_error": "వివరాలను పరిశీలించి మళ్లీ ప్రయత్నించండి.",
+    "farmer.notification_settings": "సూచనల అమరికలు", "farmer.push_notifications": "పుష్ సూచనలు",
+    "farmer.push_available": "నివేదికలు, పరీక్ష ఫలితాలు, ఆరోగ్య సమాచారం పొందడానికి పుష్ సూచనలను ప్రారంభించండి.",
+    "farmer.push_unavailable": "ఈ పరికరంలో పుష్ సూచనలు అమర్చలేదు. యాప్‌లో సూచనలు వస్తూనే ఉంటాయి.",
+    "farmer.push_admin": "ఈ సర్వర్‌లో పుష్ సూచనలు అమర్చలేదు. యాప్‌లో సూచనలు వస్తూనే ఉంటాయి.",
+    "farmer.enable_push": "సూచనలను ప్రారంభించండి", "farmer.push_unsupported": "ఈ పరికరంలో పుష్ సూచనలు అందుబాటులో లేవు.",
+    "farmer.push_permission_denied": "సూచనలకు అనుమతి ఇవ్వలేదు. పరికర సెట్టింగ్‌లను చూడండి.",
+    "farmer.push_enabled": "సూచనలు ప్రారంభించబడ్డాయి.", "farmer.push_failed": "సూచనలను ప్రారంభించలేకపోయాం. మళ్లీ ప్రయత్నించండి.",
   },
 };
-function t(key) {
-  return (I18N[state.lang] && I18N[state.lang][key]) || I18N.en[key] || key;
+function t(key, params = {}) {
+  let value = (I18N[state.lang] && I18N[state.lang][key]) || I18N.en[key] || key;
+  for (const [name, replacement] of Object.entries(params || {})) {
+    value = value.replaceAll(`{${name}}`, String(replacement ?? ""));
+  }
+  return value;
 }
-window.setLang = function (lang) {
+function ft(key, params = {}) { return t(`farmer.${key}`, params); }
+
+const FARMER_HEADER_KEYS = {
+  "Not found": "not_found", "Error": "error", "Animals": "my_animals", "My Animals": "my_animals",
+  "My Herds": "my_herds", "Add Animal": "add_animal", "Add Herd": "add_herd",
+  "Report Health Issue": "report_title", "Cases": "cases", "Active Case Tracking": "my_cases",
+  "Case Detail": "case_detail", "Prescriptions": "health_treatment", "Lab Reports": "test_results",
+  "Notifications": "notifications", "My Profile": "profile", "Animal Record": "animal_information",
+  "Digital Health Record": "animal_information", "Herd Intelligence": "herd_information",
+};
+const FARMER_MESSAGE_KEYS = {
+  "Something went wrong. Please try again.": "generic_error",
+  "Animal type is required": "invalid_animal_type", "animal_id is required": "error_report_animal",
+  "Invalid herd ID": "invalid_herd", "Animal not found": "animal_not_found", "Herd not found": "herd_not_found",
+  "Could not save this animal. Please check the details and try again.": "save_animal_error",
+  "Not authorized to view this animal": "access_error", "Forbidden for this role": "access_error",
+  "Missing or invalid Authorization header": "access_error", "Invalid or expired token": "access_error",
+  "Offline mode: Operation queued locally for auto-sync.": "offline_queued",
+  "Failed to fetch": "connection_error", "NetworkError when attempting to fetch resource.": "connection_error",
+  "Invalid credentials": "login_invalid", "Email/mobile and password are required": "login_required",
+  "An account with this email or mobile already exists": "account_exists", "Passwords do not match": "passwords_mismatch",
+  "Password must be at least 6 characters": "password_short",
+  "You’re all caught up!": "no_notifications", "You're all caught up!": "no_notifications",
+  "No active cases.": "no_cases", "No cases recorded.": "no_cases_home",
+  "No prescriptions yet.": "no_prescriptions", "No prescriptions issued yet.": "no_prescriptions",
+  "No lab reports yet.": "no_lab_reports", "No verified laboratory reports released yet.": "no_lab_reports",
+  "No animals registered yet.": "no_animals", "No herds yet. Add your first herd.": "no_herds",
+};
+function farmerHeaderTitle(title) {
+  const key = FARMER_HEADER_KEYS[title];
+  return key ? ft(key) : title;
+}
+function farmerRuntimeText(value) {
+  const text = String(value ?? "");
+  const key = FARMER_MESSAGE_KEYS[text];
+  if (key) return ft(key);
+  let match = text.match(/^Animal (.+) registered!?$/i);
+  if (match) return ft("animal_registered", { code: match[1] });
+  match = text.match(/^Animal (.+) added successfully\.$/i);
+  if (match) return ft("animal_registered", { code: match[1] });
+  match = text.match(/^Herd (.+) created!?$/i);
+  if (match) return ft("herd_created", { code: match[1] });
+  match = text.match(/^Report placed: (.+)$/i);
+  if (match) return ft("report_sent", { code: match[1] });
+  match = text.match(/^Animal (.+) deleted\.?$/i);
+  if (match) return ft("animal_deleted", { code: match[1] });
+  match = text.match(/^Animal (.+) marked as deceased\.?$/i);
+  if (match) return ft("animal_marked_deceased", { code: match[1] });
+  if (/^failed to fetch$/i.test(text) || /networkerror/i.test(text)) return ft("connection_error");
+  return text;
+}
+function ownerAnimalType(value) {
+  const key = { cattle: "cattle", cow: "cattle", buffalo: "buffalo", goat: "goat", sheep: "sheep", other: "other" }[(value || "").toLowerCase()];
+  return key ? ft(key) : (value || ft("unknown"));
+}
+function ownerAnimalStatus(value) {
+  const status = (value || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+  const keys = { healthy: "healthy", "under treatment": "under_treatment", treatment: "under_treatment", "under observation": "under_observation", sick: "sick", deceased: "deceased", "at risk": "at_risk" };
+  return keys[status] ? ft(keys[status]) : (value || ft("unknown"));
+}
+function ownerCaseStatus(value) {
+  const status = (value || "").trim().toUpperCase().replace(/[_-]+/g, " ");
+  const keys = {
+    "NEW": "case_status_new", "ASSIGNED": "case_status_assigned", "UNDER INVESTIGATION": "case_status_investigation",
+    "SAMPLE COLLECTED": "case_status_sample", "LAB PENDING": "case_status_lab", "TESTING": "case_status_lab",
+    "DIAGNOSED": "case_status_diagnosed", "TREATMENT": "case_status_treatment", "FOLLOW UP": "case_status_follow_up",
+    "RECOVERED": "case_status_recovered", "CLOSED": "case_status_closed", "COMPLETED": "case_status_completed",
+  };
+  return keys[status] ? ft(keys[status]) : (value || ft("unknown"));
+}
+function ownerRiskLabel(value) {
+  const risk = (value || "").toLowerCase();
+  if (risk.includes("high") || risk.includes("critical")) return ft("high_risk");
+  if (risk.includes("moderate")) return ft("moderate_risk");
+  if (risk.includes("low")) return ft("low_risk");
+  return ft("unknown");
+}
+function ownerResponseLabel(value) {
+  const key = "response_" + (value || "").toLowerCase().replace(/[^a-z]+/g, "_").replace(/^_|_$/g, "");
+  const translated = t(`farmer.${key}`);
+  return translated === `farmer.${key}` ? (value || ft("unknown")) : translated;
+}
+function ownerResultLabel(value) {
+  const key = ({ POSITIVE: "positive", NEGATIVE: "negative", PENDING: "pending" }[(value || "").toUpperCase()]);
+  return key ? ft(key) : (value || ft("unknown"));
+}
+function farmerLanguageControl() {
+  return `<label class="farmer-language-control" title="${ft("language")}">
+    <span aria-hidden="true">🌐</span>
+    <select aria-label="${ft("language")}" onchange="setLang(this.value)">
+      <option value="en" ${state.lang === "en" ? "selected" : ""}>English</option>
+      <option value="mr" ${state.lang === "mr" ? "selected" : ""}>मराठी</option>
+      <option value="hi" ${state.lang === "hi" ? "selected" : ""}>हिन्दी</option>
+      <option value="te" ${state.lang === "te" ? "selected" : ""}>తెలుగు</option>
+    </select><span class="farmer-language-chevron" aria-hidden="true">▾</span>
+  </label>`;
+}
+function authText(role, key, fallback) { return role === "owner" ? ft(key) : fallback; }
+
+window.setLang = async function (lang) {
+  if (!Object.prototype.hasOwnProperty.call(I18N, lang) || state.lang === lang) return;
+  const formState = Array.from(document.querySelectorAll("#app form")).map((form, index) => ({
+    id: form.id, index,
+    fields: Array.from(form.elements).map((field) => ({
+      value: field.type === "file" ? "" : field.value,
+      checked: typeof field.checked === "boolean" ? field.checked : null,
+      selected: field.options ? Array.from(field.options, (option) => option.selected) : null,
+    })),
+  }));
+  const scrollY = window.scrollY;
   state.lang = lang;
   localStorage.setItem("pm_lang", lang);
-  router();
+  document.documentElement.lang = lang;
+  await router();
+  const nextForms = Array.from(document.querySelectorAll("#app form"));
+  formState.forEach((saved) => {
+    const form = saved.id ? nextForms.find((candidate) => candidate.id === saved.id) : nextForms[saved.index];
+    if (!form) return;
+    saved.fields.forEach((fieldState, index) => {
+      const field = form.elements[index];
+      if (!field || field.type === "file") return;
+      field.value = fieldState.value;
+      if (fieldState.checked !== null) field.checked = fieldState.checked;
+      if (fieldState.selected && field.options) {
+        fieldState.selected.forEach((selected, optionIndex) => {
+          if (field.options[optionIndex]) field.options[optionIndex].selected = selected;
+        });
+      }
+    });
+  });
+  window.scrollTo(0, scrollY);
 };
+document.documentElement.lang = state.lang;
 function langToggle() {
   return `<div class="lang-toggle">
     <span>${t("lang.label")}:</span>
@@ -147,6 +795,7 @@ function langToggle() {
 function toast(msg, isError = false) {
   const el = document.getElementById("toast");
   if (!el) return;
+  if (getUserRole() === "owner") msg = farmerRuntimeText(msg);
   el.textContent = msg;
   el.className = "toast show" + (isError ? " error" : "");
   clearTimeout(toast._t);
@@ -184,7 +833,7 @@ async function syncOfflineQueue() {
     if (res.ok) {
       const data = await res.json();
       setOfflineQueue([]);
-      toast(`🟢 Synchronized ${data.synced_count} field operation(s) successfully!`);
+      toast(getUserRole() === "owner" ? ft("sync_success") : `🟢 Synchronized ${data.synced_count} field operation(s) successfully!`);
       router();
     }
   } catch (e) {}
@@ -204,22 +853,24 @@ async function getIvrInfo() {
 function helplineCard(info = DEFAULT_IVR_INFO) {
   const number = info.helpline_number || DEFAULT_IVR_INFO.helpline_number;
   const telUri = info.tel_uri || DEFAULT_IVR_INFO.tel_uri;
+  const farmer = getUserRole() === "owner";
   return `
     <div class="section-card helpline-card">
-      <div class="section-title">☎️ Need Veterinary Help?</div>
-      <div class="small-muted">Pashu-Shield Helpline</div>
+      <div class="section-title">☎️ ${farmer ? ft("helpline_title") : "Need Veterinary Help?"}</div>
+      <div class="small-muted">${farmer ? ft("helpline_name") : "Pashu-Shield Helpline"}</div>
       <div class="helpline-number">${number}</div>
-      <a class="btn btn-primary helpline-call" href="${telUri}" aria-label="Call Pashu-Shield helpline ${number}">☎ CALL NOW</a>
-      <div class="desktop-call-note">On a desktop computer, call this number from your mobile phone.</div>
+      <a class="btn btn-primary helpline-call" href="${telUri}" aria-label="${farmer ? ft("call_now") : "Call Pashu-Shield helpline"} ${number}">☎ ${farmer ? ft("call_now") : "CALL NOW"}</a>
+      <div class="desktop-call-note">${farmer ? ft("desktop_call_note") : "On a desktop computer, call this number from your mobile phone."}</div>
     </div>`;
 }
 
 function demoAccountBox(role) {
   const account = DEMO_ACCOUNTS[role];
+  const label = role === "owner" ? (key => ft(key)) : (key => ({ demo_account: "Demo Account", username: "Username", password: "Password" }[key]));
   return `<div class="demo-box">
-    <b>Demo Account</b><br />
-    Username: <b>${account.username}</b><br />
-    Password: <b>${account.password}</b>
+    <b>${label("demo_account")}</b><br />
+    ${label("username")}: <b>${account.username}</b><br />
+    ${label("password")}: <b>${account.password}</b>
   </div>`;
 }
 
@@ -232,7 +883,8 @@ async function api(path, { method = "GET", body } = {}) {
     try { data = await res.json(); } catch (e) { /* no body */ }
     if (!res.ok) {
       if (res.status === 401) logout(true);
-      const err = new Error(data.error || "Something went wrong. Please try again.");
+      const rawMessage = data.error || "Something went wrong. Please try again.";
+      const err = new Error(getUserRole() === "owner" ? farmerRuntimeText(rawMessage) : rawMessage);
       err.data = data;
       err.status = res.status;
       throw err;
@@ -255,16 +907,18 @@ function setAuth(token, user) {
 }
 
 function logout(silent) {
+  const wasOwner = getUserRole() === "owner";
   state.token = null; state.user = null;
   localStorage.removeItem("token"); localStorage.removeItem("user");
   location.hash = "#/";
-  if (!silent) toast("Logged out successfully");
+  if (!silent) toast(wasOwner ? ft("logout_success") : "Logged out successfully");
 }
 window.logout = logout;
 
 function fmtDate(d) {
   if (!d) return "—";
-  try { return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); }
+  const locale = getUserRole() === "owner" ? `${state.lang}-IN` : "en-IN";
+  try { return new Date(d).toLocaleDateString(locale, { day: "2-digit", month: "short", year: "numeric" }); }
   catch (e) { return d; }
 }
 function statusBadgeClass(status) {
@@ -283,7 +937,10 @@ function severityBadgeClass(sev) {
 function riskBadgeClass(level) {
   return level === "High Risk" || level === "Critical" ? "badge-red" : level === "Moderate Risk" || level === "Moderate" ? "badge-orange" : "badge-green";
 }
-function emptyState(msg) { return `<div class="empty-state">${msg}</div>`; }
+function emptyState(msg) {
+  if (getUserRole() === "owner") msg = farmerRuntimeText(msg);
+  return `<div class="empty-state">${msg}</div>`;
+}
 function statCard(num, lbl) { return `<div class="stat-card"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`; }
 function iconItem(emoji, label, href) {
   return `<div class="icon-item" onclick="location.hash='${href}'"><div class="icon-circle">${emoji}</div><span>${label}</span></div>`;
@@ -295,6 +952,22 @@ function header(title, opts = {}) {
   const notifHref = role ? `#/${role}/notifications` : "#/";
   const profileHref = role ? `#/${role}/profile` : "#/";
   const qCount = getOfflineQueue().length;
+  if (role === "owner") {
+    return `
+      <div class="app-header owner-app-header">
+        <div class="owner-header-top">
+          ${opts.back ? `<button class="header-icon-btn" aria-label="${ft("back_to_livestock")}" onclick="history.back()">←</button>`
+            : `<button class="header-icon-btn" aria-label="${ft("notifications")}" onclick="location.hash='${notifHref}'">🔔${opts.notif ? '<span class="dot"></span>' : ''}</button>`}
+          <div class="owner-brand">🐄 ${ft("app_name")}</div>
+          <div class="owner-header-actions">
+            ${farmerLanguageControl()}
+            <button class="header-icon-btn" aria-label="${ft("profile")}" onclick="location.hash='${profileHref}'">👤</button>
+          </div>
+        </div>
+        <h1 class="owner-page-title">${farmerHeaderTitle(title)}</h1>
+      </div>
+      ${qCount > 0 ? `<div class="owner-sync"><span class="sync-indicator" onclick="syncOfflineQueue()">⚡ ${qCount} ${ft("offline_count")}</span></div>` : ""}`;
+  }
   return `
   <div class="app-header">
     ${opts.back ? `<button class="header-icon-btn" onclick="history.back()">←</button>`
@@ -311,14 +984,17 @@ function header(title, opts = {}) {
 function bottomNav(active) {
   const role = getUserRole();
   let items = [];
+  let navClass = "";
   if (role === "owner") {
+    navClass = " owner-bottom-nav";
+    const ownerActive = active === "#/owner/report" ? "#/owner/cases" : active;
+    active = ownerActive;
     items = [
-      [`#/owner/dashboard`, "🏠", t("nav.dashboard")],
-      [`#/owner/animals`, "🐄", t("nav.animals")],
-      [`#/owner/report`, "🚑", t("nav.reporting")],
-      [`#/owner/cases`, "🩺", t("nav.cases")],
-      [`#/owner/prescriptions`, "💊", t("nav.rx")],
-      [`#/owner/notifications`, "🔔", t("nav.alerts")]
+      [`#/owner/dashboard`, "🏠", ft("home")],
+      [`#/owner/livestock`, "🐄", ft("my_livestock")],
+      [`#/owner/cases`, "📋", ft("cases")],
+      [`#/owner/prescriptions`, "💊", ft("health_treatment")],
+      [`#/owner/notifications`, "🔔", ft("notifications")]
     ];
   } else if (role === "vet") {
     items = [
@@ -347,12 +1023,18 @@ function bottomNav(active) {
       [`#/lab/notifications`, "🔔", t("nav.alerts")]
     ];
   }
-  return `<div class="bottom-nav">${items.map(([href, ic, lbl]) =>
+  return `<div class="bottom-nav${navClass}">${items.map(([href, ic, lbl]) =>
     `<button class="nav-item ${active === href ? "active" : ""}" onclick="location.hash='${href}'"><span class="ic">${ic}</span>${lbl}</button>`
   ).join("")}</div>`;
 }
 
-function render(html) { document.getElementById("app").innerHTML = html; window.scrollTo(0, 0); }
+function render(html) {
+  document.getElementById("app").innerHTML = html;
+  const farmerAuth = /^#\/(login|register)\/owner/.test(location.hash);
+  document.body.classList.toggle("farmer-portal", getUserRole() === "owner" || farmerAuth);
+  document.documentElement.lang = state.lang;
+  window.scrollTo(0, 0);
+}
 
 function barChart(items) {
   if (!items || !items.length) return emptyState("No data yet.");
@@ -403,20 +1085,26 @@ async function router() {
   // Logged in -> bounce away from public routes to the correct role dashboard
   if (state.token && isPublic(path)) { location.hash = homeFor(getUserRole() || "owner"); return; }
 
-  const matched = Object.keys(routes).find((r) => {
-    const rp = r.split("/").map((s) => (s.startsWith(":") ? "(.+)" : s));
+  const routeCandidates = Object.keys(routes).sort((a, b) => {
+    const aParams = (a.match(/:[^/]+/g) || []).length;
+    const bParams = (b.match(/:[^/]+/g) || []).length;
+    return aParams - bParams || b.length - a.length;
+  });
+  const matched = routeCandidates.find((r) => {
+    const rp = r.split("/").map((s) => (s.startsWith(":") ? "([^/]+)" : s));
     return new RegExp("^" + rp.join("\\/") + "$").test(path);
   });
 
   if (!matched) {
-    render(`${header("Not found", { back: true })}<div class="loading">Page not found. <a class="link" onclick="location.hash='${homeFor(getUserRole() || "owner")}'">Go home</a></div>`);
+    const farmer = getUserRole() === "owner";
+    render(`${header(farmer ? ft("not_found") : "Not found", { back: true })}<div class="loading">${farmer ? ft("not_found") : "Page not found."} <a class="link" onclick="location.hash='${homeFor(getUserRole() || "owner")}'">${farmer ? ft("go_home") : "Go home"}</a></div>`);
     return;
   }
 
   const def = routes[matched];
   const role = getUserRole();
   if (def.roles && role && !def.roles.includes(role)) {
-    toast("Access denied — that page belongs to another role.", true);
+    toast(role === "owner" ? ft("access_error") : "Access denied — that page belongs to another role.", true);
     location.hash = homeFor(role);
     return;
   }
@@ -430,11 +1118,21 @@ async function router() {
     await def.handler({ ...params, ...routeParams });
   } catch (e) {
     console.error(e);
-    render(`${header("Error", { back: true })}<div class="loading">⚠️ ${e.message}</div>`);
+    const farmer = getUserRole() === "owner";
+    render(`${header(farmer ? ft("error") : "Error", { back: true })}<div class="loading">⚠️ ${farmer ? farmerRuntimeText(e.message) : e.message}</div>`);
   }
 }
 window.addEventListener("hashchange", router);
 window.addEventListener("DOMContentLoaded", router);
+document.addEventListener("invalid", (event) => {
+  if (getUserRole() !== "owner") return;
+  const field = event.target;
+  if (field.validity?.valueMissing) field.setCustomValidity(ft("validation_required"));
+  else if (field.validity?.typeMismatch && field.type === "email") field.setCustomValidity(ft("validation_email"));
+  else if (field.validity?.tooShort) field.setCustomValidity(ft("validation_min_length", { count: field.minLength }));
+}, true);
+document.addEventListener("input", (event) => event.target?.setCustomValidity?.(""));
+document.addEventListener("change", (event) => event.target?.setCustomValidity?.(""));
 
 // ================================================================= AUTH ==
 const ROLE_META = {
@@ -476,16 +1174,17 @@ function renderAuth(mode, role) {
   const meta = ROLE_META[role];
   render(`
   <div class="auth-wrap">
+    ${role === "owner" ? `<div class="farmer-auth-language">${farmerLanguageControl()}</div>` : ""}
     <div class="auth-logo">
       <div class="emoji">${meta.emoji}</div>
       <h2>PashuMitra · ${t(meta.label)}</h2>
       <p>${t("app.tagline")}</p>
     </div>
     <div class="role-banner" style="background:${meta.color}1a;color:${meta.color}">
-      ${meta.emoji} ${t(meta.label)} portal
+      ${meta.emoji} ${t(meta.label)} ${role === "owner" ? ft("farmer_portal") : "portal"}
     </div>
     ${isLogin ? loginForm(role) : registerForm(role)}
-    ${langToggle()}
+    ${role === "owner" ? "" : langToggle()}
   </div>`);
 
   if (isLogin) {
@@ -495,11 +1194,12 @@ function renderAuth(mode, role) {
       try {
         const data = await api("/auth/login", { method: "POST", body: fd });
         if (data.user.role !== role) {
-          toast(`These credentials belong to the ${data.user.role} portal. Please use the correct login.`, true);
+          toast(role === "owner" ? ft("portal_mismatch") : `These credentials belong to the ${data.user.role} portal. Please use the correct login.`, true);
           return;
         }
         setAuth(data.token, data.user);
-        toast(`Welcome back, ${data.user.full_name.split(" ")[0]}!`);
+        const welcomeName = data.user.full_name.split(" ")[0];
+        toast(role === "owner" ? ft("welcome_toast", { name: welcomeName }) : `Welcome back, ${welcomeName}!`);
         location.hash = homeFor(role);
       } catch (err) { toast(err.message, true); }
     });
@@ -508,10 +1208,18 @@ function renderAuth(mode, role) {
       e.preventDefault();
       const fd = Object.fromEntries(new FormData(e.target));
       fd.role = role;
+      if (role === "owner" && fd.password !== fd.confirm_password) {
+        toast(ft("passwords_mismatch"), true);
+        return;
+      }
+      if (role === "owner" && fd.password.length < 6) {
+        toast(ft("password_short"), true);
+        return;
+      }
       try {
         const data = await api("/auth/register", { method: "POST", body: fd });
         setAuth(data.token, data.user);
-        toast(`Account created for ${data.user.full_name}!`);
+        toast(role === "owner" ? ft("account_created", { name: data.user.full_name }) : `Account created for ${data.user.full_name}!`);
         location.hash = homeFor(role);
       } catch (err) { toast(err.message, true); }
     });
@@ -521,8 +1229,8 @@ function renderAuth(mode, role) {
 function loginForm(role) {
   return `
   <form id="loginForm">
-    <div class="field"><label>Email or Mobile</label><input name="identifier" required /></div>
-    <div class="field"><label>Password</label><input name="password" type="password" required /></div>
+    <div class="field"><label>${authText(role, "email_or_mobile", "Email or Mobile")}</label><input name="identifier" autocomplete="username" required /></div>
+    <div class="field"><label>${authText(role, "password", "Password")}</label><input name="password" type="password" autocomplete="current-password" required /></div>
     <button class="btn btn-primary" type="submit">${t("btn.login")}</button>
     <div class="auth-switch">${t("auth.newHere")} <a onclick="location.hash='#/register/${role}'">${t("auth.createAccount")}</a></div>
     ${demoAccountBox(role)}
@@ -532,22 +1240,22 @@ function loginForm(role) {
 function registerForm(role) {
   return `
   <form id="registerForm">
-    <div class="field"><label>Full Name</label><input name="full_name" required /></div>
+    <div class="field"><label>${authText(role, "full_name", "Full Name")}</label><input name="full_name" autocomplete="name" required /></div>
     <div class="form-row">
-      <div class="field"><label>Mobile</label><input name="mobile" required /></div>
-      <div class="field"><label>Email</label><input name="email" type="email" required /></div>
+      <div class="field"><label>${authText(role, "mobile", "Mobile")}</label><input name="mobile" autocomplete="tel" required /></div>
+      <div class="field"><label>${authText(role, "email", "Email")}</label><input name="email" type="email" autocomplete="email" required /></div>
     </div>
     <div class="form-row">
-      <div class="field"><label>Password</label><input name="password" type="password" minlength="6" required /></div>
-      <div class="field"><label>Confirm</label><input name="confirm_password" type="password" minlength="6" required /></div>
+      <div class="field"><label>${authText(role, "password", "Password")}</label><input name="password" type="password" minlength="6" autocomplete="new-password" required /></div>
+      <div class="field"><label>${authText(role, "confirm_password", "Confirm")}</label><input name="confirm_password" type="password" minlength="6" autocomplete="new-password" required /></div>
     </div>
     ${role === "vet" || role === "lab" ? `<div class="field"><label>Specialization</label><input name="specialization" placeholder="e.g. Pathology / Epidemiology" /></div>` : ""}
     <div class="form-row">
-      <div class="field"><label>Village</label><input name="village" /></div>
-      <div class="field"><label>Block</label><input name="block" /></div>
+      <div class="field"><label>${authText(role, "village", "Village")}</label><input name="village" autocomplete="address-level3" /></div>
+      <div class="field"><label>${authText(role, "block", "Block")}</label><input name="block" /></div>
     </div>
-    <div class="field"><label>District</label><input name="district" placeholder="e.g. Pune" required /></div>
-    ${role === "owner" ? `<div class="field"><label>Preferred Helpline Language</label><select name="preferred_language"><option value="">Ask me during a call</option><option value="en">English</option><option value="te">Telugu</option><option value="hi">Hindi</option><option value="mr">Marathi</option></select></div>` : ""}
+    <div class="field"><label>${authText(role, "district", "District")}</label><input name="district" placeholder="${role === "owner" ? ft("district") : "e.g. Pune"}" required /></div>
+    ${role === "owner" ? `<div class="field"><label>${ft("preferred_helpline_language")}</label><select name="preferred_language"><option value="">${ft("ask_language_call")}</option><option value="en">English</option><option value="te">తెలుగు</option><option value="hi">हिन्दी</option><option value="mr">मराठी</option></select></div>` : ""}
     <button class="btn btn-primary" type="submit">${t("btn.register")}</button>
     <div class="auth-switch">${t("auth.haveAccount")} <a onclick="location.hash='#/login/${role}'">${t("btn.login")}</a></div>
     ${demoAccountBox(role)}
@@ -565,47 +1273,76 @@ route("#/govt/dashboard", () => govtDashboard(), ["govt"]);
 route("#/lab/dashboard", () => labDashboard(), ["lab"]);
 
 async function ownerDashboard() {
-  render(`${header("PashuMitra")}<div class="loading">Loading your dashboard…</div>`);
-  const [summary, ivrInfo] = await Promise.all([api("/owner/summary"), getIvrInfo()]);
+  render(`${header(ft("home"))}<div class="loading">${ft("loading_dashboard")}</div>`);
+  const ivrInfo = await getIvrInfo();
   render(`
-    ${header("PashuMitra")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Welcome back,</div><div style="font-size:19px;font-weight:800">${state.user.full_name} 👋</div></div>
-    <div class="stat-grid">
-      ${statCard(summary.animals, "My Animals")}
-      ${statCard(summary.active_cases, "Active Cases")}
-      ${statCard(summary.vaccinations_due, "Vax Due")}
-      ${statCard(summary.lab_reports, "Lab Reports")}
-      ${statCard(summary.prescriptions, "Prescriptions")}
-      ${statCard("MH", "State: Maharashtra")}
+    ${header(ft("home"))}
+    <div class="hello-banner owner-hello">
+      <div>${ft("welcome_back")}</div>
+      <div class="owner-name">${state.user.full_name} 👋</div>
     </div>
-    ${helplineCard(ivrInfo)}
-    <div class="section-card">
-      <div class="section-title">📍 Local Disease Advisory</div>
-      <div id="advisoryCard"><div class="loading">Loading advisory…</div></div>
-    </div>
-    <div class="section-card">
-      <div class="section-title">Quick Actions</div>
-      <div class="icon-grid">
-        ${iconItem("➕", "Add Animal", "#/owner/animals/new")}
-        ${iconItem("🐑", "Add Herd", "#/owner/herds/new")}
-        ${iconItem("🏷️", "Scan QR", "#/scan")}
-        ${iconItem("🚑", "Report Issue", "#/owner/report")}
-        ${iconItem("🎤", "Voice Report", "#/owner/report?voice=1")}
-        ${iconItem("🐄", "My Animals", "#/owner/animals")}
-        ${iconItem("🩺", "My Cases", "#/owner/cases")}
-        ${iconItem("🧪", "Lab Reports", "#/owner/lab-reports")}
-        ${iconItem("💊", "Prescriptions", "#/owner/prescriptions")}
-        ${iconItem("💉", "Vax Campaigns", "#/owner/campaigns")}
-        ${iconItem("📖", "Disease Info", "#/owner/diseases")}
-        ${iconItem("🐑", "My Herds", "#/owner/herds")}
-        ${iconItem("🔔", "Notifications", "#/owner/notifications")}
-        ${iconItem("⚙️", "Notif Settings", "#/notifications/settings")}
+    <div class="section-card owner-home-card">
+      <div class="section-title">${ft("home_prompt")}</div>
+      <div class="owner-home-actions">
+        <button class="owner-action-card" onclick="location.hash='#/owner/livestock'">
+          <span class="action-icon">🐄</span><span>${ft("my_livestock")}</span>
+        </button>
+        <button class="owner-action-card" onclick="location.hash='#/owner/report'">
+          <span class="action-icon">📋</span><span>${ft("report_problem")}</span>
+        </button>
+        <button class="owner-action-card" onclick="location.hash='#/owner/prescriptions'">
+          <span class="action-icon">💊</span><span>${ft("health_treatment")}</span>
+        </button>
+        <button class="owner-action-card" onclick="location.hash='#/owner/notifications'">
+          <span class="action-icon">🔔</span><span>${ft("notifications")}</span>
+        </button>
       </div>
     </div>
+    ${helplineCard(ivrInfo)}
     ${bottomNav("#/owner/dashboard")}
   `);
-  // Load advisory card asynchronously
-  loadOwnerAdvisory();
+}
+
+route("#/owner/livestock", () => ownerLivestockView(), ["owner"]);
+async function ownerLivestockView() {
+  render(`${header(ft("my_livestock"))}<div class="loading">${ft("loading_livestock")}</div>`);
+  try {
+    const [animals, herds] = await Promise.all([api("/animals"), api("/herds")]);
+    render(`
+      ${header(ft("my_livestock"))}
+      <div class="section-card owner-livestock-actions">
+        <div class="owner-livestock-action-grid">
+          <button class="btn btn-primary" onclick="location.hash='#/owner/animals/new'">＋ ${ft("add_animal")}</button>
+          <button class="btn btn-ghost" onclick="location.hash='#/owner/herds/new'">＋ ${ft("add_herd")}</button>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">🐄 ${ft("my_animals")} (${animals.length})</div>
+        ${animals.length ? animals.map(a => `
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${a.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/animals/${a.id}'}">
+            <div class="row1">
+              <span class="title">${a.animal_name || a.animal_code}</span>
+              <span class="badge ${a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange"}">${ownerAnimalStatus(a.status)}</span>
+            </div>
+            <div class="meta">${ft("animal_id")}: ${a.animal_code}</div>
+            <div class="meta">${ft("animal_type")}: ${ownerAnimalType(a.animal_type || a.species)} · ${ft("breed")}: ${a.breed || ft("unknown")}</div>
+            <div class="meta">${ft("age")}: ${a.age ?? a.age_years ?? ft("unknown")}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
+          </div>`).join("") : emptyState(ft("no_animals") + ". " + ft("no_animals_hint"))}
+      </div>
+      <div class="section-card">
+        <div class="section-title">🐑 ${ft("my_herds")} (${herds.length})</div>
+        ${herds.length ? herds.map(h => `
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/herds/${h.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/herds/${h.id}'}">
+            <div class="row1"><span class="title">${ft("herd_name")} ${h.herd_code}</span><span class="badge badge-blue">${h.animal_count || 0} ${ft("animal_count")}</span></div>
+            <div class="meta">${ft("location")}: ${[h.village, h.block, h.district].filter(Boolean).join(", ") || ft("unknown")}</div>
+            <div class="meta ${h.active_cases ? "farmer-health-warning" : "farmer-health-ok"}">${h.active_cases ? `${ft("active_cases")}: ${h.active_cases}` : ft("no_active_cases")}</div>
+          </div>`).join("") : emptyState(ft("no_herds") + ". " + ft("no_herds_hint"))}
+      </div>
+      ${bottomNav("#/owner/livestock")}
+    `);
+  } catch (err) {
+    render(`${header(ft("my_livestock"))}<div class="section-card">${emptyState(farmerRuntimeText(err.message))}</div>${bottomNav("#/owner/livestock")}`);
+  }
 }
 
 async function vetDashboard() {
@@ -659,6 +1396,7 @@ async function vetDashboard() {
         ${iconItem("💉", "Record Vaccination", "#/vet/vaccination/new")}
         ${iconItem("🗓️", "Vax Campaigns", "#/vet/campaigns")}
         ${iconItem("🌐", "Surveillance", "#/vet/surveillance")}
+        ${iconItem("📍", "Local Disease Advisory", "#/vet/advisories")}
         ${iconItem("🚨", "Farm Alerts", "#/vet/farm-alerts")}
         ${iconItem("💊", "Prescriptions", "#/vet/prescriptions")}
         ${iconItem("📖", "Disease Info", "#/vet/diseases")}
@@ -667,31 +1405,6 @@ async function vetDashboard() {
     </div>
     ${bottomNav("#/vet/dashboard")}
   `);
-}
-
-async function loadOwnerAdvisory() {
-  const el = document.getElementById("advisoryCard");
-  if (!el) return;
-  try {
-    const adv = await api("/advisories");
-    let html = `<div class="stat-grid" style="margin:0 0 8px">`;
-    html += `<div class="stat-card"><div class="num"><span class="badge ${riskBadgeClass(adv.risk_level)}">${adv.risk_level}</span></div><div class="lbl">${adv.district}</div></div>`;
-    html += `${statCard(adv.active_cases, "Active Cases")}`;
-    html += `</div>`;
-    if (adv.weather_advisories.length > 0) {
-      html += adv.weather_advisories.map(wa => `<div class="meta" style="margin:3px 0">🌤️ ${wa}</div>`).join("");
-    }
-    if (adv.alerts.length > 0) {
-      html += adv.alerts.map(a => `<div class="meta" style="margin:3px 0;color:var(--red)">🚨 ${a.disease}: ${a.trigger_reason}</div>`).join("");
-    }
-    if (adv.campaigns.length > 0) {
-      html += adv.campaigns.map(c => `<div class="meta" style="margin:3px 0;color:var(--primary)">💉 ${c.name} — ${c.vaccine}</div>`).join("");
-    }
-    html += `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="location.hash='#/owner/advisories'">View Full Advisory →</button>`;
-    el.innerHTML = html;
-  } catch (e) {
-    el.innerHTML = `<div class="small-muted">Advisory unavailable</div>`;
-  }
 }
 
 window.saveVetAvailability = async function() {
@@ -1498,7 +2211,7 @@ function farmAlertsView(role) {
     `);
   }, [role]);
 }
-farmAlertsView("owner"); farmAlertsView("vet"); farmAlertsView("govt");
+farmAlertsView("vet"); farmAlertsView("govt");
 
 window.ackFarmAlert = async function(id) {
   try { await api(`/farm-alerts/${id}/acknowledge`, { method: "POST" }); toast("Alert acknowledged."); router(); }
@@ -1527,7 +2240,7 @@ function campaignsView(role) {
     bindCampaignManage(camps, role);
   }, [role]);
 }
-campaignsView("owner"); campaignsView("vet"); campaignsView("govt");
+campaignsView("vet"); campaignsView("govt");
 
 function campCard(c, canUpdate) {
   const pct = c.target_animals ? Math.min(100, Math.round((c.doses_administered / c.target_animals) * 100)) : 0;
@@ -1785,12 +2498,35 @@ function diseasesView(role) {
     });
   }, [role]);
 }
-diseasesView("owner"); diseasesView("vet"); diseasesView("govt"); diseasesView("lab");
+diseasesView("vet"); diseasesView("govt"); diseasesView("lab");
 
 // --------------------------------------------------------------- profile --
 function profileView(role) {
   route(`#/${role}/profile`, () => {
     const u = state.user || {};
+    if (role === "owner") {
+      render(`
+        ${header(ft("profile"), { back: true })}
+        <div class="section-card">
+          <div style="text-align:center;margin-bottom:16px">
+            <div style="font-size:52px">${ROLE_META[role].emoji}</div>
+            <div style="font-size:18px;font-weight:800">${u.full_name || ft("user")}</div>
+            <div class="badge badge-blue" style="margin-top:4px">${t(ROLE_META[role].label)}</div>
+          </div>
+          <div class="detail-grid farmer-detail-grid">
+            <div><b>${ft("mobile_label")}</b>${u.mobile || "—"}</div>
+            <div><b>${ft("email")}</b>${u.email || "—"}</div>
+            <div><b>${ft("village")}</b>${u.village || "—"}</div>
+            <div><b>${ft("block")}</b>${u.block || "—"}</div>
+            <div><b>${ft("district")}</b>${u.district || "—"}</div>
+            <div><b>${ft("current_language")}</b>${({ en: "English", mr: "मराठी", hi: "हिन्दी", te: "తెలుగు" })[state.lang]}</div>
+          </div>
+        </div>
+        <div class="section-card"><button class="btn btn-outline" onclick="logout()">${ft("logout")}</button></div>
+        ${bottomNav("")}
+      `);
+      return;
+    }
     render(`
       ${header("My Profile", { back: true })}
       <div class="section-card">
@@ -1818,28 +2554,38 @@ function profileView(role) {
 profileView("owner"); profileView("vet"); profileView("govt"); profileView("lab");
 
 // ============================================================ HERDS =====
-route("#/owner/herds", async () => {
-  render(`${header("My Herds", { back: true })}<div class="loading">Loading…</div>`);
-  const herds = await api("/herds");
-  render(`
-    ${header("My Herds", { back: true })}
-    <div class="section-card">
-      <button class="btn btn-primary" style="margin-bottom:14px" onclick="location.hash='#/owner/herds/new'">+ Add Herd</button>
-      ${herds.length === 0 ? emptyState("No herds yet. Add your first herd.") :
-        herds.map(h => `
-        <div class="list-card" onclick="location.hash='#/owner/herds/${h.id}'">
-          <div class="row1"><span class="title">${h.herd_code}</span><span class="badge badge-blue">${h.animal_count} animals</span></div>
-          <div class="meta">📍 ${h.village || "—"}, ${h.block || "—"}, ${h.district || "—"}</div>
-          <div class="meta" style="color:var(--primary)">Tap for Farm Disease Intelligence &rarr;</div>
-        </div>`).join("")}
-    </div>
-    ${bottomNav("#/owner/dashboard")}
-  `);
-}, ["owner"]);
+route("#/owner/herds", () => { location.hash = "#/owner/livestock"; }, ["owner"]);
 
 async function herdDetailView(role, id) {
-  render(`${header("Herd Intelligence", { back: true })}<div class="loading">Loading herd telemetry…</div>`);
+  const farmer = role === "owner";
+  render(`${header(farmer ? ft("herd_information") : "Herd Intelligence", { back: true })}<div class="loading">${farmer ? ft("loading_herd") : "Loading herd telemetry…"}</div>`);
   const hi = await api(`/herds/${id}/intelligence`);
+  if (farmer) {
+    const animals = (await api("/animals")).filter(a => Number(a.herd_id) === Number(id));
+    render(`
+      ${header(ft("herd_information"), { back: true })}
+      <div class="section-card">
+        <div class="owner-herd-name">🐑 ${hi.herd_code}</div>
+        <div class="detail-grid farmer-detail-grid">
+          <div><b>${ft("animal_count")}</b>${hi.total_animals}</div>
+          <div><b>${ft("health_status")}</b><span class="badge ${riskBadgeClass(hi.risk_level)}">${ownerRiskLabel(hi.risk_level)}</span></div>
+          <div><b>${ft("active_cases")}</b>${hi.active_cases}</div>
+          <div><b>${ft("location")}</b>${[hi.village, hi.district].filter(Boolean).join(", ") || ft("unknown")}</div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">🐄 ${ft("herd_animals")} (${animals.length})</div>
+        ${animals.length ? animals.map(a => `
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${a.id}'">
+            <div class="row1"><span class="title">${a.animal_name || a.animal_code}</span><span class="badge ${a.status === "Healthy" ? "badge-green" : "badge-orange"}">${ownerAnimalStatus(a.status)}</span></div>
+            <div class="meta">${ownerAnimalType(a.animal_type || a.species)} · ${ft("age")}: ${a.age ?? a.age_years ?? ft("unknown")}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
+          </div>`).join("") : emptyState(ft("no_herd_animals"))}
+        <button class="btn btn-ghost" style="margin-top:8px" onclick="location.hash='#/owner/livestock'">${ft("back_to_livestock")}</button>
+      </div>
+      ${bottomNav("#/owner/livestock")}
+    `);
+    return;
+  }
   render(`
     ${header("Herd " + hi.herd_code, { back: true })}
     <div class="section-card">
@@ -1871,24 +2617,25 @@ route("#/:role/herds/:id", ({ role, id }) => herdDetailView(role, id), ["owner",
 
 route("#/owner/herds/new", () => {
   render(`
-    ${header("Add Herd", { back: true })}
+    ${header(ft("add_herd"), { back: true })}
     <div class="section-card">
       <form id="herdForm">
         <div class="form-row">
-          <div class="field"><label>Village</label><input name="village" value="${state.user.village || ""}" /></div>
-          <div class="field"><label>Block</label><input name="block" value="${state.user.block || ""}" /></div>
+          <div class="field"><label>${ft("village")}</label><input name="village" value="${state.user.village || ""}" autocomplete="address-level3" /></div>
+          <div class="field"><label>${ft("block")}</label><input name="block" value="${state.user.block || ""}" /></div>
         </div>
-        <div class="field"><label>District</label><input name="district" value="${state.user.district || ""}" /></div>
-        <button class="btn btn-primary" type="submit">Create Herd</button>
+        <div class="field"><label>${ft("district")}</label><input name="district" value="${state.user.district || ""}" /></div>
+        <button class="btn btn-primary" type="submit">${ft("create_herd")}</button>
       </form>
-    </div>`);
+    </div>
+    ${bottomNav("#/owner/livestock")}`);
   document.getElementById("herdForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
       const body = Object.fromEntries(new FormData(e.target));
       const herd = await api("/herds", { method: "POST", body });
-      toast(`Herd ${herd.herd_code} created!`);
-      location.hash = "#/owner/herds";
+      toast(ft("herd_created", { code: herd.herd_code }));
+      location.hash = "#/owner/livestock";
     } catch (err) { toast(err.message, true); }
   });
 }, ["owner"]);
@@ -1896,6 +2643,7 @@ route("#/owner/herds/new", () => {
 // =========================================================== ANIMALS ====
 function animalsListView(role) {
   route(`#/${role}/animals`, async () => {
+    if (role === "owner") { location.hash = "#/owner/livestock"; return; }
     render(`${header("Animals", { back: true })}<div class="loading">Loading…</div>`);
     const animals = await api("/animals");
     render(`
@@ -1922,51 +2670,108 @@ animalsListView("owner"); animalsListView("vet"); animalsListView("govt"); anima
 route("#/owner/animals/new", async () => {
   const herds = await api("/herds").catch(() => []);
   render(`
-    ${header("Add Animal", { back: true })}
+    ${header(ft("add_animal"), { back: true })}
     <div class="section-card">
       <form id="animalForm">
-        <div class="form-row">
-          <div class="field"><label>Animal Name</label><input name="animal_name" required /></div>
-          <div class="field"><label>Animal Type</label>
-            <select name="animal_type" required><option value="">Select</option>
-              <option>Cattle</option><option>Buffalo</option><option>Goat</option><option>Sheep</option><option>Other</option></select>
-          </div>
+        <div class="field"><label>${ft("animal_name")}</label><input name="animal_name" autocomplete="off" required /></div>
+        <div class="field"><label>${ft("animal_type")}</label>
+          <select name="animal_type" required><option value="">${ft("select")}</option>
+            <option value="Cattle">${ft("cattle")}</option><option value="Buffalo">${ft("buffalo")}</option>
+            <option value="Goat">${ft("goat")}</option><option value="Sheep">${ft("sheep")}</option><option value="Other">${ft("other")}</option></select>
         </div>
         <div class="form-row">
-          <div class="field"><label>Breed</label><input name="breed" /></div>
-          <div class="field"><label>Gender</label><select name="gender"><option>Female</option><option>Male</option></select></div>
-          <div class="field"><label>Age</label><input name="age" type="number" step="0.5" min="0" /></div>
+          <div class="field"><label>${ft("breed")}</label><input name="breed" placeholder="${ft("breed_placeholder")}" /></div>
+          <div class="field"><label>${ft("gender")}</label><select name="gender"><option value="Female">${ft("female")}</option><option value="Male">${ft("male")}</option></select></div>
         </div>
-        <div class="field"><label>Herd (optional)</label>
-          <select name="herd_id"><option value="">No herd</option>${herds.map(h => `<option value="${h.id}">${h.herd_code}</option>`).join("")}</select>
+        <div class="field"><label>${ft("age")}</label><input name="age" type="number" step="0.5" min="0" inputmode="decimal" placeholder="${ft("age_placeholder")}" /></div>
+        <div class="field"><label>${ft("herd")} (${ft("optional")})</label>
+          <select name="herd_id"><option value="">${ft("no_herd")}</option>${herds.map(h => `<option value="${h.id}">${ft("herd_name")} ${h.herd_code}</option>`).join("")}</select>
         </div>
+        <div class="field"><label>${ft("full_name")}</label><input name="owner_name" value="${state.user.full_name || ""}" autocomplete="name" required /></div>
+        <div class="field"><label>${ft("mobile")}</label><input name="mobile" value="${state.user.mobile || ""}" inputmode="tel" autocomplete="tel" required /></div>
         <div class="form-row">
-          <div class="field"><label>Owner Name</label><input name="owner_name" value="${state.user.full_name || ""}" required /></div>
-          <div class="field"><label>Mobile</label><input name="mobile" value="${state.user.mobile || ""}" required /></div>
+          <div class="field"><label>${ft("village")}</label><input name="village" value="${state.user.village || ""}" autocomplete="address-level3" /></div>
+          <div class="field"><label>${ft("district")}</label><input name="district" value="${state.user.district || ""}" /></div>
         </div>
-        <div class="form-row">
-          <div class="field"><label>Village</label><input name="village" value="${state.user.village || ""}" /></div>
-          <div class="field"><label>District</label><input name="district" value="${state.user.district || ""}" /></div>
-        </div>
-        <button class="btn btn-primary" type="submit">Register Animal</button>
+        <button class="btn btn-primary" type="submit">${ft("register_animal")}</button>
       </form>
-    </div>`);
+    </div>
+    ${bottomNav("#/owner/livestock")}`);
   document.getElementById("animalForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
       const body = Object.fromEntries(new FormData(e.target));
       const animal = await api("/animals", { method: "POST", body });
-      toast(`Animal ${animal.animal_code} registered!`);
+      toast(ft("animal_registered", { code: animal.animal_code }));
       location.hash = "#/owner/animals/" + animal.id;
     } catch (err) { toast(err.message, true); }
   });
 }, ["owner"]);
 
+function ownerAnimalRecord(a) {
+  const age = a.age ?? a.age_years;
+  const cases = a.cases || [];
+  const prescriptions = a.prescriptions || [];
+  const vaccinations = a.vaccinations || [];
+  const labReports = a.lab_reports || [];
+  render(`
+    ${header(ft("animal_information"), { back: true })}
+    <div class="section-card">
+      <div class="row1 farmer-animal-heading">
+        <div><div class="owner-animal-name">${a.animal_name || a.animal_code}</div><div class="small-muted">${ft("animal_id")}: ${a.animal_code}</div></div>
+        <span class="badge ${a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange"}">${ownerAnimalStatus(a.status)}</span>
+      </div>
+      <div class="detail-grid farmer-detail-grid" style="margin-top:14px">
+        <div><b>${ft("animal_type")}</b>${ownerAnimalType(a.animal_type || a.species)}</div>
+        <div><b>${ft("breed")}</b>${a.breed || ft("unknown")}</div>
+        <div><b>${ft("age")}</b>${age !== null && age !== undefined && age !== "" ? `${age} ${ft("years")}` : ft("unknown")}</div>
+        <div><b>${ft("gender")}</b>${a.gender === "Female" || a.sex === "Female" ? ft("female") : a.gender === "Male" || a.sex === "Male" ? ft("male") : ft("unknown")}</div>
+        <div><b>${ft("herd")}</b>${a.herd ? a.herd.herd_code : ft("no_herd")}</div>
+        <div><b>${ft("location")}</b>${[a.village, a.district].filter(Boolean).join(", ") || ft("unknown")}</div>
+      </div>
+      <div class="owner-detail-actions">
+        <button class="btn btn-primary" onclick="location.hash='#/owner/report?animal=${a.id}'">📋 ${ft("report_problem")}</button>
+        <button class="btn btn-ghost" onclick="showQrModal(${a.id})">🏷️ ${ft("qr_tag")}</button>
+        ${a.status !== "Deceased" ? `<button class="btn btn-outline" onclick="markDeceased(${a.id},'${a.animal_code}')">${ft("mark_deceased")}</button>` : ""}
+        <button class="btn btn-outline owner-danger-button" onclick="deleteAnimal(${a.id},'${a.animal_code}')">${ft("delete_animal")}</button>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">💊 ${ft("health_and_treatment")}</div>
+      ${cases.length ? cases.slice(0, 4).map(c => `
+        <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${c.id}'">
+          <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
+          <div class="meta">${c.symptoms || ft("case_detail")} · ${fmtDate(c.created_at)}</div>
+        </div>`).join("") : `<div class="meta">${ft("healthy_message")}</div>`}
+      ${prescriptions.length ? `
+        <div class="subheading">${ft("treatment_history")}</div>
+        ${prescriptions.slice(0, 4).map(p => `
+          <div class="list-card" style="cursor:default">
+            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.dosage || ""}</span></div>
+            <div class="meta">${p.frequency || ""}${p.duration ? ` · ${p.duration}` : ""}</div>
+            <div class="meta">${ft("prescribed_by")}: ${p.vet_name || ft("unknown")} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
+            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${p.instructions}</div>` : ""}
+          </div>`).join("")}
+      ` : `<div class="subheading">${ft("treatment_history")}</div>${emptyState(ft("no_treatments"))}`}
+      ${vaccinations.length ? `
+        <div class="subheading">${ft("vaccination_history")}</div>
+        ${vaccinations.slice(0, 3).map(v => `<div class="list-card" style="cursor:default"><div class="row1"><span class="title">${v.vaccine}</span><span class="badge badge-blue">${ft("given_on")}: ${fmtDate(v.date_given)}</span></div></div>`).join("")}
+      ` : ""}
+      ${labReports.length ? `
+        <button class="btn btn-ghost" style="margin-top:8px" onclick="location.hash='#/owner/lab-reports'">🧪 ${ft("test_results")}</button>
+      ` : ""}
+    </div>
+    ${bottomNav("#/owner/livestock")}
+  `);
+}
+
 // Animal health record (shared render, role-scoped routes)
 function animalRecordView(role) {
   route(`#/${role}/animals/:id`, async ({ id }) => {
-    render(`${header("Animal Record", { back: true })}<div class="loading">Loading health passport…</div>`);
+    const farmer = role === "owner";
+    render(`${header(farmer ? ft("animal_information") : "Animal Record", { back: true })}<div class="loading">${farmer ? ft("loading_animal") : "Loading health passport…"}</div>`);
     const a = await api(`/animals/${id}`);
+    if (farmer) { ownerAnimalRecord(a); return; }
     const isVet = role === "vet";
     const canEdit = isVet || role === "owner";
 
@@ -2153,6 +2958,7 @@ animalRecordView("owner"); animalRecordView("vet"); animalRecordView("govt"); an
 window.showQrModal = async function(id) {
   try {
     const data = await api(`/animals/${id}/qr`);
+    const farmer = getUserRole() === "owner";
     const old = document.getElementById("qrModal");
     if (old) old.remove();
     const div = document.createElement("div");
@@ -2161,19 +2967,19 @@ window.showQrModal = async function(id) {
     div.innerHTML = `
       <div class="qr-modal-content">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <b>🏷️ Digital Animal Health Tag</b>
-          <button style="border:none;background:none;font-size:20px;cursor:pointer" onclick="document.getElementById('qrModal').remove()">✕</button>
+          <b>🏷️ ${farmer ? ft("qr_tag") : "Digital Animal Health Tag"}</b>
+          <button aria-label="${farmer ? ft("close") : "Close"}" style="border:none;background:none;font-size:20px;cursor:pointer" onclick="document.getElementById('qrModal').remove()">✕</button>
         </div>
         <div style="font-size:17px;font-weight:800;color:var(--primary)">${data.animal_code}</div>
-        <div class="small-muted">${data.species} · Token: ${data.qr_token.slice(0, 16)}…</div>
+        <div class="small-muted">${farmer ? ownerAnimalType(data.species) : data.species}${farmer ? "" : ` · Token: ${data.qr_token.slice(0, 16)}…`}</div>
         <div class="qr-image-wrap">
-          <img src="${data.qr_image}" alt="Animal Health Passport QR" />
+          <img src="${data.qr_image}" alt="${farmer ? ft("qr_tag") : "Animal Health Passport QR"}" />
         </div>
         <div class="btn-row" style="margin-top:12px">
-          <a class="btn btn-ghost btn-sm" href="${data.qr_image}" download="${data.animal_code}_QR.png" style="flex:1;text-decoration:none">⬇️ Download</a>
-          <button class="btn btn-primary btn-sm" style="flex:1" onclick="window.print()">🖨️ Print Card</button>
+          <a class="btn btn-ghost btn-sm" href="${data.qr_image}" download="${data.animal_code}_QR.png" style="flex:1;text-decoration:none">⬇️ ${farmer ? ft("download") : "Download"}</a>
+          <button class="btn btn-primary btn-sm" style="flex:1" onclick="window.print()">🖨️ ${farmer ? ft("print") : "Print Card"}</button>
         </div>
-        ${getUserRole() !== "owner" ? `<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%" onclick="regenAnimalQr(${id})">🔄 Regenerate QR Identity</button>` : ""}
+        ${!farmer ? `<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%" onclick="regenAnimalQr(${id})">🔄 Regenerate QR Identity</button>` : ""}
       </div>
     `;
     document.body.appendChild(div);
@@ -2192,68 +2998,62 @@ window.regenAnimalQr = async function(id) {
 
 // =========================================================== REPORT =====
 route("#/owner/report", async ({ animal, voice }) => {
-  render(`${header("Report Health Issue", { back: true })}<div class="loading">Loading…</div>`);
-  const [animals, vets] = await Promise.all([api("/animals"), api("/vets")]);
+  render(`${header(ft("report_title"), { back: true })}<div class="loading">${ft("loading")}</div>`);
+  const animals = await api("/animals");
   const defaultAnimal = animal ? animals.find(a => a.id === Number(animal)) : null;
+  if (!animals.length) {
+    render(`${header(ft("report_title"), { back: true })}
+      <div class="section-card">${emptyState(ft("no_animals") + ". " + ft("no_animals_hint"))}
+        <button class="btn btn-primary" onclick="location.hash='#/owner/animals/new'">＋ ${ft("add_animal")}</button>
+      </div>${bottomNav("#/owner/cases")}`);
+    return;
+  }
 
   render(`
-    ${header("Report Health Issue", { back: true })}
+    ${header(ft("report_title"), { back: true })}
     <div class="section-card">
-      <div class="section-title">Describe Symptoms</div>
-      <div class="meta" style="margin-bottom:12px">Report sickness or abnormal behavior to your local veterinarian dispensary.</div>
-
+      <div class="section-title">${ft("describe_symptoms")}</div>
+      <div class="meta" style="margin-bottom:12px">${ft("report_help")}</div>
+      ${!voice ? `<button class="btn btn-ghost farmer-voice-link" type="button" onclick="location.hash='#/owner/report?voice=1'">🎙️ ${ft("voice_report")}</button>` : ""}
       ${voice ? `
       <div class="voice-box">
-        <button id="micBtn" class="btn btn-primary btn-sm" type="button">🎙️ Tap to Speak (AI Whisper)</button>
-        <span id="voiceStatus" class="small-muted">Press microphone to record speech</span>
+        <button id="micBtn" class="btn btn-primary" type="button">🎙️ ${ft("tap_to_speak")}</button>
+        <span id="voiceStatus" class="small-muted">${ft("press_mic")}</span>
       </div>
       <div id="voiceTranscriptWrap" style="display:none" class="voice-transcript">
-        <b>Transcribed Voice:</b>
+        <b>${ft("transcribed_voice")}:</b>
         <div id="voiceTranscriptText"></div>
       </div>` : ""}
-
       <form id="caseForm">
-        <div class="field"><label>Animal</label>
+        <div class="field"><label>${ft("animal")}</label>
           <select name="animal_id" required>
-            <option value="">Select your animal</option>
-            ${animals.map(a => `<option value="${a.id}" ${defaultAnimal && defaultAnimal.id === a.id ? "selected" : ""}>${a.animal_code} — ${a.animal_name || a.species}</option>`).join("")}
+            <option value="">${ft("choose_animal")}</option>
+            ${animals.map(a => `<option value="${a.id}" ${defaultAnimal && defaultAnimal.id === a.id ? "selected" : ""}>${a.animal_name || a.animal_code} · ${ownerAnimalType(a.animal_type || a.species)}</option>`).join("")}
           </select>
         </div>
-        <div class="field"><label>Assign Veterinarian (optional)</label>
-          <select name="vet_id">
-            <option value="">Nearest available veterinarian</option>
-            ${vets.map(v => `<option value="${v.id}">${v.full_name} (${v.district})</option>`).join("")}
-          </select>
+        <div class="field"><label>${ft("symptoms")}</label>
+          <input name="symptoms" id="symptomsInput" placeholder="${ft("symptoms_placeholder")}" required />
         </div>
-        <div class="field"><label>Symptoms Observed</label>
-          <input name="symptoms" id="symptomsInput" placeholder="e.g. High fever, drooling, blisters, not eating" required />
+        <div class="field"><label>${ft("severity")}</label>
+          <select name="severity"><option value="Low">${ft("severity_low")}</option><option value="Medium" selected>${ft("severity_medium")}</option><option value="High">${ft("severity_high")}</option><option value="Critical">${ft("severity_critical")}</option></select>
         </div>
-        <div class="form-row">
-          <div class="field"><label>Severity</label>
-            <select name="severity"><option>Low</option><option selected>Medium</option><option>High</option><option>Critical</option></select>
-          </div>
-          <div class="field"><label>Suspected Disease</label>
-            <input name="disease_suspected" placeholder="e.g. FMD / HS (if known)" />
-          </div>
+        <div class="field"><label>${ft("additional_details")}</label>
+          <textarea name="description" id="descInput" placeholder="${ft("details_placeholder")}"></textarea>
         </div>
-        <div class="field"><label>Additional Details</label>
-          <textarea name="description" id="descInput" placeholder="How many days has the animal shown these signs? Any others in herd affected?"></textarea>
-        </div>
-        <button class="btn btn-primary" type="submit">Submit Report</button>
+        <button class="btn btn-primary" type="submit">📋 ${ft("submit_report")}</button>
       </form>
     </div>
-    ${bottomNav("#/owner/report")}
+    ${bottomNav("#/owner/cases")}
   `);
 
   if (voice) setupVoiceReport();
-
   document.getElementById("caseForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
       const body = Object.fromEntries(new FormData(e.target));
       if (voice) body.reported_through = "Voice App";
       const c = await api("/cases", { method: "POST", body });
-      toast(`Report placed: ${c.case_no}`);
+      toast(ft("report_sent", { code: c.case_no }));
       location.hash = `#/owner/cases/${c.id}`;
     } catch (err) { toast(err.message, true); }
   });
@@ -2272,16 +3072,16 @@ function setVoiceStatus(txt) { const el = document.getElementById("voiceStatus")
 function onVoiceMessage(e) {
   const { status, type, text, error } = e.data || {};
   const eventType = status || type;
-  if (eventType === "ready") setVoiceStatus("AI Speech Model ready. Speak now.");
-  else if (eventType === "progress" || eventType === "transcribing") setVoiceStatus("Transcribing Marathi/English speech…");
+  if (eventType === "ready") setVoiceStatus(ft("voice_ready"));
+  else if (eventType === "progress" || eventType === "transcribing") setVoiceStatus(ft("voice_transcribing"));
   else if (eventType === "result" || eventType === "done") {
-    setVoiceStatus("Transcribed!");
+    setVoiceStatus(ft("voice_transcribed_status"));
     const tWrap = document.getElementById("voiceTranscriptWrap");
     const tBox = document.getElementById("voiceTranscriptText");
     const symInp = document.getElementById("symptomsInput");
     if (tWrap && tBox) { tWrap.style.display = "block"; tBox.textContent = text; }
     if (symInp && !symInp.value) symInp.value = text;
-  } else if (eventType === "error") setVoiceStatus("⚠️ Speech Error: " + (error || "failed"));
+  } else if (eventType === "error") setVoiceStatus(`${ft("voice_error")} ${error || ""}`.trim());
 }
 
 function setupVoiceReport() {
@@ -2291,7 +3091,7 @@ function setupVoiceReport() {
   btn.addEventListener("click", async () => {
     if (mediaRec && mediaRec.state === "recording") {
       mediaRec.stop();
-      btn.textContent = "🎙️ Tap to Speak (AI Whisper)";
+      btn.textContent = `🎙️ ${ft("tap_to_speak")}`;
       return;
     }
     try {
@@ -2300,21 +3100,21 @@ function setupVoiceReport() {
       mediaRec = new MediaRecorder(stream);
       mediaRec.ondataavailable = ev => chunks.push(ev.data);
       mediaRec.onstop = async () => {
-        setVoiceStatus("Processing voice audio…");
+        setVoiceStatus(ft("processing_voice"));
         stream.getTracks().forEach(track => track.stop());
         const blob = new Blob(chunks, { type: mediaRec.mimeType || "audio/webm" });
         const ab = await blob.arrayBuffer();
         const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
         const decoded = await ctx.decodeAudioData(ab);
         const floatData = decoded.getChannelData(0);
-        const whisperLanguage = state.lang === "mr" ? "marathi" : "english";
+        const whisperLanguage = ({ en: "english", mr: "marathi", hi: "hindi", te: "telugu" })[state.lang] || "english";
         getVoiceWorker().postMessage({ type: "transcribe", audio: floatData, language: whisperLanguage });
       };
       mediaRec.start();
-      btn.textContent = "⏹️ Stop Recording";
-      setVoiceStatus("🔴 Recording… describe symptoms clearly.");
+      btn.textContent = `⏹️ ${ft("stop_recording")}`;
+      setVoiceStatus(ft("voice_recording"));
     } catch (err) {
-      setVoiceStatus("Microphone access denied: " + err.message);
+      setVoiceStatus(ft("microphone_denied"));
     }
   });
 }
@@ -2322,8 +3122,26 @@ function setupVoiceReport() {
 // ============================================================ CASES =====
 function casesListView(role) {
   route(`#/${role}/cases`, async () => {
-    render(`${header("Cases", { back: true })}<div class="loading">Loading cases…</div>`);
+    const farmer = role === "owner";
+    render(`${header(farmer ? ft("cases") : "Cases", { back: true })}<div class="loading">${farmer ? ft("loading_cases") : "Loading cases…"}</div>`);
     const cases = await api("/cases");
+    if (farmer) {
+      render(`
+        ${header(ft("my_cases"), { back: true })}
+        <div class="section-card">
+          <button class="btn btn-primary farmer-primary-action" style="margin-bottom:14px" onclick="location.hash='#/owner/report'">＋ ${ft("report_problem")}</button>
+          ${cases.length ? cases.map(c => `
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${c.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${c.id}'}">
+              <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
+              <div class="meta">${ft("animal_id")}: ${c.animal ? c.animal.animal_code : "—"}</div>
+              <div class="meta">${c.symptoms || "—"}</div>
+              <div class="meta">${ft("reported")}: ${fmtDate(c.created_at)}</div>
+            </div>`).join("") : emptyState(ft("no_cases_home"))}
+        </div>
+        ${bottomNav("#/owner/cases")}
+      `);
+      return;
+    }
     render(`
       ${header("Active Case Tracking", { back: true })}
       <div class="section-card">
@@ -2334,7 +3152,7 @@ function casesListView(role) {
             <div class="meta">Owner: ${c.owner ? c.owner.full_name : "—"} · Reported: ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
       </div>
-      ${bottomNav(role === "owner" ? "#/owner/cases" : `#/${role}/dashboard`)}
+      ${bottomNav(`#/${role}/dashboard`)}
     `);
   }, [role]);
 }
@@ -2359,15 +3177,104 @@ route("#/vet/reports", async () => {
   `);
 }, ["vet"]);
 
+function ownerSeverityLabel(value) {
+  const key = ({ LOW: "severity_low", MEDIUM: "severity_medium", MODERATE: "severity_medium", HIGH: "severity_high", CRITICAL: "severity_critical" }[(value || "").toUpperCase()]);
+  return key ? ft(key) : (value || ft("unknown"));
+}
+
+function ownerCaseDetail(c) {
+  const prescriptions = c.prescriptions || [];
+  const treatmentResponses = c.treatment_responses || [];
+  const labReports = c.lab_reports || [];
+  const isActive = !["RECOVERED", "CLOSED", "COMPLETED"].includes((c.status || "").toUpperCase());
+  render(`
+    ${header(ft("case_detail"), { back: true })}
+    <div class="section-card">
+      <div class="row1 farmer-case-heading">
+        <span class="owner-case-number">${c.case_no}</span>
+        <span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span>
+      </div>
+      <div class="detail-grid farmer-detail-grid" style="margin-top:12px">
+        <div><b>${ft("animal")}</b><a class="link" onclick="location.hash='#/owner/animals/${c.animal?.id}'">${c.animal?.animal_name || c.animal?.animal_code || "—"}</a></div>
+        <div><b>${ft("report_date")}</b>${fmtDate(c.created_at)}</div>
+        <div><b>${ft("severity")}</b>${ownerSeverityLabel(c.severity)}</div>
+        ${c.vet_name ? `<div><b>${ft("vet")}</b>${c.vet_name}</div>` : ""}
+      </div>
+      <div class="owner-case-copy"><b>${ft("symptoms")}</b><p>${c.symptoms || "—"}</p></div>
+      ${c.description ? `<div class="owner-case-copy"><b>${ft("additional_details")}</b><p>${c.description}</p></div>` : ""}
+      ${c.diagnosis ? `<div class="owner-case-copy"><b>${ft("diagnosis")}</b><p>${c.diagnosis}</p></div>` : ""}
+      ${c.treatment ? `<div class="owner-case-copy"><b>${ft("instructions")}</b><p>${c.treatment}</p></div>` : ""}
+    </div>
+    <div id="trackWrap"></div>
+    ${prescriptions.length ? `
+      <div class="section-card">
+        <div class="section-title">💊 ${ft("health_and_treatment")}</div>
+        ${prescriptions.map(p => `
+          <div class="list-card" style="cursor:default">
+            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.dosage || ""}</span></div>
+            <div class="meta">${p.frequency || ""}${p.duration ? ` · ${p.duration}` : ""}</div>
+            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${p.instructions}</div>` : ""}
+            <div class="meta">${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
+          </div>`).join("")}
+      </div>` : ""}
+    ${treatmentResponses.length ? `
+      <div class="section-card">
+        <div class="section-title">${ft("treatment_history")}</div>
+        ${treatmentResponses.map(update => `
+          <div class="list-card" style="cursor:default">
+            <div class="row1"><span class="title">${ownerResponseLabel(update.response)}</span><span class="small-muted">${fmtDate(update.response_date)}</span></div>
+            ${update.objective_observations ? `<div class="meta">${update.objective_observations}</div>` : ""}
+            ${update.notes ? `<div class="meta">${update.notes}</div>` : ""}
+          </div>`).join("")}
+      </div>` : ""}
+    ${labReports.length ? `
+      <div class="section-card">
+        <div class="section-title">🧪 ${ft("test_results")}</div>
+        ${labReports.map(report => `
+          <div class="list-card" style="cursor:default">
+            <div class="row1"><span class="title">${report.test_name || report.report_no}</span><span class="badge ${report.result === "NEGATIVE" ? "badge-green" : "badge-blue"}">${ownerResultLabel(report.result)}</span></div>
+            <div class="meta">${ft("report_date")}: ${fmtDate(report.test_date)}</div>
+          </div>`).join("")}
+      </div>` : ""}
+    ${c.updates?.length ? `
+      <div class="section-card">
+        <div class="section-title">🕒 ${ft("case_updates")}</div>
+        <div class="timeline">${c.updates.map(update => `
+          <div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-body">
+            <div class="t-status">${ownerCaseStatus(update.status)}</div>
+            ${update.note ? `<div class="t-note">${update.note}</div>` : ""}
+            <div class="t-date">${fmtDate(update.created_at)}</div>
+          </div></div>`).join("")}</div>
+      </div>` : ""}
+    ${isActive ? farmerFeedbackSection(c) : ""}
+    ${bottomNav("#/owner/cases")}
+  `);
+}
+
 // Case Detail view
 function caseDetailView(role) {
   route(`#/${role}/cases/:id`, async ({ id }) => {
-    render(`${header("Case Detail", { back: true })}<div class="loading">Loading…</div>`);
+    const farmer = role === "owner";
+    render(`${header(farmer ? ft("case_detail") : "Case Detail", { back: true })}<div class="loading">${farmer ? ft("loading_cases") : "Loading…"}</div>`);
     const c = await api(`/cases/${id}`);
     const isVet = role === "vet";
     const samples = c.samples || [];
     const trs = c.treatment_responses || [];
     const allergies = c.animal_allergies || [];
+    if (farmer) {
+      ownerCaseDetail(c);
+      loadTracking(c, role);
+      const feedbackForm = document.getElementById("farmerFeedbackForm");
+      if (feedbackForm) feedbackForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          await api(`/cases/${c.id}/farmer-feedback`, { method: "POST", body: Object.fromEntries(new FormData(e.target)) });
+          toast(ft("feedback_thanks"));
+          router();
+        } catch (err) { toast(err.message, true); }
+      });
+      return;
+    }
 
     render(`
       ${header(c.case_no, { back: true })}
@@ -2650,34 +3557,36 @@ window.captureSampleGps = function() {
 // ============================ LIVE FIELD-VISIT TRACKING ===================
 let trackTimer = null, trackMap = null, trackVet = null, trackLine = null, trackCtx = null;
 
-function trackStages(t) {
+function trackStages(t, role) {
   const s = t.visit ? t.visit.status : null;
   const onWay = s === "ON_THE_WAY";
   const arrived = s === "ARRIVED" || s === "COMPLETED";
   const completed = s === "COMPLETED";
+  const localized = role === "owner";
   return [
-    ["📝 Report placed", "badge-green"],
-    ["✅ Vet accepted", s ? "badge-green" : "badge-blue"],
-    ["🚗 On the way", onWay ? "badge-orange" : arrived || completed ? "badge-green" : "badge-blue"],
-    ["📍 Arrived", arrived ? "badge-green" : "badge-blue"],
-    ["💊 Visit done", completed ? "badge-green" : "badge-blue"],
+    [localized ? `📝 ${ft("tracking_report_placed")}` : "📝 Report placed", "badge-green"],
+    [localized ? `✅ ${ft("tracking_vet_accepted")}` : "✅ Vet accepted", s ? "badge-green" : "badge-blue"],
+    [localized ? `🚗 ${ft("tracking_on_way")}` : "🚗 On the way", onWay ? "badge-orange" : arrived || completed ? "badge-green" : "badge-blue"],
+    [localized ? `📍 ${ft("tracking_arrived")}` : "📍 Arrived", arrived ? "badge-green" : "badge-blue"],
+    [localized ? `💊 ${ft("tracking_visit_done")}` : "💊 Visit done", completed ? "badge-green" : "badge-blue"],
   ];
 }
 
 function trackingCardHTML(t, c, role) {
-  const stages = trackStages(t);
+  const localized = role === "owner";
+  const stages = trackStages(t, role);
   const v = t.visit;
   return `
     <div class="section-card">
-      <div class="subheading">🚗 Live Field-Visit Tracking</div>
+      <div class="subheading">🚗 ${localized ? ft("tracking_title") : "Live Field-Visit Tracking"}</div>
       <div class="tag-row" style="margin-bottom:12px">
         ${stages.map(([lbl, cls]) => `<span class="badge ${cls}">${lbl}</span>`).join("")}
       </div>
       <div id="trackMap" style="height:240px;width:100%;border-radius:14px;overflow:hidden;background:#e5e5e5"></div>
       ${v ? `
-        <div class="row1" style="margin-top:10px;font-size:13px">
-          <div><b>ETA:</b> ${v.status === "ON_THE_WAY" ? `${Math.ceil(t.eta_seconds / 60)} mins` : v.status === "ARRIVED" ? "Arrived" : "Completed"}</div>
-          <div><b>Veterinarian:</b> ${t.vet ? t.vet.full_name : "Assigned"}</div>
+        <div class="row1 tracking-meta" style="margin-top:10px;font-size:13px">
+          <div><b>${localized ? ft("eta") : "ETA"}:</b> ${v.status === "ON_THE_WAY" ? `${Math.ceil(t.eta_seconds / 60)} ${localized ? ft("minutes") : "mins"}` : v.status === "ARRIVED" ? (localized ? ft("tracking_arrived") : "Arrived") : (localized ? ft("tracking_visit_done") : "Completed")}</div>
+          <div><b>${localized ? ft("vet") : "Veterinarian"}:</b> ${t.vet ? t.vet.full_name : (localized ? ft("assigned") : "Assigned")}</div>
         </div>
       ` : ""}
       ${role === "vet" ? visitControlButtons(v) : ""}
@@ -2691,7 +3600,7 @@ function visitControlButtons(v) {
   return "";
 }
 
-function initTrackMap(t) {
+function initTrackMap(t, role) {
   if (typeof L === "undefined") return;
   const el = document.getElementById("trackMap");
   if (!el) return;
@@ -2699,7 +3608,7 @@ function initTrackMap(t) {
   const cur = t.current_position || t.destination;
   trackMap = L.map("trackMap").setView([cur.lat, cur.lng], 13);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(trackMap);
-  L.marker([t.destination.lat, t.destination.lng]).addTo(trackMap).bindTooltip("📍 Animal Location");
+  L.marker([t.destination.lat, t.destination.lng]).addTo(trackMap).bindTooltip(role === "owner" ? `📍 ${ft("location")} · ${ft("animal")}` : "📍 Animal Location");
   if (t.origin) L.marker([t.origin.lat, t.origin.lng]).addTo(trackMap).bindTooltip("Dispensary");
   trackVet = L.circleMarker([cur.lat, cur.lng], { radius: 9, color: "#2f6fed", fillColor: "#2f6fed", fillOpacity: 0.9 }).addTo(trackMap);
   if (t.origin && t.destination) trackLine = L.polyline([[t.origin.lat, t.origin.lng], [t.destination.lat, t.destination.lng]], { color: "#2f6fed", dashArray: "5, 8" }).addTo(trackMap);
@@ -2717,7 +3626,7 @@ async function loadTracking(c, role) {
   try {
     const t = await api(`/cases/${c.id}/track`);
     wrap.innerHTML = trackingCardHTML(t, c, role);
-    if (t.destination) initTrackMap(t);
+    if (t.destination) initTrackMap(t, role);
     bindVisitControls(c, role);
     if (trackTimer) clearInterval(trackTimer);
     if (t.visit && t.visit.status === "ON_THE_WAY") {
@@ -2919,8 +3828,25 @@ route("#/vet/vaccination/new", () => {
 // ======================================================= PRESCRIPTIONS ==
 function prescriptionsView(role) {
   route(`#/${role}/prescriptions`, async () => {
-    render(`${header("Prescriptions", { back: true })}<div class="loading">Loading…</div>`);
+    const farmer = role === "owner";
+    render(`${header(farmer ? ft("health_treatment") : "Prescriptions", { back: true })}<div class="loading">${farmer ? ft("loading_treatment") : "Loading…"}</div>`);
     const rx = await api("/prescriptions");
+    if (farmer) {
+      render(`
+        ${header(ft("health_treatment"), { back: true })}
+        <div class="section-card">
+          ${rx.length === 0 ? emptyState(ft("no_prescriptions")) : rx.map(p => `
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${p.case_id}'">
+              <div class="row1"><span class="title">💊 ${p.medicine}</span><span class="badge badge-blue">${p.case_no}</span></div>
+              <div class="meta">${ft("animal_id")}: ${p.animal_code}</div>
+              <div class="meta">${ft("dosage")}: ${p.dosage || ft("unknown")} · ${ft("frequency")}: ${p.frequency || ft("unknown")}</div>
+              <div class="meta">${ft("prescribed_by")}: ${p.vet_name || ft("unknown")} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
+            </div>`).join("")}
+        </div>
+        ${bottomNav("#/owner/prescriptions")}
+      `);
+      return;
+    }
     render(`
       ${header("Prescriptions", { back: true })}
       <div class="section-card">
@@ -2940,8 +3866,24 @@ prescriptionsView("owner"); prescriptionsView("vet"); prescriptionsView("lab");
 // ======================================================= LAB REPORTS ====
 function labReportsView(role) {
   route(`#/${role}/lab-reports`, async () => {
-    render(`${header("Lab Reports", { back: true })}<div class="loading">Loading…</div>`);
+    const farmer = role === "owner";
+    render(`${header(farmer ? ft("test_results") : "Lab Reports", { back: true })}<div class="loading">${farmer ? ft("loading") : "Loading…"}</div>`);
     const reps = await api("/lab/reports");
+    if (farmer) {
+      render(`
+        ${header(ft("test_results"), { back: true })}
+        <div class="section-card">
+          ${reps.length ? reps.map(report => `
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${report.case_id}'">
+              <div class="row1"><span class="title">${report.test_name || report.report_no}</span><span class="badge ${report.result === "NEGATIVE" ? "badge-green" : "badge-blue"}">${ownerResultLabel(report.result)}</span></div>
+              <div class="meta">${ft("animal_id")}: ${report.animal_code}${report.animal_name ? ` · ${report.animal_name}` : ""}</div>
+              <div class="meta">${ft("case_number")}: ${report.case_no} · ${fmtDate(report.test_date)}</div>
+            </div>`).join("") : emptyState(ft("no_lab_reports"))}
+        </div>
+        ${bottomNav("#/owner/prescriptions")}
+      `);
+      return;
+    }
     render(`
       ${header("Lab Reports", { back: true })}
       <div class="section-card">
@@ -2959,11 +3901,74 @@ function labReportsView(role) {
 }
 labReportsView("owner"); labReportsView("vet"); labReportsView("lab");
 
+function ownerNotificationMessage(message) {
+  const text = String(message || "");
+  let match;
+  if ((match = text.match(/^New case reported: (.+) for animal (.+)\.$/i))) return ft("notification_case_new", { case: match[1], animal: match[2] });
+  if ((match = text.match(/^नया मामला दर्ज: (.+) के लिए (.+)[।.]$/))) return ft("notification_case_new", { animal: match[1], case: match[2] });
+  if ((match = text.match(/^नवीन प्रकरण नोंदवले: (.+) पशू (.+) साठी[।.]$/))) return ft("notification_case_new", { case: match[1], animal: match[2] });
+  if ((match = text.match(/^కొత్త కేసు నమోదు: (.+) జంతువు (.+) కోసం[।.]$/))) return ft("notification_case_new", { case: match[1], animal: match[2] });
+
+  if ((match = text.match(/^Case (.+) updated: (.+?)[.]?$/i))) return ft("notification_case_update", { case: match[1], status: ownerCaseStatus(match[2].replace(/[.।]$/, "")) });
+  if ((match = text.match(/^मामला (.+) अपडेट: (.+?)[।.]$/))) return ft("notification_case_update", { case: match[1], status: ownerCaseStatus(match[2].replace(/[.।]$/, "")) });
+  if ((match = text.match(/^प्रकरण (.+) अद्ययावत: (.+?)[।.]$/))) return ft("notification_case_update", { case: match[1], status: ownerCaseStatus(match[2].replace(/[.।]$/, "")) });
+  if ((match = text.match(/^కేసు (.+) నవీకరణ: (.+?)[।.]$/))) return ft("notification_case_update", { case: match[1], status: ownerCaseStatus(match[2].replace(/[.।]$/, "")) });
+
+  if ((match = text.match(/^(?:Your )?Lab report (.+) is ready for case (.+)[.]?$/i))) return ft("notification_lab_ready", { report: match[1], case: match[2] });
+  if ((match = text.match(/^लैब रिपोर्ट (.+) मामले (.+) के लिए तैयार है[।.]$/))) return ft("notification_lab_ready", { report: match[1], case: match[2] });
+  if ((match = text.match(/^प्रयोगशाळा अहवाल (.+) प्रकरण (.+) साठी तयार आहे[।.]$/))) return ft("notification_lab_ready", { report: match[1], case: match[2] });
+  if ((match = text.match(/^ల్యాబ్ రిపోర్ట్ (.+) కేసు (.+) కోసం సిద్ధంగా ఉంది[।.]$/))) return ft("notification_lab_ready", { report: match[1], case: match[2] });
+  if ((match = text.match(/^(?:🧪\s*)?Laboratory report (.+) for your animal (.+) \(Case (.+)\) has been released\.$/i))) {
+    return `${ft("notification_lab_ready", { report: match[1], case: match[3] })} · ${ft("animal_id")}: ${match[2]}`;
+  }
+
+  if ((match = text.match(/^An e-prescription is available for case (.+)[.]?$/i))) return ft("notification_prescription_issued", { case: match[1] });
+  if ((match = text.match(/^मामले (.+) के लिए ई-प्रिस्क्रिप्शन उपलब्ध है[।.]$/))) return ft("notification_prescription_issued", { case: match[1] });
+  if ((match = text.match(/^प्रकरण (.+) साठी ई-प्रिस्क्रिप्शन उपलब्ध आहे[।.]$/))) return ft("notification_prescription_issued", { case: match[1] });
+  if ((match = text.match(/^కేసు (.+) కోసం ఇ-ప్రిస్క్రిప్షన్ అందుబాటులో ఉంది[।.]$/))) return ft("notification_prescription_issued", { case: match[1] });
+
+  if ((match = text.match(/^Dr\. (.+) is on the way to examine your animal for (.+)\.$/i))) return ft("notification_vet_on_way", { name: match[1], case: match[2] });
+  if ((match = text.match(/^Dr\. (.+) has arrived at your farm for case (.+)\.$/i))) return ft("notification_vet_arrived", { name: match[1], case: match[2] });
+  if ((match = text.match(/^A laboratory test has been requested for case (.+)\.$/i))) return ft("notification_test_requested", { case: match[1] });
+  if ((match = text.match(/^Lab sample for animal (.+) could not be processed: (.+)$/i))) return ft("notification_lab_problem", { animal: match[1], reason: match[2] });
+  if ((match = text.match(/^Case (.+) marked as RECOVERED by Dr\. (.+)\.$/i))) return ft("notification_case_recovered", { case: match[1], name: match[2] });
+  if ((match = text.match(/^Farm alert: (.+) detected in your area \((.+?)\)\. ?(.*)$/i))) return ft("notification_farm_alert", { disease: match[1], district: match[2], action: match[3] });
+  if ((match = text.match(/^फार्म अलर्ट: आपके क्षेत्र \((.+?)\) में (.+) का पता चला[।.] ?(.*)$/))) return ft("notification_farm_alert", { district: match[1], disease: match[2], action: match[3] });
+  if ((match = text.match(/^शेत सूचना: तुमच्या भागात \((.+?)\) (.+) आढळला[।.] ?(.*)$/))) return ft("notification_farm_alert", { district: match[1], disease: match[2], action: match[3] });
+  if ((match = text.match(/^ఫార్మ్ హెచ్చరిక: మీ ప్రాంతంలో \((.+?)\) (.+) కనుగొనబడింది[।.] ?(.*)$/))) return ft("notification_farm_alert", { district: match[1], disease: match[2], action: match[3] });
+
+  if ((match = text.match(/^Vaccination due for your animal (.+)\.?.*$/i))) return ft("notification_vaccination_due", { animal: match[1].split(".")[0] });
+  if ((match = text.match(/^आपके पशु (.+) के लिए टीकाकरण बकाया है.*$/))) return ft("notification_vaccination_due", { animal: match[1].split("।")[0] });
+  if ((match = text.match(/^तुमच्या पशूचे (.+) लसीकरण बाकी आहे.*$/))) return ft("notification_vaccination_due", { animal: match[1].split(".")[0] });
+  if ((match = text.match(/^మీ జంతువు (.+) కోసం వ్యాక్సినేషన్ బాకీ ఉంది[।.]?$/))) return ft("notification_vaccination_due", { animal: match[1] });
+  return farmerRuntimeText(text);
+}
+function ownerNotificationType(type) {
+  const key = ({ case: "notification_case", lab: "notification_lab", prescription: "notification_prescription", vaccination: "notification_vaccination", farm_alert: "notification_alert", info: "notification_info" }[(type || "").toLowerCase()]);
+  return key ? ft(key) : ft("notification_info");
+}
+
 // ======================================================= NOTIFICATIONS ==
 function notificationsView(role) {
   route(`#/${role}/notifications`, async () => {
-    render(`${header("Notifications", { back: true })}<div class="loading">Loading…</div>`);
+    const farmer = role === "owner";
+    render(`${header(farmer ? ft("notifications") : "Notifications", { back: true })}<div class="loading">${farmer ? ft("loading_notifications") : "Loading…"}</div>`);
     const notes = await api("/notifications");
+    if (farmer) {
+      render(`
+        ${header(ft("notifications"), { back: true })}
+        <div class="section-card">
+          ${notes.length === 0 ? emptyState(ft("no_notifications")) : notes.map(n => `
+            <div class="list-card" style="${n.is_read ? "opacity:0.6" : ""}" onclick="markRead(${n.id})">
+              <div class="row1"><span class="title">${iconForType(n.type)} ${ownerNotificationType(n.type)}</span>${n.is_read ? "" : `<span class="badge badge-red">${ft("new")}</span>`}</div>
+              <div class="meta">${ownerNotificationMessage(n.message)}</div>
+              <div class="meta">${fmtDate(n.created_at)}</div>
+            </div>`).join("")}
+        </div>
+        ${bottomNav("#/owner/notifications")}
+      `);
+      return;
+    }
     render(`
       ${header("Notifications", { back: true })}
       <div class="section-card">
@@ -2986,9 +3991,15 @@ window.markRead = async function (id) {
   try { await api(`/notifications/${id}/read`, { method: "PUT" }); router(); } catch (e) { }
 };
 window.deleteAnimal = async function (id, code) {
-  if (!confirm(`Delete animal ${code}? This also removes its cases, lab reports and prescriptions.`)) return;
-  try { await api(`/animals/${id}`, { method: "DELETE" }); toast(`Animal ${code} deleted`); router(); }
-  catch (err) { toast(err.message, true); }
+  const confirmation = getUserRole() === "owner"
+    ? ft("delete_confirm", { code })
+    : `Delete animal ${code}? This also removes its cases, lab reports and prescriptions.`;
+  if (!confirm(confirmation)) return;
+  try {
+    await api(`/animals/${id}`, { method: "DELETE" });
+    toast(getUserRole() === "owner" ? ft("animal_deleted", { code }) : `Animal ${code} deleted`);
+    router();
+  } catch (err) { toast(err.message, true); }
 };
 window.deleteCase = async function (id, caseNo) {
   if (!confirm(`Delete report ${caseNo}? This removes the case, its lab reports and prescriptions permanently.`)) return;
@@ -3000,11 +4011,12 @@ window.deleteCase = async function (id, caseNo) {
 // REQ 1: MORTALITY — Mark Animal Deceased
 // ==========================================================================
 window.markDeceased = async function (id, code) {
-  const cause = prompt(`Enter cause of death for ${code}:`);
+  const promptText = getUserRole() === "owner" ? ft("deceased_prompt", { code }) : `Enter cause of death for ${code}:`;
+  const cause = prompt(promptText);
   if (!cause) return;
   try {
     await api(`/animals/${id}/deceased`, { method: "POST", body: { cause_of_death: cause } });
-    toast(`Animal ${code} marked as deceased.`);
+    toast(getUserRole() === "owner" ? ft("animal_marked_deceased", { code }) : `Animal ${code} marked as deceased.`);
     router();
   } catch (err) { toast(err.message, true); }
 };
@@ -3124,7 +4136,7 @@ route("#/govt/blocks", async () => {
 // ==========================================================================
 // REQ 11: FARMER ADVISORIES
 // ==========================================================================
-route("#/owner/advisories", async () => {
+route("#/vet/advisories", async () => {
   render(`${header("Local Advisories", { back: true })}<div class="loading">Loading advisories…</div>`);
   try {
     const adv = await api("/advisories");
@@ -3168,12 +4180,12 @@ route("#/owner/advisories", async () => {
           `).join("")}
         </div>
       ` : ""}
-      ${bottomNav("#/owner/dashboard")}
+      ${bottomNav("#/vet/dashboard")}
     `);
   } catch (err) {
-    render(`${header("Local Advisories", { back: true })}<div class="loading">⚠️ ${err.message}</div>${bottomNav("#/owner/dashboard")}`);
+    render(`${header("Local Advisories", { back: true })}<div class="loading">⚠️ ${err.message}</div>${bottomNav("#/vet/dashboard")}`);
   }
-}, ["owner"]);
+}, ["vet"]);
 
 // ==========================================================================
 // REQ 12: DATA EXPORT
@@ -3251,20 +4263,21 @@ function weatherReliabilityWarning(weatherReliability) {
 // REQ 17: PUSH NOTIFICATION UI
 // ==========================================================================
 route("#/notifications/settings", async () => {
+  const farmer = getUserRole() === "owner";
   const vapidRes = await api("/push/vapid-key").catch(() => ({ configured: false }));
   render(`
-    ${header("Notification Settings", { back: true })}
+    ${header(farmer ? ft("notification_settings") : "Notification Settings", { back: true })}
     <div class="section-card">
-      <div class="section-title">🔔 Push Notifications</div>
+      <div class="section-title">🔔 ${farmer ? ft("push_notifications") : "Push Notifications"}</div>
       <div class="meta" style="margin-bottom:12px">
         ${vapidRes.configured
-          ? "Push notifications are available. Enable to receive real-time alerts for cases, lab reports, and outbreaks."
-          : "Push notifications are not configured on this server. In-app notifications will still work."}
+          ? (farmer ? ft("push_available") : "Push notifications are available. Enable to receive real-time alerts for cases, lab reports, and outbreaks.")
+          : (farmer ? ft("push_admin") : "Push notifications are not configured on this server. In-app notifications will still work.")}
       </div>
       ${vapidRes.configured ? `
-        <button class="btn btn-primary" id="btnEnablePush">🔔 Enable Push Notifications</button>
+        <button class="btn btn-primary" id="btnEnablePush">🔔 ${farmer ? ft("enable_push") : "Enable Push Notifications"}</button>
         <div id="pushStatus" class="small-muted" style="margin-top:8px"></div>
-      ` : `<div class="demo-box">Push notifications require VAPID keys to be configured by the server administrator.</div>`}
+      ` : `<div class="demo-box">${farmer ? ft("push_admin") : "Push notifications require VAPID keys to be configured by the server administrator."}</div>`}
     </div>
     ${bottomNav(homeFor(getUserRole() || "owner"))}
   `);
@@ -3273,12 +4286,12 @@ route("#/notifications/settings", async () => {
       const statusEl = document.getElementById("pushStatus");
       try {
         if (!("Notification" in window)) {
-          statusEl.textContent = "Push notifications are not supported in this browser.";
+          statusEl.textContent = farmer ? ft("push_unsupported") : "Push notifications are not supported in this browser.";
           return;
         }
         const permission = await Notification.requestPermission();
         if (permission !== "granted") {
-          statusEl.textContent = "Notification permission denied. Please enable in browser settings.";
+          statusEl.textContent = farmer ? ft("push_permission_denied") : "Notification permission denied. Please enable in browser settings.";
           return;
         }
         const reg = await navigator.serviceWorker.ready;
@@ -3288,10 +4301,10 @@ route("#/notifications/settings", async () => {
         });
         const subJson = sub.toJSON();
         await api("/push/subscribe", { method: "POST", body: subJson });
-        statusEl.textContent = "✅ Push notifications enabled!";
-        toast("Push notifications enabled!");
+        statusEl.textContent = farmer ? `✅ ${ft("push_enabled")}` : "✅ Push notifications enabled!";
+        toast(farmer ? ft("push_enabled") : "Push notifications enabled!");
       } catch (err) {
-        statusEl.textContent = "Failed: " + err.message;
+        statusEl.textContent = farmer ? ft("push_failed") : "Failed: " + err.message;
       }
     });
   }
@@ -3301,20 +4314,21 @@ route("#/notifications/settings", async () => {
 // REQ 18: FARMER FEEDBACK
 // ==========================================================================
 function farmerFeedbackSection(c) {
+  const localized = getUserRole() === "owner";
   return `
     <div class="section-card">
-      <div class="subheading">📝 How is your animal?</div>
-      <div class="meta" style="margin-bottom:10px">Let your veterinarian know the recovery progress.</div>
+      <div class="subheading">📝 ${localized ? ft("how_is_animal") : "How is your animal?"}</div>
+      <div class="meta" style="margin-bottom:10px">${localized ? ft("notes_placeholder") : "Let your veterinarian know the recovery progress."}</div>
       <form id="farmerFeedbackForm">
-        <div class="field"><label>Recovery Status</label>
+        <div class="field"><label>${localized ? ft("recovery_status") : "Recovery Status"}</label>
           <select name="recovery_status">
-            <option value="improving">✅ Improving</option>
-            <option value="same">↔️ Same</option>
-            <option value="worse">⚠️ Getting Worse</option>
+            <option value="improving">✅ ${localized ? ft("improving") : "Improving"}</option>
+            <option value="same">↔️ ${localized ? ft("same") : "Same"}</option>
+            <option value="worse">⚠️ ${localized ? ft("worse") : "Getting Worse"}</option>
           </select>
         </div>
-        <div class="field"><label>Notes (optional)</label><textarea name="notes" placeholder="Any observations about the animal's condition"></textarea></div>
-        <button class="btn btn-primary btn-sm" type="submit">Submit Feedback</button>
+        <div class="field"><label>${localized ? ft("notes") : "Notes (optional)"}</label><textarea name="notes" placeholder="${localized ? ft("notes_placeholder") : "Any observations about the animal's condition"}"></textarea></div>
+        <button class="btn btn-primary" type="submit">${localized ? ft("submit_feedback") : "Submit Feedback"}</button>
       </form>
     </div>`;
 }
