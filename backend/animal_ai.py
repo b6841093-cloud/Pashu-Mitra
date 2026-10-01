@@ -8,9 +8,14 @@ Strictly adheres to veterinary ethics:
 - Never presents output as an autonomous diagnosis
 - Mandates veterinary confirmation
 - Provides clear explanation factors, confidence, and diagnostic next steps
+
+Disease signatures are loaded from the unified DiseaseKnowledge base
+(diseases.json) so new diseases are automatically detectable without
+editing this file.
 """
 from datetime import datetime, date, timedelta
 import re
+from disease_knowledge import DiseaseKnowledge
 
 VET_REFERENCE_RANGES = {
     "cattle": {
@@ -192,12 +197,20 @@ def evaluate_animal_cds(animal: dict, cases: list, vaccinations: list,
         for c in active_cases
     ]).lower()
 
+    # Load disease signatures from unified knowledge base (Req 19)
+    # Falls back to hardcoded DISEASE_SIGNATURES if knowledge base unavailable
+    try:
+        dk = DiseaseKnowledge.load()
+        _signatures = dk.cds_signatures()
+    except Exception:
+        _signatures = DISEASE_SIGNATURES
+
     matched_diseases = []
     if active_cases:
         base_risk += 25.0
         abnormal_findings.append(f"Active clinical episode recorded ({len(active_cases)} ongoing case(s))")
 
-        for sig in DISEASE_SIGNATURES:
+        for sig in _signatures:
             hits = [kw for kw in sig["keywords"] if kw in all_symptoms_text]
             if len(hits) >= 2:
                 matched_diseases.append(sig)
@@ -316,7 +329,26 @@ def evaluate_animal_cds(animal: dict, cases: list, vaccinations: list,
             })
             suggested_steps.append(f"Strict contraindication: DO NOT administer {al.get('allergen')} or related classes")
 
-    # 6. Fallback / Default suggestions if clean
+    # 6. Zoonotic risk detection (Req 20)
+    try:
+        dk = DiseaseKnowledge.load()
+        for sig in matched_diseases:
+            disease_name = sig.get("disease", "")
+            dk_entry = dk.lookup(disease_name)
+            if dk_entry and dk_entry.zoonotic:
+                abnormal_findings.append(
+                    f"⚠️ ZOONOTIC RISK — {disease_name} can transmit to humans. Take PPE precautions."
+                )
+                concern_categories.add("Zoonotic Transmission Risk")
+                explanation_factors.append({
+                    "factor": f"Zoonotic Alert: {disease_name}",
+                    "detail": "This disease has zoonotic potential. Use gloves, mask, and protective eyewear.",
+                    "impact": 0.25,
+                })
+    except Exception:
+        pass  # Non-critical — continue without zoonotic check
+
+    # 7. Fallback / Default suggestions if clean
     if not abnormal_findings:
         abnormal_findings.append("No acute physiological abnormalities or active disease markers detected")
         suggested_steps.append("Continue routine preventive healthcare, deworming, and nutritional maintenance")

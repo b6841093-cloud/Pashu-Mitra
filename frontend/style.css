@@ -326,3 +326,14 @@ a.link{color:var(--primary);font-weight:700;cursor:pointer;}
   .app-header,.bottom-nav,.topbar,.btn,button{display:none !important;}
   .section-card{box-shadow:none;border:1px solid #ccc;margin:10px 0;}
 }
+
+/* New feature styles */
+.auto-escalated-badge{display:inline-block;background:#e53935;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;}
+.lang-toggle button{padding:3px 8px;border-radius:8px;font-size:12px;}
+.lang-toggle button.active{background:var(--primary);color:#fff;}
+.trend-chart-bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.trend-chart-bar .bar{width:100%;background:var(--primary);border-radius:4px 4px 0 0;min-height:4px;}
+.advisory-card{border-left:4px solid var(--primary);background:#f0f4ff;}
+.ml-status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;}
+.ml-status-dot.online{background:#43a047;}
+.ml-status-dot.offline{background:#e53935;}

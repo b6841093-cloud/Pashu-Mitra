@@ -155,5 +155,97 @@
   "transmission_mr": "संक्रमित प्राण्यांशी थेट संपर्क, विशेषत: श्वासोच्छवासाचे स्त्राव आणि विष्ठेद्वारे.",
   "prevention_en": "Mass vaccination campaigns, isolation of sick animals, and safe disposal of carcasses.",
   "prevention_mr": "सामूहिक लसीकरण मोहिमा, आजारी प्राण्यांचे अलगीकरण आणि मृतदेहांची सुरक्षित विल्हेवाट."
+ },
+ {
+  "id": "D-005",
+  "name_en": "Haemorrhagic Septicaemia (HS)",
+  "name_mr": "रक्तस्रावी सेप्टिसीमिया",
+  "scientificName": "Pasteurella multocida",
+  "aliases": ["HS", "Hemorrhagic Septicemia", "Galghotu"],
+  "category": "Bacterial",
+  "affectedSpecies": ["Cattle", "Buffalo"],
+  "riskLevel": "High",
+  "zoonotic": false,
+  "vaccinePreventable": true,
+  "description_en": "An acute, highly fatal septicaemic disease of cattle and buffalo caused by Pasteurella multocida, prevalent during monsoon.",
+  "description_mr": "पावसाळ्यात बरेचदा दिसणारा, पशुधनातील तीव्र आणि घातक सेप्टिसीमिक रोग.",
+  "symptoms_en": [
+    "High fever",
+    "Swelling of throat and submandibular region",
+    "Difficulty breathing",
+    "Nasal discharge",
+    "Loss of appetite and lethargy"
+  ],
+  "symptoms_mr": [
+    "तीव्र ताप",
+    "घसा आणि तोंडखालील भागात सूज",
+    "श्वास घेण्यात त्रास",
+    "नाकातून स्त्राव",
+    "भूक न लागणे आणि अशक्तपणा"
+  ],
+  "transmission_en": "Direct contact with infected animals, contaminated water/feed, and fly vectors.",
+  "transmission_mr": "संक्रमित प्राण्यांशी थेट संपर्क, दूषित पाणी/चारा आणि माश्यांद्वारे.",
+  "prevention_en": "Annual pre-monsoon vaccination, isolation of affected animals, and proper carcass disposal.",
+  "prevention_mr": "दरवर्षी पावसाळ्यापूर्वी लसीकरण, बाधित प्राण्यांचे अलगीकरण आणि योग्य मृतदेह विल्हेवाट."
+ },
+ {
+  "id": "D-006",
+  "name_en": "Black Quarter (BQ)",
+  "name_mr": "काळा पाय / खुरपाटा",
+  "scientificName": "Clostridium chauvoei",
+  "aliases": ["BQ", "Blackleg", "Clostridial Myonecrosis"],
+  "category": "Bacterial",
+  "affectedSpecies": ["Cattle", "Buffalo", "Sheep"],
+  "riskLevel": "Critical",
+  "zoonotic": false,
+  "vaccinePreventable": true,
+  "description_en": "An acute, highly fatal clostridial infection causing muscle necrosis, crepitant swelling, and sudden death in young stock.",
+  "description_mr": "स्नायू कुरुपाणे, फुगून येणारी सूज आणि तरुण पशुधनातील अचानक मृत्यू होणारा तीव्र क्लॉस्ट्रिडियल संसर्ग.",
+  "symptoms_en": [
+    "Sudden high fever",
+    "Crepitant (crackling) swelling in shoulder or thigh",
+    "Severe lameness",
+    "Rapid death in untreated cases"
+  ],
+  "symptoms_mr": [
+    "अचानक तीव्र ताप",
+    "खांद्यात किंवा मांडीत फुगणारी सूज",
+    "तीव्र लंगडेपणा",
+    "उपचार न केल्यास झटपट मृत्यू"
+  ],
+  "transmission_en": "Ingestion of spores from contaminated soil; spores enter through wounds.",
+  "transmission_mr": "दूषित मातीतील बीजाणू ग्रहण करणे; जखमांद्वारे बीजाणू शरीरात जातात.",
+  "prevention_en": "Annual vaccination of young stock (6 months to 2 years), proper wound care, and deep burial of carcasses with quicklime.",
+  "prevention_mr": "तरुण पशुधनाचे वार्षिक लसीकरण, जखमांची योग्य काळजी, चुन्यासह मृतदेह खोल गाडणे."
+ },
+ {
+  "id": "D-007",
+  "name_en": "Bovine Mastitis",
+  "name_mr": "गायीचे स्तनशोथ",
+  "scientificName": "Staphylococcus / Streptococcus spp.",
+  "aliases": ["Mastitis", "Udder Infection"],
+  "category": "Bacterial",
+  "affectedSpecies": ["Cattle", "Buffalo"],
+  "riskLevel": "Medium",
+  "zoonotic": false,
+  "vaccinePreventable": false,
+  "description_en": "Inflammation of the mammary gland caused by bacterial infection, leading to reduced milk production and quality losses.",
+  "description_mr": "स्तन ग्रंथीची बॅक्टेरियल संसर्गामुळे होणारी सूज, ज्यामुळे दूध उत्पादन कमी होते.",
+  "symptoms_en": [
+    "Swollen, hot, painful udder",
+    "Watery or clotted milk",
+    "Fever and loss of appetite",
+    "Reduced milk yield"
+  ],
+  "symptoms_mr": [
+    "सुजलेले, गरम, वेदनादायक स्तन",
+    "पाण्यासारखे किंवा गोठलेले दूध",
+    "ताप आणि भूक न लागणे",
+    "दुधाचे उत्पादन कमी होणे"
+  ],
+  "transmission_en": "Bacterial entry through teat canal, contaminated milking equipment, and poor hygiene.",
+  "transmission_mr": "थनाच्या नळीतून बॅक्टेरिया प्रवेश, दूध काढण्याच्या दूषित उपकरणांमुळे आणि स्वच्छतेचा अभाव.",
+  "prevention_en": "Post-milking teat dipping, proper milking hygiene, regular CMT screening, and clean bedding.",
+  "prevention_mr": "दूध काढल्यानंतर थन बुडवणे, योग्य दुग्ध स्वच्छता, नियमित तपासणी आणि स्वच्छ बिछाना."
  }
 ]
