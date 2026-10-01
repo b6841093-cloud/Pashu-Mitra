@@ -1,4 +1,72 @@
-"""Central, validated configuration for the Pashu-Shield helpline."""
+"""Central, validated configuration for the Pashu-Shield helpline.
+
+=============================================================================
+PROVIDER-INDEPENDENT IVR ARCHITECTURE & PSTN INTEGRATION GUIDE
+=============================================================================
+
+Architecture Overview
+---------------------
+PashuMitra uses a provider-independent IVR architecture.  The application
+layer owns call *state* (language selection, survey answers, routing decisions)
+and emits voice *instructions* (gather DTMF, bridge, hangup).  Actual audio
+termination, DTMF detection and SIP/RTP handling are delegated to an external
+PBX or CPaaS carrier.
+
+This design means you can connect any SIP-compatible PBX (Asterisk, FreeSWITCH)
+or cloud telephony provider (Twilio, Exotel, Plivo) without changing application
+code — only a thin adapter is needed.
+
+How a Real SIP/PBX Provider Connects
+-------------------------------------
+1. Provision a phone number (DID) from a SIP trunk provider.
+2. Configure the trunk in your PBX (see voice/asterisk/ for example configs).
+3. When an inbound call arrives, the PBX makes an HTTP POST to:
+       POST /api/ivr/calls/inbound
+   with the caller's number and a unique provider call ID.
+4. The API returns a JSON voice instruction telling the PBX what to play/gather.
+5. The PBX plays the prompt, collects DTMF input, then sends it to:
+       POST /api/ivr/calls/<call_id>/input
+6. This cycle repeats (language → region → menu → survey questions).
+7. When a veterinarian bridge is requested, the PBX receives a BRIDGE
+   instruction with the vet's E.164 number and dials it.
+8. Call lifecycle events (hangup, bridge_connected, bridge_failed) are sent to:
+       POST /api/ivr/calls/<call_id>/events
+9. A signed webhook secret (IVR_WEBHOOK_SECRET env var) authenticates each call.
+
+Required Webhook Endpoints
+--------------------------
+  POST /api/ivr/calls/inbound       — new call from PSTN
+  POST /api/ivr/calls/<id>/input    — DTMF / speech input
+  POST /api/ivr/calls/<id>/events   — lifecycle events (hangup, bridge)
+
+Environment Variables for PSTN
+------------------------------
+  IVR_PROVIDER_MODE       = SIP_PBX           (default: MOCK)
+  IVR_PHONE_NUMBER        = 7382210251        (official helpline — do not change)
+  IVR_WEBHOOK_SECRET      = <random string>   (validates incoming webhook HMAC)
+  IVR_PSTN_CONNECTED      = true              (set after verified live call)
+  IVR_PSTN_VERIFIED_AT    = <ISO timestamp>   (record when first real call succeeds)
+  VET_WORK_START_HOUR     = 0                 (24h format, default 0 = always)
+  VET_WORK_END_HOUR       = 24                (default 24 = 24h coverage)
+
+Security Considerations
+-----------------------
+- All webhook endpoints are protected by HMAC signature verification
+  (see ivr_security.py).  The shared secret must be stored in IVR_WEBHOOK_SECRET.
+- Credentials (SIP username/password, API keys) MUST be provided through
+  environment variables and NEVER committed to source control.
+- Caller phone numbers are normalized to E.164 format; raw numbers are never
+  stored in logs.
+
+Testing Without PSTN
+--------------------
+Set IVR_PROVIDER_MODE=MOCK (the default).  The MockTelephonyAdapter returns
+instruction objects without making real calls.  Use /api/ivr/report to
+simulate a completed survey for end-to-end testing.
+
+See voice/asterisk/extensions.conf.example and pjsip.conf.example for a
+working Asterisk configuration template.
+"""
 from __future__ import annotations
 
 import os

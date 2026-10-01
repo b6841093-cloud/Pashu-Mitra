@@ -84,6 +84,46 @@ const I18N = {
     "auth.haveAccount": "आधीच नोंदणी केली आहे?", "auth.createAccount": "खाते तयार करा",
     "lang.label": "भाषा",
   },
+  hi: {
+    "app.tagline": "पशुधन रोग रिपोर्टिंग और पशु चिकित्सा सेवा — महाराष्ट्र",
+    "nav.dashboard": "मुख्यपृष्ठ", "nav.analytics": "विश्लेषण", "nav.gis": "जीआईएस जोखिम मानचित्र",
+    "nav.surveillance": "रोग निगरानी", "nav.ai": "एआई जोखिम", "nav.reporting": "रिपोर्ट",
+    "nav.animals": "पशु", "nav.cases": "मामले", "nav.lab": "प्रयोगशाला", "nav.rx": "दवा",
+    "nav.alerts": "अलर्ट", "nav.reports": "रिपोर्ट", "nav.search": "खोज",
+    "nav.campaigns": "टीकाकरण अभियान", "nav.stock": "स्टॉक", "nav.diseases": "जानकारी",
+    "nav.queue": "कतार", "nav.national": "राष्ट्रीय", "nav.scan": "स्कैन",
+    "role.owner": "पशु मालिक", "role.vet": "पशु चिकित्सक", "role.govt": "सरकारी अधिकारी",
+    "role.lab": "प्रयोगशाला कर्मचारी",
+    "role.owner.desc": "पशु पंजीकरण, स्वास्थ्य रिपोर्ट, दवाएं और क्यूआर पासपोर्ट देखें",
+    "role.vet.desc": "रिपोर्ट प्राप्त करें, नमूना संग्रह, निदान, प्रयोगशाला, दवा और एआई सलाह",
+    "role.govt.desc": "राज्य विश्लेषण, रोग निगरानी, जीआईएस जोखिम और राष्ट्रीय पूर्व चेतावनी",
+    "role.lab.desc": "नमूना प्राप्ति, सत्यापन, जैविक परीक्षण, परिणाम प्रविष्टि और रिपोर्ट",
+    "btn.login": "लॉगिन", "btn.register": "पंजीकरण", "btn.logout": "लॉगआउट",
+    "btn.save": "सहेजें", "btn.submit": "जमा करें", "btn.create": "बनाएं",
+    "auth.choose": "अपना पोर्टल चुनें", "auth.newHere": "यहां नए हैं?",
+    "auth.haveAccount": "पहले से पंजीकृत?", "auth.createAccount": "खाता बनाएं",
+    "lang.label": "भाषा",
+  },
+  te: {
+    "app.tagline": "పశువుల వ్యాధి నివేదిక & పశు వైద్య సేవ — మహారాష్ట్ర",
+    "nav.dashboard": "హోమ్", "nav.analytics": "విశ్లేషణ", "nav.gis": "జీఐఎస్ రిస్క్ మ్యాప్",
+    "nav.surveillance": "వ్యాధి పర్యవేక్షణ", "nav.ai": "ఏఐ రిస్క్", "nav.reporting": "నివేదిక",
+    "nav.animals": "జంతువులు", "nav.cases": "కేసులు", "nav.lab": "ల్యాబ్", "nav.rx": "మందులు",
+    "nav.alerts": "హెచ్చరికలు", "nav.reports": "నివేదికలు", "nav.search": "శోధన",
+    "nav.campaigns": "వ్యాక్సినేషన్ డ్రైవ్లు", "nav.stock": "స్టాక్", "nav.diseases": "సమాచారం",
+    "nav.queue": "క్యూ", "nav.national": "జాతీయ", "nav.scan": "స్కాన్",
+    "role.owner": "పశువుల యజమాని", "role.vet": "పశువైద్యుడు", "role.govt": "ప్రభుత్వ అధికారి",
+    "role.lab": "ల్యాబ్ సిబ్బంది",
+    "role.owner.desc": "జంతువులను నమోదు చేయండి, ఆరోగ్య నివేదికలు, మందులు & QR పాస్‌పోర్ట్ చూడండి",
+    "role.vet.desc": "నివేదికలు స్వీకరించండి, నమూనా సేకరణ, రోగ నిర్ధారణ, ల్యాబ్, మందులు & ఏఐ సలహా",
+    "role.govt.desc": "రాష్ట్ర విశ్లేషణ, వ్యాధి పర్యవేక్షణ, GIS రిస్క్ మరియు జాతీయ ముందస్తు హెచ్చరిక",
+    "role.lab.desc": "నమూనా స్వీకరణ, ధృవీకరణ, జైవిక పరీక్షలు, ఫలితాల నమోదు & నివేదికలు",
+    "btn.login": "లాగిన్", "btn.register": "నమోదు", "btn.logout": "లాగౌట్",
+    "btn.save": "సేవ్ చేయండి", "btn.submit": "సమర్పించండి", "btn.create": "సృష్టించండి",
+    "auth.choose": "మీ పోర్టల్ ఎంచుకోండి", "auth.newHere": "కొత్తగా వచ్చారా?",
+    "auth.haveAccount": "ఇప్పటికే నమోదు చేసుకున్నారా?", "auth.createAccount": "ఖాతా సృష్టించండి",
+    "lang.label": "భాష",
+  },
 };
 function t(key) {
   return (I18N[state.lang] && I18N[state.lang][key]) || I18N.en[key] || key;
@@ -98,6 +138,8 @@ function langToggle() {
     <span>${t("lang.label")}:</span>
     <button type="button" class="${state.lang === "en" ? "active" : ""}" onclick="setLang('en')">English</button>
     <button type="button" class="${state.lang === "mr" ? "active" : ""}" onclick="setLang('mr')">मराठी</button>
+    <button type="button" class="${state.lang === "hi" ? "active" : ""}" onclick="setLang('hi')">हिन्दी</button>
+    <button type="button" class="${state.lang === "te" ? "active" : ""}" onclick="setLang('te')">తెలుగు</button>
   </div>`;
 }
 
@@ -538,6 +580,10 @@ async function ownerDashboard() {
     </div>
     ${helplineCard(ivrInfo)}
     <div class="section-card">
+      <div class="section-title">📍 Local Disease Advisory</div>
+      <div id="advisoryCard"><div class="loading">Loading advisory…</div></div>
+    </div>
+    <div class="section-card">
       <div class="section-title">Quick Actions</div>
       <div class="icon-grid">
         ${iconItem("➕", "Add Animal", "#/owner/animals/new")}
@@ -553,16 +599,20 @@ async function ownerDashboard() {
         ${iconItem("📖", "Disease Info", "#/owner/diseases")}
         ${iconItem("🐑", "My Herds", "#/owner/herds")}
         ${iconItem("🔔", "Notifications", "#/owner/notifications")}
+        ${iconItem("⚙️", "Notif Settings", "#/notifications/settings")}
       </div>
     </div>
     ${bottomNav("#/owner/dashboard")}
   `);
+  // Load advisory card asynchronously
+  loadOwnerAdvisory();
 }
 
 async function vetDashboard() {
   render(`${header("Vet Dashboard")}<div class="loading">Loading…</div>`);
-  const [summary, availabilityRows] = await Promise.all([
-    api("/vet/summary"), api("/vet/availability").catch(() => [])
+  const [summary, availabilityRows, ivrStatus] = await Promise.all([
+    api("/vet/summary"), api("/vet/availability").catch(() => []),
+    api("/ivr/status").catch(() => ({ pstn_connected: false, provider_mode: "MOCK" }))
   ]);
   const availability = availabilityRows[0] || { configured_status: "AVAILABLE", effective_status: "AVAILABLE", supported_languages: ["en"] };
   render(`
@@ -590,6 +640,14 @@ async function vetDashboard() {
       <button class="btn btn-ghost btn-sm" onclick="saveVetAvailability()">Save Availability</button>
     </div>
     <div class="section-card">
+      <div class="section-title">📞 IVR / Helpline Status</div>
+      <div class="meta">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ivrStatus.pstn_connected ? '#43a047' : '#fb8c00'};margin-right:6px"></span>
+        Provider: <b>${ivrStatus.provider_mode}</b> · PSTN: <b>${ivrStatus.pstn_connected ? 'Connected' : 'Not Connected'}</b>
+      </div>
+      ${!ivrStatus.pstn_connected ? `<div class="small-muted" style="margin-top:4px">${ivrStatus.setup_instructions || ''}</div>` : ""}
+    </div>
+    <div class="section-card">
       <div class="section-title">Today's Tasks</div>
       <div class="icon-grid">
         ${iconItem("📷", "Scan QR", "#/scan")}
@@ -609,6 +667,31 @@ async function vetDashboard() {
     </div>
     ${bottomNav("#/vet/dashboard")}
   `);
+}
+
+async function loadOwnerAdvisory() {
+  const el = document.getElementById("advisoryCard");
+  if (!el) return;
+  try {
+    const adv = await api("/advisories");
+    let html = `<div class="stat-grid" style="margin:0 0 8px">`;
+    html += `<div class="stat-card"><div class="num"><span class="badge ${riskBadgeClass(adv.risk_level)}">${adv.risk_level}</span></div><div class="lbl">${adv.district}</div></div>`;
+    html += `${statCard(adv.active_cases, "Active Cases")}`;
+    html += `</div>`;
+    if (adv.weather_advisories.length > 0) {
+      html += adv.weather_advisories.map(wa => `<div class="meta" style="margin:3px 0">🌤️ ${wa}</div>`).join("");
+    }
+    if (adv.alerts.length > 0) {
+      html += adv.alerts.map(a => `<div class="meta" style="margin:3px 0;color:var(--red)">🚨 ${a.disease}: ${a.trigger_reason}</div>`).join("");
+    }
+    if (adv.campaigns.length > 0) {
+      html += adv.campaigns.map(c => `<div class="meta" style="margin:3px 0;color:var(--primary)">💉 ${c.name} — ${c.vaccine}</div>`).join("");
+    }
+    html += `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="location.hash='#/owner/advisories'">View Full Advisory →</button>`;
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = `<div class="small-muted">Advisory unavailable</div>`;
+  }
 }
 
 window.saveVetAvailability = async function() {
@@ -632,6 +715,8 @@ async function govtDashboard() {
       ${statCard(a.totals.active, "Active Cases")}
       ${statCard(a.totals.animals, "Animals Registered")}
       ${statCard(a.totals.districts, "Districts Reporting")}
+      ${statCard(a.totals.deaths || 0, "Deaths Reported")}
+      ${statCard(a.totals.deceased_animals || 0, "Deceased Animals")}
     </div>
     <div class="section-card">
       <div class="section-title">☎️ Helpline Reporting</div>
@@ -668,6 +753,22 @@ async function govtDashboard() {
       <div class="section-title">🧠 AI Early Warning System</div>
       <div class="meta">Disease risk prediction &amp; outbreak detection — trained ML model scored on your real district case data.</div>
       <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="location.hash='#/govt/ai'">Open AI Risk Analysis</button>
+    </div>
+    <div class="section-card">
+      <div class="section-title">📈 Disease Trends</div>
+      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/trends'">View Historical Trends</button>
+    </div>
+    <div class="section-card">
+      <div class="section-title">🏘️ Block-Level Analytics</div>
+      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/blocks'">View Block Data</button>
+    </div>
+    <div class="section-card">
+      <div class="section-title">🦠 Zoonotic Risk</div>
+      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/zoonotic'">View Zoonotic Disease Risk</button>
+    </div>
+    <div class="section-card">
+      <div class="section-title">📥 Export Data</div>
+      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/export'">Export Cases, Animals &amp; Campaigns</button>
     </div>
     ${bottomNav("#/govt/dashboard")}
   `);
@@ -1137,8 +1238,25 @@ route("#/govt/gis", async () => {
 
 function initGisMap() {
   if (typeof L === "undefined") {
-    document.getElementById("gisMap").innerHTML = emptyState("Map library failed to load.");
+    document.getElementById("gisMap").innerHTML = `
+      ${emptyState("Map library failed to load.")}
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="location.hash='#/govt/gis'">🔄 Retry</button>`;
     return;
+  }
+  // Show warning if GIS data failed to load
+  if (!gisState.outline) {
+    const warning = document.createElement("div");
+    warning.style.cssText = "background:#fff3cd;padding:8px 12px;font-size:12px;border-radius:8px;margin-bottom:8px";
+    warning.innerHTML = "⚠️ Map boundary data unavailable. Using district centroids. <button class='btn btn-ghost btn-sm' onclick='location.hash=\"#/govt/gis\"'>Retry</button>";
+    const mapEl = document.getElementById("gisMap");
+    if (mapEl && mapEl.parentNode) mapEl.parentNode.insertBefore(warning, mapEl);
+  }
+  if (!gisState.locations || !gisState.locations.length) {
+    const warning2 = document.createElement("div");
+    warning2.style.cssText = "background:#fff3cd;padding:8px 12px;font-size:12px;border-radius:8px;margin-bottom:8px";
+    warning2.innerHTML = "⚠️ Location data unavailable — using district centroids.";
+    const mapEl2 = document.getElementById("gisMap");
+    if (mapEl2 && mapEl2.parentNode) mapEl2.parentNode.insertBefore(warning2, mapEl2);
   }
   const map = L.map("gisMap").setView([19.7515, 75.7139], 7);
   if (navigator.onLine) {
@@ -1259,6 +1377,11 @@ function nationalSurveillanceView() {
     const data = await api("/national/surveillance");
     render(`
       ${header("National Surveillance", { back: true })}
+      ${data.reporting_scope_note ? `
+        <div style="background:#e3f2fd;padding:10px 14px;border-radius:12px;margin:12px 16px;font-size:13px">
+          📋 ${data.reporting_scope_note}
+        </div>
+      ` : ""}
       <div class="section-card">
         <div class="section-title">🇮🇳 India Livestock Health Chain Hierarchy</div>
         <div class="meta" style="font-size:12px;margin-bottom:12px"><b>Surveillance Layer:</b> Country → State → District → Block → Herd → Animal</div>
@@ -1267,6 +1390,7 @@ function nationalSurveillanceView() {
           ${statCard(data.total_national_cases, "National Cases")}
           ${statCard(data.total_national_active, "Active Episodes")}
           ${statCard(data.states.length, "Federated States")}
+          ${statCard(data.zoonotic_risk_count || 0, "Zoonotic Cases")}
         </div>
       </div>
 
@@ -1548,9 +1672,11 @@ route("#/govt/ai", async () => {
     <div class="section-card">
       <div class="section-title">🧠 Disease Risk Prediction</div>
       <div class="meta" style="margin-bottom:10px">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${modelStatus.online ? '#43a047' : '#e53935'};margin-right:6px"></span>
         ${modelStatus.online
           ? `AI model <b>online</b> — ${modelStatus.model}, accuracy ${Math.round(modelStatus.accuracy * 100)}% (ROC-AUC ${modelStatus.roc_auc})`
           : `⚠️ AI model <b>offline</b>. Start the ml-backend service (port 8000) to enable predictions.`}
+        ${modelStatus.last_successful_prediction ? `<br>Last successful prediction: ${fmtDate(modelStatus.last_successful_prediction)}` : ""}
       </div>
       <form id="aiForm">
         <div class="form-row">
@@ -1602,6 +1728,7 @@ route("#/govt/ai", async () => {
           <div class="section-title">🚨 Outbreak Detection (Isolation Forest)</div>
           <div class="meta">Detected: <b>${outbreak.outbreak_detected ? "YES ⚠️" : "No"}</b> · Severity: <b>${outbreak.severity}</b> · Anomaly score: ${outbreak.anomaly_score}</div>
         </div>` : ""}
+        ${weatherReliabilityWarning(pred.weather_reliability)}
         <div class="section-card">
           <div class="section-title">🗄 Live Data & Weather Used (from database)</div>
           <div class="meta">Animals registered: <b>${feat.animal_population}</b></div>
@@ -1866,6 +1993,7 @@ function animalRecordView(role) {
         </div>
         <div style="margin-top:14px">
           <button class="btn btn-ghost btn-sm" onclick="showQrModal(${a.id})">🏷️ Digital QR Passport &amp; Printable Tag</button>
+          ${a.status !== "Deceased" && (role === "owner" || role === "vet") ? `<button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);margin-left:8px" onclick="markDeceased(${a.id},'${a.animal_code}')">☠️ Mark Deceased</button>` : ""}
         </div>
       </div>
 
@@ -2247,6 +2375,7 @@ function caseDetailView(role) {
         <div class="row1" style="justify-content:space-between;display:flex;align-items:center;margin-bottom:8px">
           <span class="badge ${statusBadgeClass(c.status)}">${c.status}</span>
           <span class="badge ${severityBadgeClass(c.severity)}">${c.severity} severity</span>
+          ${autoEscalatedBadge(c)}
         </div>
         <div class="detail-grid">
           <div><b>Animal</b><a class="link" onclick="location.hash='#/${role}/animals/${c.animal.id}'">${c.animal.animal_code}</a></div>
@@ -2358,6 +2487,7 @@ function caseDetailView(role) {
               </div>
               <div class="field"><label>Objective Clinical Observations</label><textarea name="objective_observations" placeholder="e.g. Temp 101.3°F, normal rumination, appetite restored"></textarea></div>
               <div class="field"><label>Clinical Notes</label><input name="notes" placeholder="e.g. Complete 3-day course" /></div>
+              <div class="field"><label>Productivity Impact</label><input name="productivity_notes" placeholder="e.g. Milk yield dropped 40%" /></div>
               <button class="btn btn-primary btn-sm" type="submit">Save Treatment Evaluation</button>
             </form>
           </div>
@@ -2424,11 +2554,31 @@ function caseDetailView(role) {
         <button class="btn btn-outline" onclick="deleteCase(${c.id},'${c.case_no}')">Delete Report</button>
       </div>` : ""}
 
+      <!-- REQ 18: FARMER FEEDBACK SECTION -->
+      ${role === "owner" && !["RECOVERED", "CLOSED"].includes(c.status) ? `
+        <div id="farmerFeedbackWrap"></div>
+        ${farmerFeedbackSection(c)}
+      ` : ""}
+
       ${bottomNav(`#/${role}/cases`)}
     `);
 
     if (isVet) bindVetCaseActions(c, allergies);
     loadTracking(c, role);
+
+    // REQ 18: Bind farmer feedback form
+    const ffForm = document.getElementById("farmerFeedbackForm");
+    if (ffForm) {
+      ffForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          const body = Object.fromEntries(new FormData(e.target));
+          await api(`/cases/${c.id}/farmer-feedback`, { method: "POST", body });
+          toast("Feedback submitted! Thank you.");
+          router();
+        } catch (err) { toast(err.message, true); }
+      });
+    }
   }, [role]);
 }
 caseDetailView("owner"); caseDetailView("vet"); caseDetailView("govt");
@@ -2845,3 +2995,370 @@ window.deleteCase = async function (id, caseNo) {
   try { await api(`/cases/${id}`, { method: "DELETE" }); toast(`Report ${caseNo} deleted`); location.hash = "#/vet/reports"; }
   catch (err) { toast(err.message, true); }
 };
+
+// ==========================================================================
+// REQ 1: MORTALITY — Mark Animal Deceased
+// ==========================================================================
+window.markDeceased = async function (id, code) {
+  const cause = prompt(`Enter cause of death for ${code}:`);
+  if (!cause) return;
+  try {
+    await api(`/animals/${id}/deceased`, { method: "POST", body: { cause_of_death: cause } });
+    toast(`Animal ${code} marked as deceased.`);
+    router();
+  } catch (err) { toast(err.message, true); }
+};
+
+// ==========================================================================
+// REQ 5: GOVT TREND CHARTS
+// ==========================================================================
+route("#/govt/trends", async () => {
+  render(`${header("Disease Trends", { back: true })}<div class="loading">Loading trends…</div>`);
+  const data = await api("/govt/trends?period=monthly");
+  render(`
+    ${header("Disease Trends", { back: true })}
+    <div class="section-card">
+      <div class="section-title">📈 Historical Case Trends</div>
+      <div class="btn-row" style="margin-bottom:12px">
+        <button class="btn btn-ghost btn-sm" onclick="loadTrends('weekly')">Weekly</button>
+        <button class="btn btn-primary btn-sm" onclick="loadTrends('monthly')">Monthly</button>
+      </div>
+      <div id="trendChart">${trendBarChart(data.trends)}</div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">🦠 Disease-wise Trends</div>
+      <div id="diseaseTrendChart">${diseaseTrendSection(data.disease_trends, data.trends)}</div>
+    </div>
+    ${bottomNav("#/govt/dashboard")}
+  `);
+}, ["govt", "vet"]);
+
+window.loadTrends = async function (period) {
+  try {
+    const data = await api(`/govt/trends?period=${period}`);
+    const el = document.getElementById("trendChart");
+    if (el) el.innerHTML = trendBarChart(data.trends);
+    const el2 = document.getElementById("diseaseTrendChart");
+    if (el2) el2.innerHTML = diseaseTrendSection(data.disease_trends, data.trends);
+  } catch (err) { toast(err.message, true); }
+};
+
+function trendBarChart(trends) {
+  if (!trends || !trends.length) return emptyState("No trend data available yet.");
+  const max = Math.max(...trends.map(t => t.total), 1);
+  return `<div style="display:flex;align-items:end;gap:4px;height:160px;padding:8px 0">
+    ${trends.map(t => {
+      const pct = Math.round((t.total / max) * 100);
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="font-size:10px;font-weight:700">${t.total}</div>
+        <div style="width:100%;height:${Math.max(pct, 4)}%;background:var(--primary);border-radius:4px 4px 0 0;min-height:4px"></div>
+        <div style="font-size:9px;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap">${t.period_label}</div>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function diseaseTrendSection(diseaseTrends, trends) {
+  if (!diseaseTrends || !Object.keys(diseaseTrends).length) return emptyState("No disease trend data.");
+  const allDiseases = new Set();
+  Object.values(diseaseTrends).forEach(arr => arr.forEach(d => allDiseases.add(d.disease)));
+  const top3 = [...allDiseases].slice(0, 3);
+  const colors = ["#3f51b5", "#e53935", "#43a047"];
+  let html = `<div style="margin:8px 0">`;
+  top3.forEach((disease, i) => {
+    html += `<div style="margin:6px 0"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${colors[i]};margin-right:6px"></span><b>${disease}</b></div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+// ==========================================================================
+// REQ 6: IVR STATUS ON VET DASHBOARD
+// ==========================================================================
+// Modified vetDashboard to show IVR status
+const _origVetDashboard = vetDashboard;
+
+// ==========================================================================
+// REQ 9: AI AUTO-ESCALATED BADGE
+// ==========================================================================
+// Helper to show auto-escalated badge
+function autoEscalatedBadge(c) {
+  if (c.ai_auto_escalated) {
+    return `<span class="badge badge-red" style="margin-left:6px">🤖 AI Auto-escalated</span>`;
+  }
+  return "";
+}
+
+// ==========================================================================
+// REQ 10: BLOCK-LEVEL ANALYTICS VIEW
+// ==========================================================================
+route("#/govt/blocks", async () => {
+  render(`${header("Block-Level Analytics", { back: true })}<div class="loading">Loading…</div>`);
+  const a = await api("/govt/analytics");
+  render(`
+    ${header("Block-Level Analytics", { back: true })}
+    <div class="section-card">
+      <div class="section-title">🏘️ Cases by Block & District</div>
+      ${a.cases_by_block && a.cases_by_block.length > 0 ? `
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>District</th><th>Block</th><th>Cases</th><th>Active</th></tr></thead>
+            <tbody>
+              ${a.cases_by_block.map(b => `
+                <tr>
+                  <td>${b.district}</td>
+                  <td><b>${b.block}</b></td>
+                  <td>${b.cases}</td>
+                  <td>${b.active}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      ` : emptyState("No block-level case data available.")}
+    </div>
+    ${bottomNav("#/govt/dashboard")}
+  `);
+}, ["govt"]);
+
+// ==========================================================================
+// REQ 11: FARMER ADVISORIES
+// ==========================================================================
+route("#/owner/advisories", async () => {
+  render(`${header("Local Advisories", { back: true })}<div class="loading">Loading advisories…</div>`);
+  try {
+    const adv = await api("/advisories");
+    render(`
+      ${header("Local Disease Advisory", { back: true })}
+      <div class="section-card">
+        <div class="section-title">📍 ${adv.district} — Disease Risk</div>
+        <div class="stat-grid" style="margin:0">
+          <div class="stat-card"><div class="num"><span class="badge ${riskBadgeClass(adv.risk_level)}">${adv.risk_level}</span></div><div class="lbl">Current Risk</div></div>
+          ${statCard(adv.active_cases, "Active Cases")}
+        </div>
+      </div>
+      ${adv.weather_advisories.length > 0 ? `
+        <div class="section-card">
+          <div class="section-title">🌤️ Weather Advisories</div>
+          ${adv.weather_advisories.map(wa => `<div class="meta" style="margin:4px 0">• ${wa}</div>`).join("")}
+          <div class="small-muted" style="margin-top:8px">Temp: ${adv.weather.temperature}°C · Humidity: ${adv.weather.humidity}% · Rainfall: ${adv.weather.rainfall}mm</div>
+        </div>
+      ` : ""}
+      ${adv.alerts.length > 0 ? `
+        <div class="section-card">
+          <div class="section-title">🚨 Active Alerts in Your Area</div>
+          ${adv.alerts.map(a => `
+            <div class="list-card" style="cursor:default">
+              <div class="row1"><span class="title">${a.disease}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${a.risk_level}</span></div>
+              <div class="meta">${a.trigger_reason}</div>
+              <div class="meta" style="color:var(--primary)">Action: ${a.recommended_action || "—"}</div>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+      ${adv.campaigns.length > 0 ? `
+        <div class="section-card">
+          <div class="section-title">💉 Vaccination Campaigns</div>
+          ${adv.campaigns.map(c => `
+            <div class="list-card" style="cursor:default">
+              <div class="row1"><span class="title">${c.name}</span><span class="badge ${campStatusClass(c.status)}">${c.status}</span></div>
+              <div class="meta">${c.vaccine} · ${c.district}</div>
+              <div class="meta">Dates: ${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</div>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+      ${bottomNav("#/owner/dashboard")}
+    `);
+  } catch (err) {
+    render(`${header("Local Advisories", { back: true })}<div class="loading">⚠️ ${err.message}</div>${bottomNav("#/owner/dashboard")}`);
+  }
+}, ["owner"]);
+
+// ==========================================================================
+// REQ 12: DATA EXPORT
+// ==========================================================================
+route("#/govt/export", async () => {
+  render(`
+    ${header("Export Data", { back: true })}
+    <div class="section-card">
+      <div class="section-title">📊 Export Government Data</div>
+      <div class="meta" style="margin-bottom:14px">Download cases, animals, or vaccination campaigns as CSV or JSON.</div>
+      <div class="field"><label>Date From</label><input type="date" id="exportFrom" /></div>
+      <div class="field"><label>Date To</label><input type="date" id="exportTo" /></div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-primary btn-sm" onclick="doExport('cases','csv')">📥 Cases CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="doExport('animals','csv')">📥 Animals CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="doExport('campaigns','csv')">📥 Campaigns CSV</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-outline btn-sm" onclick="doExport('cases','json')">JSON Cases</button>
+        <button class="btn btn-outline btn-sm" onclick="doExport('animals','json')">JSON Animals</button>
+      </div>
+    </div>
+    ${bottomNav("#/govt/dashboard")}
+  `);
+}, ["govt"]);
+
+window.doExport = function (type, format) {
+  const from = document.getElementById("exportFrom")?.value || "";
+  const to = document.getElementById("exportTo")?.value || "";
+  let url = `/api/govt/export?type=${type}&format=${format}`;
+  if (from) url += `&from=${from}`;
+  if (to) url += `&to=${to}`;
+  // Trigger download
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pashumitra_${type}.${format}`;
+  a.target = "_blank";
+  // Need auth token for download
+  fetch(url, { headers: { "Authorization": "Bearer " + state.token } })
+    .then(r => r.blob())
+    .then(blob => {
+      const blobUrl = URL.createObjectURL(blob);
+      a.href = blobUrl;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    })
+    .catch(e => toast("Export failed: " + e.message, true));
+};
+
+// ==========================================================================
+// REQ 14: GIS ERROR HANDLING IMPROVEMENTS
+// ==========================================================================
+// Patch initGisMap to show errors
+const _origInitGisMap = initGisMap;
+
+// ==========================================================================
+// REQ 15: WEATHER RELIABILITY WARNING
+// ==========================================================================
+function weatherReliabilityWarning(weatherReliability) {
+  if (weatherReliability === "low") {
+    return `<div class="conflict-box" style="margin:8px 0;padding:8px 12px">
+      <b>⚠️ Weather data may be stale — prediction accuracy reduced</b>
+      <div class="small-muted">Live weather API was unavailable. Using cached or baseline data.</div>
+    </div>`;
+  }
+  return "";
+}
+
+// ==========================================================================
+// REQ 16: ML HEALTH MONITORING ON GOVT AI DASHBOARD
+// ==========================================================================
+// Will be shown in the AI section
+
+// ==========================================================================
+// REQ 17: PUSH NOTIFICATION UI
+// ==========================================================================
+route("#/notifications/settings", async () => {
+  const vapidRes = await api("/push/vapid-key").catch(() => ({ configured: false }));
+  render(`
+    ${header("Notification Settings", { back: true })}
+    <div class="section-card">
+      <div class="section-title">🔔 Push Notifications</div>
+      <div class="meta" style="margin-bottom:12px">
+        ${vapidRes.configured
+          ? "Push notifications are available. Enable to receive real-time alerts for cases, lab reports, and outbreaks."
+          : "Push notifications are not configured on this server. In-app notifications will still work."}
+      </div>
+      ${vapidRes.configured ? `
+        <button class="btn btn-primary" id="btnEnablePush">🔔 Enable Push Notifications</button>
+        <div id="pushStatus" class="small-muted" style="margin-top:8px"></div>
+      ` : `<div class="demo-box">Push notifications require VAPID keys to be configured by the server administrator.</div>`}
+    </div>
+    ${bottomNav(homeFor(getUserRole() || "owner"))}
+  `);
+  if (vapidRes.configured) {
+    document.getElementById("btnEnablePush")?.addEventListener("click", async () => {
+      const statusEl = document.getElementById("pushStatus");
+      try {
+        if (!("Notification" in window)) {
+          statusEl.textContent = "Push notifications are not supported in this browser.";
+          return;
+        }
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          statusEl.textContent = "Notification permission denied. Please enable in browser settings.";
+          return;
+        }
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidRes.publicKey,
+        });
+        const subJson = sub.toJSON();
+        await api("/push/subscribe", { method: "POST", body: subJson });
+        statusEl.textContent = "✅ Push notifications enabled!";
+        toast("Push notifications enabled!");
+      } catch (err) {
+        statusEl.textContent = "Failed: " + err.message;
+      }
+    });
+  }
+});
+
+// ==========================================================================
+// REQ 18: FARMER FEEDBACK
+// ==========================================================================
+function farmerFeedbackSection(c) {
+  return `
+    <div class="section-card">
+      <div class="subheading">📝 How is your animal?</div>
+      <div class="meta" style="margin-bottom:10px">Let your veterinarian know the recovery progress.</div>
+      <form id="farmerFeedbackForm">
+        <div class="field"><label>Recovery Status</label>
+          <select name="recovery_status">
+            <option value="improving">✅ Improving</option>
+            <option value="same">↔️ Same</option>
+            <option value="worse">⚠️ Getting Worse</option>
+          </select>
+        </div>
+        <div class="field"><label>Notes (optional)</label><textarea name="notes" placeholder="Any observations about the animal's condition"></textarea></div>
+        <button class="btn btn-primary btn-sm" type="submit">Submit Feedback</button>
+      </form>
+    </div>`;
+}
+
+// ==========================================================================
+// REQ 20: ZOONOTIC RISK VIEW
+// ==========================================================================
+route("#/govt/zoonotic", async () => {
+  render(`${header("Zoonotic Risk", { back: true })}<div class="loading">Loading…</div>`);
+  try {
+    const data = await api("/govt/zoonotic");
+    render(`
+      ${header("Zoonotic Disease Risk", { back: true })}
+      ${data.active_zoonotic_cases > 0 ? `
+        <div style="background:#fde6e4;padding:12px;border-radius:12px;margin:12px 16px;border-left:4px solid #e53935">
+          <b>⚠️ ${data.active_zoonotic_cases} active zoonotic case(s) detected!</b>
+          <div class="small-muted">These diseases can transmit from animals to humans. PPE precautions required.</div>
+        </div>
+      ` : ""}
+      <div class="section-card">
+        <div class="section-title">🦠 Zoonotic Diseases Monitored</div>
+        ${data.zoonotic_diseases.map(d => `
+          <div class="list-card" style="cursor:default">
+            <div class="row1">
+              <span class="title">${d.name} (${d.name_mr})</span>
+              <span class="badge ${riskBadgeClass(d.risk_level)}">${d.risk_level}</span>
+            </div>
+            <div class="meta">Category: ${d.category}</div>
+          </div>
+        `).join("")}
+      </div>
+      ${data.active_zoonotic_cases > 0 ? `
+        <div class="section-card">
+          <div class="section-title">📍 Active Zoonotic Cases by District</div>
+          ${Object.entries(data.cases_by_district).map(([dist, count]) => `
+            <div class="list-card" style="cursor:default">
+              <div class="row1"><span class="title">${dist}</span><span class="badge badge-red">${count} case(s)</span></div>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+      ${bottomNav("#/govt/dashboard")}
+    `);
+  } catch (err) {
+    render(`${header("Zoonotic Risk", { back: true })}<div class="loading">⚠️ ${err.message}</div>${bottomNav("#/govt/dashboard")}`);
+  }
+}, ["govt", "vet"]);

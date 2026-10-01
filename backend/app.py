@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, date
 from functools import wraps
 from ipaddress import ip_address
 from urllib.parse import urlsplit
-from flask import Flask, request, jsonify, g, send_from_directory
+from flask import Flask, request, jsonify, g, send_from_directory, Response
 from PIL import Image
 import cv2
 import numpy as np
@@ -34,6 +34,9 @@ from ivr_service import (
 )
 import weather
 import animal_ai
+from sms_service import send_sms, send_sms_urgent, get_sent_log, get_dead_letters, get_worker_stats, get_sms_provider_info
+from push_service import is_push_configured, get_public_key, push_notification
+from disease_knowledge import DiseaseKnowledge
 
 SECRET_KEY = os.environ.get("SIH_SECRET_KEY") or secrets.token_urlsafe(48)
 if not os.environ.get("SIH_SECRET_KEY"):
@@ -112,9 +115,104 @@ def auth_required(roles=None):
 def row_to_dict(row):
     return dict(row) if row else None
 
+# ------------------------------------------------------------------
+# Multilingual notification templates (Req 4)
+# ------------------------------------------------------------------
+_NOTIFICATION_TEMPLATES = {
+    "new_case": {
+        "en": "New case reported: {case_no} for animal {animal_code}.",
+        "hi": "नया मामला दर्ज: {animal_code} के लिए {case_no}।",
+        "mr": "नवीन प्रकरण नोंदवले: {case_no} पशू {animal_code} साठी.",
+        "te": "కొత్త కేసు నమోదు: {case_no} జంతువు {animal_code} కోసం.",
+    },
+    "case_update": {
+        "en": "Case {case_no} updated: {status}.",
+        "hi": "मामला {case_no} अपडेट: {status}।",
+        "mr": "प्रकरण {case_no} अद्ययावत: {status}.",
+        "te": "కేసు {case_no} నవీకరణ: {status}.",
+    },
+    "lab_report_ready": {
+        "en": "Lab report {report_no} is ready for case {case_no}.",
+        "hi": "लैब रिपोर्ट {report_no} मामले {case_no} के लिए तैयार है।",
+        "mr": "प्रयोगशाळा अहवाल {report_no} प्रकरण {case_no} साठी तयार आहे.",
+        "te": "ల్యాబ్ రిపోర్ట్ {report_no} కేసు {case_no} కోసం సిద్ధంగా ఉంది.",
+    },
+    "prescription_issued": {
+        "en": "An e-prescription is available for case {case_no}.",
+        "hi": "मामले {case_no} के लिए ई-प्रिस्क्रिप्शन उपलब्ध है।",
+        "mr": "प्रकरण {case_no} साठी ई-प्रिस्क्रिप्शन उपलब्ध आहे.",
+        "te": "కేసు {case_no} కోసం ఇ-ప్రిస్క్రిప్షన్ అందుబాటులో ఉంది.",
+    },
+    "vaccination_due": {
+        "en": "Vaccination due for your animal {animal_code}. Please schedule a visit.",
+        "hi": "आपके पशु {animal_code} के लिए टीकाकरण बकाया है। कृपया विज़िट शेड्यूल करें।",
+        "mr": "तुमच्या पशूचे {animal_code} लसीकरण बाकी आहे. कृपया भेटीची व्यवस्था करा.",
+        "te": "మీ జంతువు {animal_code} కోసం వ్యాక్సినేషన్ బాకీ ఉంది.",
+    },
+    "farm_alert": {
+        "en": "Farm alert: {disease} detected in your area ({district}). {action}",
+        "hi": "फार्म अलर्ट: आपके क्षेत्र ({district}) में {disease} का पता चला। {action}",
+        "mr": "शेत सूचना: तुमच्या भागात ({district}) {disease} आढळला. {action}",
+        "te": "ఫార్మ్ హెచ్చరిక: మీ ప్రాంతంలో ({district}) {disease} కనుగొనబడింది. {action}",
+    },
+    "auto_escalation": {
+        "en": "URGENT: Case {case_no} auto-escalated to Critical by AI triage. Disease risk: {disease}.",
+        "hi": "अत्यावश्यक: मामला {case_no} AI ट्राइएज द्वारा गंभीर के रूप में स्वतः बढ़ाया गया।",
+        "mr": "अत्यंत आवश्यक: प्रकरण {case_no} AI ट्रायजद्वारे गंभीर म्हणून आपोआप वाढवले.",
+        "te": "అత్యవసరం: కేసు {case_no} AI ట్రయాజ్ ద్వారా స్వయంచాలకంగా క్లిష్టంగా పెంచబడింది.",
+    },
+}
 
-def notify(conn, user_id, message, type_="info"):
+
+def _translate(template_key: str, language: str | None, **kwargs) -> str:
+    """Return translated notification text using the template system."""
+    lang = (language or "en").strip().lower()
+    templates = _NOTIFICATION_TEMPLATES.get(template_key, {})
+    text = templates.get(lang) or templates.get("en") or template_key
+    try:
+        return text.format(**kwargs)
+    except (KeyError, IndexError):
+        return text
+
+
+def notify(conn, user_id, message, type_="info", language=None, template_key=None, **kwargs):
+    """Create an in-app notification, optionally translated and sent via SMS/Push."""
+    if template_key:
+        # Look up user's preferred language
+        if not language:
+            user_row = conn.execute("SELECT preferred_language, sms_enabled, mobile FROM users WHERE id=?", (user_id,)).fetchone()
+            if user_row:
+                language = user_row["preferred_language"] or "en"
+                sms_enabled = user_row["sms_enabled"]
+                user_mobile = user_row["mobile"]
+            else:
+                language = language or "en"
+                sms_enabled = 0
+                user_mobile = None
+        else:
+            user_row = conn.execute("SELECT sms_enabled, mobile FROM users WHERE id=?", (user_id,)).fetchone()
+            sms_enabled = user_row["sms_enabled"] if user_row else 0
+            user_mobile = user_row["mobile"] if user_row else None
+        message = _translate(template_key, language, **kwargs)
+    else:
+        sms_enabled = 0
+        user_mobile = None
+
     conn.execute("INSERT INTO notifications (user_id, message, type) VALUES (?,?,?)", (user_id, message, type_))
+
+    # SMS dispatch for critical alerts when enabled (Req 8)
+    # Real-time: send_sms is non-blocking (background thread)
+    if sms_enabled and user_mobile and type_ in ("case", "lab", "prescription", "farm_alert"):
+        try:
+            from ivr_config import normalize_indian_number
+            e164 = normalize_indian_number(user_mobile)
+            if e164:
+                if type_ == "farm_alert":
+                    send_sms_urgent(e164, message)  # Critical: outbreak alert
+                else:
+                    send_sms(e164, message)          # Standard priority
+        except Exception:
+            pass  # Never block notification on SMS failure
 
 
 def case_json(conn, row):
@@ -801,6 +899,8 @@ def create_case():
         actor_id=g.user["uid"],
         assigned_vet_id=data.get("vet_id") or None,
     )
+    # Req 9: Auto-escalation via AI triage
+    _auto_escalate_case(conn, case)
     conn.commit()
     result = case_json(conn, case)
     conn.close()
@@ -1942,12 +2042,13 @@ def record_treatment_response(case_id):
         """
         INSERT INTO treatment_responses
         (case_id, animal_id, prescription_id, response, response_date,
-         veterinarian_id, veterinarian_name, objective_observations, notes)
-        VALUES (?,?,?,?,?,?,?,?,?)
+         veterinarian_id, veterinarian_name, objective_observations, notes, productivity_notes)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
         """,
         (case_id, case["animal_id"], data.get("prescription_id"), response,
          data.get("response_date", str(date.today())), g.user["uid"], g.user["name"],
-         data.get("objective_observations"), data.get("notes"))
+         data.get("objective_observations"), data.get("notes"),
+         data.get("productivity_notes"))
     )
     tr_id = cur.lastrowid
 
@@ -2088,6 +2189,9 @@ def govt_analytics():
     tot_active = conn.execute("SELECT COUNT(*) c FROM cases WHERE status NOT IN ('CLOSED','RECOVERED')").fetchone()["c"]
     tot_animals = conn.execute("SELECT COUNT(*) c FROM animals").fetchone()["c"]
     districts = conn.execute("SELECT COUNT(DISTINCT district) c FROM animals WHERE district IS NOT NULL").fetchone()["c"]
+    # Req 1: Total deaths
+    tot_deaths = conn.execute("SELECT COALESCE(SUM(deaths), 0) c FROM cases").fetchone()["c"]
+    deceased_animals = conn.execute("SELECT COUNT(*) c FROM animals WHERE status='Deceased'").fetchone()["c"]
 
     cbd = conn.execute(
         "SELECT COALESCE(NULLIF(TRIM(district),''), 'Unknown') d, COUNT(*) c FROM animals a "
@@ -2098,6 +2202,37 @@ def govt_analytics():
         "FROM cases GROUP BY LOWER(d) ORDER BY c DESC LIMIT 6"
     ).fetchall()
 
+    # Req 10: Block-level data
+    cbb = conn.execute(
+        """SELECT COALESCE(NULLIF(TRIM(a.block),''), 'Unknown') AS block,
+                  COALESCE(NULLIF(TRIM(a.district),''), 'Unknown') AS district,
+                  COUNT(c.id) AS cases,
+                  SUM(CASE WHEN c.status NOT IN ('CLOSED','RECOVERED') THEN 1 ELSE 0 END) AS active
+           FROM animals a JOIN cases c ON c.animal_id=a.id
+           GROUP BY LOWER(district), LOWER(block) ORDER BY cases DESC"""
+    ).fetchall()
+
+    # Req 1: Deaths by district
+    deaths_by_dist = conn.execute(
+        """SELECT COALESCE(NULLIF(TRIM(a.district),''), 'Unknown') AS district,
+                  COALESCE(SUM(c.deaths), 0) AS deaths,
+                  COUNT(CASE WHEN a.status='Deceased' THEN 1 END) AS deceased_animals
+           FROM animals a JOIN cases c ON c.animal_id=a.id
+           GROUP BY LOWER(district) ORDER BY deaths DESC"""
+    ).fetchall()
+
+    # Req 2: Average recovery time and productivity metrics
+    recovery_stats = conn.execute(
+        """SELECT AVG(julianday(tr.response_date) - julianday(c.created_at)) AS avg_recovery_days,
+                  COUNT(*) AS total_responses
+           FROM treatment_responses tr JOIN cases c ON c.id=tr.case_id
+           WHERE tr.response IN ('recovered', 'improved')"""
+    ).fetchone()
+    productivity_notes = conn.execute(
+        """SELECT productivity_notes FROM treatment_responses
+           WHERE productivity_notes IS NOT NULL AND productivity_notes != '' ORDER BY id DESC LIMIT 10"""
+    ).fetchall()
+
     stock_rows = conn.execute("SELECT district, vaccine, doses_available FROM vaccine_stock ORDER BY district, vaccine").fetchall()
     stock_by_dist = {}
     for r in stock_rows:
@@ -2106,9 +2241,17 @@ def govt_analytics():
     helpline = helpline_analytics(conn)
     conn.close()
     return jsonify({
-        "totals": {"cases": tot_cases, "active": tot_active, "animals": tot_animals, "districts": districts},
+        "totals": {"cases": tot_cases, "active": tot_active, "animals": tot_animals, "districts": districts,
+                   "deaths": tot_deaths, "deceased_animals": deceased_animals},
         "cases_by_district": [{"label": r["d"], "value": r["c"]} for r in cbd],
         "disease_spread": [{"label": r["d"], "value": r["c"]} for r in ds],
+        "cases_by_block": [{"block": r["block"], "district": r["district"], "cases": r["cases"], "active": r["active"]} for r in cbb],
+        "deaths_by_district": [{"district": r["district"], "deaths": r["deaths"], "deceased_animals": r["deceased_animals"]} for r in deaths_by_dist],
+        "recovery_metrics": {
+            "avg_recovery_days": round(float(recovery_stats["avg_recovery_days"] or 0), 1) if recovery_stats else 0,
+            "total_responses": recovery_stats["total_responses"] if recovery_stats else 0,
+        },
+        "productivity_notes": [r["productivity_notes"] for r in productivity_notes],
         "vaccine_stock": stock_by_dist,
         "helpline": helpline,
     })
@@ -2483,6 +2626,8 @@ def district_ai_features(conn, district):
         "humidity": float(w_info["humidity"]),
         "weather_source": w_info["source"],
         "weather_status": w_info["status"],
+        # Req 15: weather reliability flag
+        "weather_reliability": "low" if w_info.get("is_stale") else "high",
     }
 
 
@@ -2536,6 +2681,9 @@ def ai_predict():
     result, status = _ml_post("/api/predict", payload)
     if status == 200:
         result["features_used"] = features
+        # Req 15: Pass weather reliability flag to frontend
+        result["weather_reliability"] = features.get("weather_reliability", "high")
+        _last_successful_prediction["timestamp"] = datetime.utcnow().isoformat()
     return jsonify(result), status
 
 
@@ -2576,10 +2724,17 @@ def ai_status():
         metrics = resp.json()
         if not isinstance(metrics, dict) or "accuracy" not in metrics:
             raise ValueError("Model metrics response is invalid")
-        return jsonify({"online": True, **metrics})
+        return jsonify({
+            "online": True,
+            **metrics,
+            "last_successful_prediction": _last_successful_prediction.get("timestamp"),
+        })
     except (requests.RequestException, ValueError) as exc:
         app.logger.warning("ML model status check failed: %s", exc)
-        return jsonify({"online": False})
+        return jsonify({
+            "online": False,
+            "last_successful_prediction": _last_successful_prediction.get("timestamp"),
+        })
 
 
 # ---------------------------- animal-level AI decision support endpoint -----
@@ -2791,6 +2946,27 @@ def national_surveillance():
     ]
 
     national_alerts = conn.execute("SELECT * FROM national_alerts ORDER BY id DESC").fetchall()
+
+    # Req 20: Zoonotic risk count
+    dk = DiseaseKnowledge.load()
+    zoonotic_diseases = dk.zoonotic_diseases()
+    zoonotic_names = set()
+    for d in zoonotic_diseases:
+        zoonotic_names.add(d.name_en.lower())
+        for a in d.aliases:
+            zoonotic_names.add(a.lower())
+
+    active_cases_all = conn.execute(
+        "SELECT disease_suspected, diagnosis FROM cases WHERE status NOT IN ('CLOSED','RECOVERED')"
+    ).fetchall()
+    zoonotic_count = 0
+    for c in active_cases_all:
+        combined = f"{c['disease_suspected'] or ''} {c['diagnosis'] or ''}".lower()
+        for name in zoonotic_names:
+            if name in combined:
+                zoonotic_count += 1
+                break
+
     conn.close()
 
     return jsonify({
@@ -2800,8 +2976,10 @@ def national_surveillance():
         "total_national_animals": mh_animals,
         "total_national_cases": mh_cases,
         "total_national_active": mh_active,
+        "zoonotic_risk_count": zoonotic_count,
+        "reporting_scope_note": "Maharashtra currently contains the only active field data. Other states are shown as placeholders.",
         "states": states_data,
-        "national_alerts": [row_to_dict(a) for a in national_alerts]
+        "national_alerts": [row_to_dict(a) for a in national_alerts],
     })
 
 
@@ -2933,7 +3111,552 @@ def sync_queue():
     return jsonify({"synced_count": len([r for r in results if r["status"] == "success"]), "results": results})
 
 
-if __name__ == "__main__":
-    print("Database ready at", DB_PATH)
-    print(f"Starting app on http://0.0.0.0:{PORT}")
-    app.run(host="0.0.0.0", port=PORT, debug=os.environ.get("FLASK_DEBUG") == "1")
+# ================================================================
+# REQ 1: MORTALITY TRACKING
+# ================================================================
+@app.post("/api/animals/<int:animal_id>/deceased")
+@auth_required(roles=["owner", "vet"])
+def mark_animal_deceased(animal_id):
+    """Mark an animal as deceased with cause of death."""
+    data = request.get_json(force=True) or {}
+    cause = (data.get("cause_of_death") or "").strip()
+    if not cause:
+        return jsonify({"error": "cause_of_death is required"}), 400
+    conn = get_db()
+    try:
+        animal = conn.execute("SELECT * FROM animals WHERE id=?", (animal_id,)).fetchone()
+        if not animal:
+            return jsonify({"error": "Animal not found"}), 404
+        if g.user["role"] == "owner" and animal["owner_id"] != g.user["uid"]:
+            return jsonify({"error": "Not authorized"}), 403
+        conn.execute(
+            "UPDATE animals SET status='Deceased', deceased_at=datetime('now'), cause_of_death=? WHERE id=?",
+            (cause, animal_id),
+        )
+        # Increment deaths count on any active case for this animal
+        conn.execute(
+            "UPDATE cases SET deaths = COALESCE(deaths, 0) + 1 WHERE animal_id=? AND status NOT IN ('CLOSED','RECOVERED')",
+            (animal_id,),
+        )
+        audit_log(conn, "MARK_DECEASED", "animal", animal_id, actor_id=g.user["uid"],
+                  actor_name=g.user["name"], actor_role=g.user["role"],
+                  details={"cause_of_death": cause})
+        conn.commit()
+        return jsonify({"ok": True, "status": "Deceased", "cause_of_death": cause})
+    finally:
+        conn.close()
+
+
+# ================================================================
+# REQ 5: HISTORICAL TRENDS
+# ================================================================
+@app.get("/api/govt/trends")
+@auth_required(roles=["govt", "vet"])
+def govt_trends():
+    """Return case trends grouped by week or month for the last 6 months."""
+    period = (request.args.get("period") or "monthly").strip().lower()
+    conn = get_db()
+    try:
+        if period == "weekly":
+            # SQLite week grouping using date functions
+            rows = conn.execute(
+                """
+                SELECT strftime('%Y-W%W', c.created_at) AS period_label,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN c.status NOT IN ('CLOSED','RECOVERED') THEN 1 ELSE 0 END) AS active,
+                       COALESCE(SUM(c.deaths), 0) AS deaths
+                FROM cases c
+                WHERE c.created_at >= datetime('now', '-6 months')
+                GROUP BY period_label
+                ORDER BY period_label
+                """
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT strftime('%Y-%m', c.created_at) AS period_label,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN c.status NOT IN ('CLOSED','RECOVERED') THEN 1 ELSE 0 END) AS active,
+                       COALESCE(SUM(c.deaths), 0) AS deaths
+                FROM cases c
+                WHERE c.created_at >= datetime('now', '-6 months')
+                GROUP BY period_label
+                ORDER BY period_label
+                """
+            ).fetchall()
+
+        # Disease-wise trends (top 3)
+        disease_rows = conn.execute(
+            """
+            SELECT strftime('%Y-%m', c.created_at) AS period_label,
+                   COALESCE(NULLIF(TRIM(c.disease_suspected),''), 'Unspecified') AS disease,
+                   COUNT(*) AS total
+            FROM cases c
+            WHERE c.created_at >= datetime('now', '-6 months')
+            GROUP BY period_label, LOWER(disease)
+            ORDER BY period_label, total DESC
+            """
+        ).fetchall()
+        conn.close()
+
+        # Build disease trends by period
+        disease_by_period = {}
+        for r in disease_rows:
+            p = r["period_label"]
+            disease_by_period.setdefault(p, []).append({"disease": r["disease"], "count": r["total"]})
+
+        return jsonify({
+            "period": period,
+            "trends": [dict(r) for r in rows],
+            "disease_trends": disease_by_period,
+        })
+    finally:
+        conn.close()
+
+
+# ================================================================
+# REQ 6: IVR STATUS ENDPOINT
+# ================================================================
+@app.get("/api/ivr/status")
+@auth_required()
+def ivr_status():
+    """Return IVR/PSTN connection status and setup guidance."""
+    settings = get_ivr_settings()
+    return jsonify({
+        "pstn_connected": settings.pstn_connected,
+        "provider_mode": settings.provider_mode,
+        "phone_number": settings.phone_number,
+        "helpline_e164": settings.helpline_e164,
+        "setup_instructions": (
+            "To connect real PSTN, configure IVR_PROVIDER_MODE=SIP_PBX and "
+            "set up a SIP trunk to reach the webhook endpoints "
+            "POST /api/ivr/calls/inbound, /api/ivr/calls/<id>/input, /api/ivr/calls/<id>/events. "
+            "See voice/asterisk/ for example Asterisk configuration."
+        ) if not settings.pstn_connected else "PSTN is connected and verified.",
+    })
+
+
+# ================================================================
+# REQ 8: SMS ADMIN ENDPOINT (Real-time monitoring)
+# ================================================================
+@app.get("/api/admin/sms-log")
+@auth_required(roles=["govt"])
+def sms_log_endpoint():
+    """Return real-time SMS delivery log, dead letters, and worker stats."""
+    return jsonify({
+        "provider": get_sms_provider_info(),
+        "stats": get_worker_stats(),
+        "recent": get_sent_log()[:50],
+        "dead_letters": get_dead_letters()[:20],
+    })
+
+
+# ================================================================
+# REQ 9: AI AUTO-ESCALATION (integrated into case creation)
+# ================================================================
+def _auto_escalate_case(conn, case_row):
+    """Run CDS on the case's animal and auto-escalate if high risk."""
+    from database import audit_log as _audit_log
+    animal = conn.execute("SELECT * FROM animals WHERE id=?", (case_row["animal_id"],)).fetchone()
+    if not animal:
+        return
+    cases = conn.execute("SELECT * FROM cases WHERE animal_id=? ORDER BY id DESC", (animal["id"],)).fetchall()
+    vaccinations = conn.execute("SELECT * FROM vaccinations WHERE animal_id=? ORDER BY date_given DESC", (animal["id"],)).fetchall()
+    lab_reports = conn.execute("SELECT * FROM lab_reports WHERE animal_id=? ORDER BY id DESC", (animal["id"],)).fetchall()
+    repro = conn.execute("SELECT * FROM animal_reproductive_records WHERE animal_id=? ORDER BY id DESC", (animal["id"],)).fetchall()
+    allergies = conn.execute("SELECT * FROM animal_allergies WHERE animal_id=? ORDER BY id DESC", (animal["id"],)).fetchall()
+    meds = conn.execute("SELECT * FROM animal_medications WHERE animal_id=? ORDER BY id DESC", (animal["id"],)).fetchall()
+
+    try:
+        assessment = animal_ai.evaluate_animal_cds(
+            dict(animal), [dict(c) for c in cases], [dict(v) for v in vaccinations],
+            [dict(l) for l in lab_reports], [dict(r) for r in repro],
+            [dict(al) for al in allergies], [dict(m) for m in meds]
+        )
+    except Exception:
+        return
+
+    risk_level = assessment.get("risk_level", "")
+    matched_diseases = [f.get("factor", "") for f in assessment.get("explanation_factors", []) if "FMD" in f.get("factor", "") or "BQ" in f.get("factor", "")]
+
+    if risk_level == "High Risk" or matched_diseases:
+        # Escalate
+        conn.execute("UPDATE cases SET severity='Critical', ai_auto_escalated=1 WHERE id=?", (case_row["id"],))
+        district = animal["district"] or "Unknown"
+        disease_text = matched_diseases[0] if matched_diseases else risk_level
+
+        # Notify all vets in district
+        regional_vets = conn.execute("SELECT id FROM users WHERE role='vet' AND LOWER(COALESCE(district,''))=LOWER(?)", (district,)).fetchall()
+        for v in regional_vets:
+            notify(conn, v["id"], f"URGENT: Case {case_row['case_no']} auto-escalated to Critical. Risk: {disease_text}.",
+                   "case", template_key="auto_escalation", case_no=case_row["case_no"], disease=disease_text)
+
+        # Create farm alert if not exists
+        existing_alert = conn.execute("SELECT id FROM farm_alerts WHERE herd_id=? AND status='ACTIVE' AND disease LIKE ?",
+                                      (case_row["herd_id"] or 0, f"%{disease_text[:10]}%")).fetchone()
+        if not existing_alert and case_row["herd_id"]:
+            herd = conn.execute("SELECT * FROM herds WHERE id=?", (case_row["herd_id"],)).fetchone()
+            if herd:
+                conn.execute(
+                    """INSERT INTO farm_alerts (herd_id, herd_code, district, disease, affected_animals_count,
+                       risk_level, trigger_reason, recommended_action, status) VALUES (?,?,?,?,?,'High',?,?, 'ACTIVE')""",
+                    (herd["id"], herd["herd_code"], district, disease_text, 1,
+                     f"AI auto-escalation: {risk_level}", "Immediate veterinary inspection recommended")
+                )
+        _audit_log(conn, "AI_AUTO_ESCALATE", "case", case_row["id"],
+                   actor_name="AI Triage System", actor_role="system",
+                   details={"risk_level": risk_level, "disease": disease_text})
+
+
+# ================================================================
+# REQ 10: BLOCK-LEVEL ANALYTICS
+# ================================================================
+# (Extend govt_analytics — will be added as a new section)
+
+
+# ================================================================
+# REQ 11: FARMER ADVISORIES
+# ================================================================
+@app.get("/api/advisories")
+@auth_required(roles=["owner"])
+def get_advisories():
+    """Return localized disease advisories for a farmer's district."""
+    district = (request.args.get("district") or "").strip()
+    conn = get_db()
+    try:
+        if not district:
+            user = conn.execute("SELECT district FROM users WHERE id=?", (g.user["uid"],)).fetchone()
+            district = user["district"] if user else "Unknown"
+
+        # 1. Disease risk level
+        risk_data = conn.execute(
+            """SELECT COUNT(*) AS total,
+               SUM(CASE WHEN c.status NOT IN ('CLOSED','RECOVERED') THEN 1 ELSE 0 END) AS active,
+               SUM(CASE WHEN LOWER(COALESCE(c.severity,'')) IN ('high','critical') THEN 1 ELSE 0 END) AS high_sev
+            FROM cases c JOIN animals a ON a.id=c.animal_id
+            WHERE LOWER(COALESCE(a.district,''))=LOWER(?)""",
+            (district,)
+        ).fetchone()
+        total = risk_data["total"] or 0
+        active = risk_data["active"] or 0
+        high_sev = risk_data["high_sev"] or 0
+
+        if high_sev > 0:
+            risk_level = "High Risk"
+        elif active >= 3:
+            risk_level = "Moderate Risk"
+        else:
+            risk_level = "Low Risk"
+
+        # 2. Active outbreaks / farm alerts
+        alerts = conn.execute(
+            "SELECT * FROM farm_alerts WHERE LOWER(district)=LOWER(?) AND status='ACTIVE' ORDER BY id DESC LIMIT 5",
+            (district,)
+        ).fetchall()
+
+        # 3. Weather-based advisories
+        w = weather.fetch_district_weather(conn, district)
+        weather_advisories = []
+        temp = w.get("temperature", 28)
+        humidity = w.get("humidity", 60)
+        rainfall = w.get("rainfall", 0)
+        if humidity > 80:
+            weather_advisories.append("High humidity — watch for mastitis and fungal infections.")
+        if temp > 38:
+            weather_advisories.append("Extreme heat — ensure shade and water for livestock.")
+        if rainfall > 20:
+            weather_advisories.append("Heavy rainfall — watch for foot rot and vector-borne diseases.")
+        if humidity > 70 and temp > 30:
+            weather_advisories.append("Warm and humid — increased risk of Haemorrhagic Septicaemia.")
+
+        # 4. Vaccination campaign reminders
+        campaigns = conn.execute(
+            "SELECT * FROM vaccination_campaigns WHERE LOWER(district)=LOWER(?) AND status='ACTIVE' ORDER BY id DESC LIMIT 3",
+            (district,)
+        ).fetchall()
+
+        # Preferred language for advisory translation
+        lang = g.user.get("preferred_language") or "en"
+        user_row = conn.execute("SELECT preferred_language FROM users WHERE id=?", (g.user["uid"],)).fetchone()
+        if user_row and user_row["preferred_language"]:
+            lang = user_row["preferred_language"]
+
+        conn.close()
+
+        return jsonify({
+            "district": district,
+            "risk_level": risk_level,
+            "active_cases": active,
+            "weather_advisories": weather_advisories,
+            "weather": {"temperature": temp, "humidity": humidity, "rainfall": rainfall, "source": w.get("source", "")},
+            "alerts": [row_to_dict(a) for a in alerts],
+            "campaigns": [row_to_dict(c) for c in campaigns],
+            "language": lang,
+        })
+    finally:
+        conn.close()
+
+
+# ================================================================
+# REQ 12: DATA EXPORT
+# ================================================================
+@app.get("/api/govt/export")
+@auth_required(roles=["govt"])
+def govt_export():
+    """Export cases, animals, or campaigns as CSV or JSON."""
+    import csv
+    import io
+
+    export_type = (request.args.get("type") or "cases").strip().lower()
+    fmt = (request.args.get("format") or "json").strip().lower()
+    date_from = (request.args.get("from") or "").strip()
+    date_to = (request.args.get("to") or "").strip()
+
+    if export_type not in ("cases", "animals", "campaigns"):
+        return jsonify({"error": "type must be cases, animals, or campaigns"}), 400
+
+    conn = get_db()
+    try:
+        if export_type == "cases":
+            query = "SELECT c.*, a.animal_code, a.species, a.district AS animal_district FROM cases c JOIN animals a ON a.id=c.animal_id WHERE 1=1"
+            params = []
+            if date_from:
+                query += " AND c.created_at >= ?"
+                params.append(date_from)
+            if date_to:
+                query += " AND c.created_at <= ?"
+                params.append(date_to + " 23:59:59")
+            query += " ORDER BY c.id DESC"
+            rows = conn.execute(query, params).fetchall()
+            data = [dict(r) for r in rows]
+        elif export_type == "animals":
+            query = "SELECT * FROM animals WHERE 1=1"
+            params = []
+            if date_from:
+                query += " AND created_at >= ?"
+                params.append(date_from)
+            if date_to:
+                query += " AND created_at <= ?"
+                params.append(date_to + " 23:59:59")
+            query += " ORDER BY id DESC"
+            rows = conn.execute(query, params).fetchall()
+            data = [dict(r) for r in rows]
+        else:
+            rows = conn.execute("SELECT * FROM vaccination_campaigns ORDER BY id DESC").fetchall()
+            data = [dict(r) for r in rows]
+        conn.close()
+
+        if fmt == "csv":
+            if not data:
+                return Response("No data", mimetype="text/csv", headers={"Content-Disposition": f"attachment;filename={export_type}.csv"})
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=data[0].keys())
+            writer.writeheader()
+            writer.writerows(data)
+            from flask import Response
+            return Response(output.getvalue(), mimetype="text/csv",
+                            headers={"Content-Disposition": f"attachment;filename=pashumitra_{export_type}.csv"})
+        else:
+            return jsonify(data)
+    finally:
+        conn.close()
+
+
+# ================================================================
+# REQ 13: MULTI-STATE REPORTING STATUS
+# (Modify national_surveillance — add reporting_status field)
+# ================================================================
+# The existing national_surveillance already uses "Active Surveillance Node" etc.
+# We just need to add a standard reporting_status field.
+
+
+# ================================================================
+# REQ 15: WEATHER RELIABILITY FLAG
+# (Modify district_ai_features to include reliability)
+# ================================================================
+# Will be added by modifying the existing function
+
+
+# ================================================================
+# REQ 16: ML HEALTH LAST SUCCESSFUL PREDICTION
+# ================================================================
+_last_successful_prediction = {"timestamp": None}
+
+
+# ================================================================
+# REQ 17: PUSH NOTIFICATION SUBSCRIPTIONS
+# ================================================================
+@app.post("/api/push/subscribe")
+@auth_required()
+def push_subscribe():
+    """Subscribe to Web Push notifications."""
+    data = request.get_json(force=True) or {}
+    endpoint = data.get("endpoint")
+    keys = data.get("keys", {})
+    p256dh = keys.get("p256dh", "")
+    auth = keys.get("auth", "")
+    if not endpoint or not p256dh or not auth:
+        return jsonify({"error": "endpoint, keys.p256dh and keys.auth are required"}), 400
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth""",
+            (g.user["uid"], endpoint, p256dh, auth, request.headers.get("User-Agent", ""))
+        )
+        conn.commit()
+        return jsonify({"ok": True, "push_configured": is_push_configured()})
+    finally:
+        conn.close()
+
+
+@app.post("/api/push/unsubscribe")
+@auth_required()
+def push_unsubscribe():
+    """Unsubscribe from Web Push notifications."""
+    data = request.get_json(force=True) or {}
+    endpoint = data.get("endpoint", "")
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM push_subscriptions WHERE user_id=? AND endpoint=?",
+                     (g.user["uid"], endpoint))
+        conn.commit()
+        return jsonify({"ok": True})
+    finally:
+        conn.close()
+
+
+@app.get("/api/push/vapid-key")
+@auth_required()
+def get_vapid_public_key():
+    """Return the VAPID public key for the frontend Push API."""
+    key = get_public_key()
+    return jsonify({"publicKey": key, "configured": is_push_configured()})
+
+
+# ================================================================
+# REQ 18: FARMER FEEDBACK
+# ================================================================
+@app.post("/api/cases/<int:case_id>/farmer-feedback")
+@auth_required(roles=["owner"])
+def submit_farmer_feedback(case_id):
+    """Allow animal owners to submit recovery feedback on their own cases."""
+    data = request.get_json(force=True) or {}
+    recovery_status = (data.get("recovery_status") or "").strip().lower()
+    if recovery_status not in ("improving", "same", "worse"):
+        return jsonify({"error": "recovery_status must be improving, same, or worse"}), 400
+    notes = (data.get("notes") or "").strip()
+    photo_url = (data.get("photo_url") or "").strip() or None
+
+    conn = get_db()
+    try:
+        case = conn.execute("SELECT * FROM cases WHERE id=?", (case_id,)).fetchone()
+        if not case:
+            return jsonify({"error": "Case not found"}), 404
+        if case["owner_id"] != g.user["uid"]:
+            return jsonify({"error": "Not authorized"}), 403
+
+        cur = conn.execute(
+            """INSERT INTO farmer_feedback (case_id, owner_id, animal_id, recovery_status, notes, photo_url)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (case_id, g.user["uid"], case["animal_id"], recovery_status, notes, photo_url)
+        )
+        feedback_id = cur.lastrowid
+
+        # Notify vet if assigned
+        if case["vet_id"]:
+            msg = f"Farmer feedback on {case['case_no']}: patient is {recovery_status}."
+            if notes:
+                msg += f" Notes: {notes[:100]}"
+            notify(conn, case["vet_id"], msg, "case")
+
+        # If worsening, create urgent notification
+        if recovery_status == "worse":
+            if case["vet_id"]:
+                notify(conn, case["vet_id"], f"⚠️ URGENT: Animal for {case['case_no']} reported WORSENING by farmer.", "case")
+            # Notify govt officers in district
+            animal = conn.execute("SELECT district FROM animals WHERE id=?", (case["animal_id"],)).fetchone()
+            if animal:
+                govt_users = conn.execute("SELECT id FROM users WHERE role='govt' AND LOWER(COALESCE(district,''))=LOWER(?)",
+                                          (animal["district"] or "",)).fetchall()
+                for gu in govt_users:
+                    notify(conn, gu["id"], f"⚠️ Farmer reports worsening for case {case['case_no']} in {animal['district']}.", "case")
+
+        audit_log(conn, "FARMER_FEEDBACK", "case", case_id, actor_id=g.user["uid"],
+                  actor_name=g.user["name"], actor_role="owner",
+                  details={"recovery_status": recovery_status})
+        conn.commit()
+        feedback = conn.execute("SELECT * FROM farmer_feedback WHERE id=?", (feedback_id,)).fetchone()
+        return jsonify(row_to_dict(feedback)), 201
+    finally:
+        conn.close()
+
+
+@app.get("/api/cases/<int:case_id>/farmer-feedback")
+@auth_required()
+def get_farmer_feedback(case_id):
+    """Get farmer feedback for a case."""
+    conn = get_db()
+    try:
+        case = conn.execute("SELECT * FROM cases WHERE id=?", (case_id,)).fetchone()
+        if not case:
+            return jsonify({"error": "Case not found"}), 404
+        if g.user["role"] == "owner" and case["owner_id"] != g.user["uid"]:
+            return jsonify({"error": "Not authorized"}), 403
+        rows = conn.execute("SELECT * FROM farmer_feedback WHERE case_id=? ORDER BY id DESC", (case_id,)).fetchall()
+        return jsonify([row_to_dict(r) for r in rows])
+    finally:
+        conn.close()
+
+
+# ================================================================
+# REQ 20: ZOONOTIC RISK ENDPOINT
+# ================================================================
+@app.get("/api/govt/zoonotic")
+@auth_required(roles=["govt", "vet"])
+def zoonotic_risk():
+    """Return zoonotic disease risk data from diseases.json + active cases."""
+    conn = get_db()
+    try:
+        dk = DiseaseKnowledge.load()
+        zoonotic = dk.zoonotic_diseases()
+        zoonotic_names = [d.name_en for d in zoonotic]
+        zoonotic_aliases = set()
+        for d in zoonotic:
+            zoonotic_aliases.add(d.name_en.lower())
+            for a in d.aliases:
+                zoonotic_aliases.add(a.lower())
+
+        # Find active cases that match zoonotic diseases
+        all_cases = conn.execute(
+            """SELECT c.*, a.district, a.animal_code FROM cases c
+               JOIN animals a ON a.id=c.animal_id
+               WHERE c.status NOT IN ('CLOSED','RECOVERED')"""
+        ).fetchall()
+
+        zoonotic_cases = []
+        for c in all_cases:
+            suspected = (c["disease_suspected"] or "").lower()
+            diagnosis = (c["diagnosis"] or "").lower()
+            combined = f"{suspected} {diagnosis}"
+            for name in zoonotic_aliases:
+                if name in combined:
+                    zoonotic_cases.append(dict(c))
+                    break
+
+        # District-wise count
+        district_counts = {}
+        for c in zoonotic_cases:
+            d = c.get("district") or "Unknown"
+            district_counts[d] = district_counts.get(d, 0) + 1
+
+        conn.close()
+        return jsonify({
+            "zoonotic_diseases": [{"name": d.name_en, "name_mr": d.name_mr, "category": d.category, "risk_level": d.risk_level} for d in zoonotic],
+            "active_zoonotic_cases": len(zoonotic_cases),
+            "cases_by_district": district_counts,
+            "cases": zoonotic_cases[:20],
+        })
+    finally:
+        conn.close()

@@ -581,6 +581,35 @@ CREATE INDEX IF NOT EXISTS idx_helpline_reports_region ON helpline_reports(distr
 CREATE INDEX IF NOT EXISTS idx_helpline_reports_status ON helpline_reports(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_ivr_events_call ON ivr_call_events(call_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_ivr_routing_call ON ivr_routing_attempts(call_id, created_at);
+
+-- ============================================================
+-- EXTENDED TABLES (added for feature requirements)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS farmer_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    owner_id INTEGER NOT NULL REFERENCES users(id),
+    animal_id INTEGER NOT NULL REFERENCES animals(id),
+    recovery_status TEXT NOT NULL CHECK(recovery_status IN ('improving','same','worse')),
+    notes TEXT,
+    photo_url TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    user_agent TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, endpoint)
+);
+
+CREATE INDEX IF NOT EXISTS idx_farmer_feedback_case ON farmer_feedback(case_id);
+CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id);
 """
 
 
@@ -888,11 +917,34 @@ def ensure_new_columns(conn):
     c_cols = {row["name"] for row in conn.execute("PRAGMA table_info(cases)").fetchall()}
     if "farm_alert_id" not in c_cols:
         conn.execute("ALTER TABLE cases ADD COLUMN farm_alert_id INTEGER")
+    # Req 1: deaths field in cases
+    if "deaths" not in c_cols:
+        conn.execute("ALTER TABLE cases ADD COLUMN deaths INTEGER DEFAULT 0")
+    # Req 9: ai_auto_escalated flag
+    if "ai_auto_escalated" not in c_cols:
+        conn.execute("ALTER TABLE cases ADD COLUMN ai_auto_escalated INTEGER DEFAULT 0")
 
     # herds columns
     h_cols = {row["name"] for row in conn.execute("PRAGMA table_info(herds)").fetchall()}
     if "state" not in h_cols:
         conn.execute("ALTER TABLE herds ADD COLUMN state TEXT DEFAULT 'Maharashtra'")
+
+    # treatment_responses columns — Req 2: productivity_notes
+    tr_cols = {row["name"] for row in conn.execute("PRAGMA table_info(treatment_responses)").fetchall()}
+    if "productivity_notes" not in tr_cols:
+        conn.execute("ALTER TABLE treatment_responses ADD COLUMN productivity_notes TEXT")
+
+    # animals columns — Req 1: mortality tracking
+    a_cols = {row["name"] for row in conn.execute("PRAGMA table_info(animals)").fetchall()}
+    if "deceased_at" not in a_cols:
+        conn.execute("ALTER TABLE animals ADD COLUMN deceased_at TEXT")
+    if "cause_of_death" not in a_cols:
+        conn.execute("ALTER TABLE animals ADD COLUMN cause_of_death TEXT")
+
+    # users columns — Req 8: sms_enabled
+    u_cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "sms_enabled" not in u_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN sms_enabled INTEGER DEFAULT 0")
 
     conn.commit()
 
