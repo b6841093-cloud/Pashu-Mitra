@@ -3315,12 +3315,12 @@ def _auto_escalate_case(conn, case_row):
 
 
 # ================================================================
-# REQ 11: FARMER ADVISORIES
+# REQ 11: LOCAL DISEASE ADVISORIES
 # ================================================================
 @app.get("/api/advisories")
-@auth_required(roles=["owner"])
+@auth_required(roles=["owner", "vet"])
 def get_advisories():
-    """Return localized disease advisories for a farmer's district."""
+    """Return localized disease advisories for the signed-in user's district."""
     district = (request.args.get("district") or "").strip()
     conn = get_db()
     try:
