@@ -2,7 +2,7 @@
    PashuMitra Service Worker — Offline Support
    ================================================================= */
 
-const CACHE_NAME = "pashumitra-v4";  // bumped: farmer OTP-only auth + OTP farmer signup, staff password login restored
+const CACHE_NAME = "pashu-mitra-v5";  // bumped: prototype farmer Demo Account box (DEMO_MODE)
 const STATIC_ASSETS = [
   "/",
   "/index.html",

@@ -73,6 +73,15 @@ services:
       # Farmer auth is OTP-only (no password fallback); staff keep password login.
       - key: OTP_REGISTRATION_TOKEN_TTL_SECONDS
         value: "900"
+      # ---------------------------------------------- prototype demo account
+      # Ships OFF. Set DEMO_MODE=true AND DEMO_MODE_ALLOW_PRODUCTION=true in the
+      # Render dashboard to show the Demo Account box (fixed OTP) on a prototype
+      # deployment; set both back to false before any public production use.
+      # See DEMO_ACCOUNT.md.
+      - key: DEMO_MODE
+        value: "false"
+      - key: DEMO_MODE_ALLOW_PRODUCTION
+        value: "false"
 
   # Existing trained-model API. If this service is already deployed separately,
   # create only the backend service above and point SIH_ML_BACKEND at its URL.

@@ -28,6 +28,14 @@ const DEMO_ACCOUNTS = {
   govt: { username: "govt@example.com", password: "password123" },
   lab: { username: "lab@example.com", password: "password123" },
 };
+// Prototype demo farmer (backend flag: DEMO_MODE, default false). These are the
+// documented prototype credentials shown on the farmer login screen; the server
+// is the authority and sends them in /api/auth/farmer/config while demo mode is
+// on. The values below are only the fallback used to fill the form, so the
+// screen still works if the config request is slow. They are not secrets: the
+// whole point of the demo account is that they are printed on screen, and the
+// backend rejects them outright whenever demo mode is off.
+const DEMO_FARMER = { mobile: "9999999999", otp: "123456" };
 let ivrInfoPromise = null;
 
 const state = {
@@ -228,6 +236,14 @@ const I18N = {
     "farmer.login_link": "Already registered? Login with mobile OTP",
     "farmer.otp_unavailable_hint": "OTP SMS login is not available right now. Please try again shortly or call the helpline {helpline}.",
     "farmer.demo_mobile": "Demo mobile number",
+    // ---- Prototype demo account (shown only while the server has DEMO_MODE on)
+    "farmer.demo_account_title": "Demo Account",
+    "farmer.demo_phone_label": "Phone Number",
+    "farmer.demo_otp_label": "Demo OTP",
+    "farmer.demo_use_button": "Use Demo Account",
+    "farmer.demo_filled": "Demo number filled in. Tap Send OTP, then enter the demo OTP.",
+    "farmer.demo_no_sms": "Prototype demo — no real SMS is sent. Use the demo OTP shown above.",
+    "farmer.demo_welcome": "Signed in with the demo account.",
     "farmer.notification_settings": "Notification settings", "farmer.push_notifications": "Push notifications",
     "farmer.push_available": "Turn on push notifications to receive alerts about reports, test results, and health updates.",
     "farmer.push_unavailable": "Push notifications are not set up on this device. You will still receive in-app notifications.",
@@ -416,6 +432,13 @@ const I18N = {
     "farmer.login_link": "आधीच नोंदणीकृत? मोबाईल OTP ने लॉगिन करा",
     "farmer.otp_unavailable_hint": "OTP SMS लॉगिन सध्या उपलब्ध नाही. कृपया थोड्या वेळाने प्रयत्न करा किंवा हेल्पलाइन {helpline} वर कॉल करा.",
     "farmer.demo_mobile": "डेमो मोबाईल क्रमांक",
+    "farmer.demo_account_title": "डेमो खाते",
+    "farmer.demo_phone_label": "मोबाईल क्रमांक",
+    "farmer.demo_otp_label": "डेमो OTP",
+    "farmer.demo_use_button": "डेमो खाते वापरा",
+    "farmer.demo_filled": "डेमो क्रमांक भरला आहे. OTP पाठवा दाबा, नंतर डेमो OTP टाका.",
+    "farmer.demo_no_sms": "प्रोटोटाइप डेमो — खरे SMS पाठवले जात नाहीत. वर दाखवलेला डेमो OTP वापरा.",
+    "farmer.demo_welcome": "डेमो खात्याने लॉगिन केले.",
     "farmer.notification_settings": "सूचना सेटिंग्ज", "farmer.push_notifications": "पुश सूचना",
     "farmer.push_available": "अहवाल, तपासणीचे निकाल आणि आरोग्याची माहिती मिळवण्यासाठी पुश सूचना सुरू करा.",
     "farmer.push_unavailable": "या उपकरणावर पुश सूचना सुरू केलेल्या नाहीत. अॅपमधील सूचना मिळत राहतील.",
@@ -604,6 +627,13 @@ const I18N = {
     "farmer.login_link": "पहले से पंजीकृत? मोबाइल OTP से लॉगिन करें",
     "farmer.otp_unavailable_hint": "OTP SMS लॉगिन अभी उपलब्ध नहीं है। कृपया थोड़ी देर बाद प्रयास करें या हेल्पलाइन {helpline} पर कॉल करें।",
     "farmer.demo_mobile": "डेमो मोबाइल नंबर",
+    "farmer.demo_account_title": "डेमो खाता",
+    "farmer.demo_phone_label": "मोबाइल नंबर",
+    "farmer.demo_otp_label": "डेमो OTP",
+    "farmer.demo_use_button": "डेमो खाता उपयोग करें",
+    "farmer.demo_filled": "डेमो नंबर भर गया है। OTP भेजें दबाएं, फिर डेमो OTP डालें।",
+    "farmer.demo_no_sms": "प्रोटोटाइप डेमो — कोई असली SMS नहीं भेजा जाता। ऊपर दिखाया डेमो OTP उपयोग करें।",
+    "farmer.demo_welcome": "डेमो खाते से लॉगिन किया गया।",
     "farmer.notification_settings": "सूचना सेटिंग", "farmer.push_notifications": "पुश सूचनाएं",
     "farmer.push_available": "रिपोर्ट, जांच के नतीजे और स्वास्थ्य की जानकारी पाने के लिए पुश सूचनाएं चालू करें।",
     "farmer.push_unavailable": "इस डिवाइस पर पुश सूचनाएं चालू नहीं हैं। ऐप में सूचनाएं मिलती रहेंगी।",
@@ -792,6 +822,13 @@ const I18N = {
     "farmer.login_link": "ఇప్పటికే నమోదయ్యారా? మొబైల్ OTP తో లాగిన్ చేయండి",
     "farmer.otp_unavailable_hint": "OTP SMS లాగిన్ ప్రస్తుతం అందుబాటులో లేదు. కొద్దిసేపటి తర్వాత ప్రయత్నించండి లేదా హెల్ప్‌లైన్ {helpline} కు కాల్ చేయండి.",
     "farmer.demo_mobile": "డెమో మొబైల్ నంబరు",
+    "farmer.demo_account_title": "డెమో ఖాతా",
+    "farmer.demo_phone_label": "మొబైల్ నంబరు",
+    "farmer.demo_otp_label": "డెమో OTP",
+    "farmer.demo_use_button": "డెమో ఖాతా ఉపయోగించండి",
+    "farmer.demo_filled": "డెమో నంబరు నమోదు చేయబడింది. OTP పంపండి నొక్కి, తర్వాత డెమో OTP నమోదు చేయండి.",
+    "farmer.demo_no_sms": "ప్రోటోటైప్ డెమో — నిజమైన SMS పంపబడదు. పైన చూపిన డెమో OTP ఉపయోగించండి.",
+    "farmer.demo_welcome": "డెమో ఖాతాతో లాగిన్ అయ్యారు.",
     "farmer.notification_settings": "సూచనల అమరికలు", "farmer.push_notifications": "పుష్ సూచనలు",
     "farmer.push_available": "నివేదికలు, పరీక్ష ఫలితాలు, ఆరోగ్య సమాచారం పొందడానికి పుష్ సూచనలను ప్రారంభించండి.",
     "farmer.push_unavailable": "ఈ పరికరంలో పుష్ సూచనలు అమర్చలేదు. యాప్‌లో సూచనలు వస్తూనే ఉంటాయి.",
@@ -1022,6 +1059,73 @@ function helplineCard(info = DEFAULT_IVR_INFO) {
       <a class="btn btn-primary helpline-call" href="${telUri}" aria-label="${farmer ? ft("call_now") : "Call Pashu-Shield helpline"} ${number}">☎ ${farmer ? ft("call_now") : "CALL NOW"}</a>
       <div class="desktop-call-note">${farmer ? ft("desktop_call_note") : "On a desktop computer, call this number from your mobile phone."}</div>
     </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Prototype demo farmer account (server flag: DEMO_MODE, default false).
+// The credentials shown here come from /api/auth/farmer/config, which only
+// returns them while the backend has demo mode enabled. With demo mode off the
+// section is never rendered, and the backend rejects the fixed OTP anyway — the
+// browser can never grant itself a session by showing these values.
+// ---------------------------------------------------------------------------
+function farmerDemoCredentials() {
+  const demo = (farmerAuthConfig && farmerAuthConfig.demo) || null;
+  if (!demo || demo.enabled !== true) return null;
+  const mobile = String(demo.mobile || DEMO_FARMER.mobile).replace(/\D/g, "").slice(-10);
+  const otp = String(demo.otp || DEMO_FARMER.otp);
+  if (mobile.length !== 10 || !otp) return null;
+  return { mobile, otp };
+}
+
+function farmerDemoAccountSection() {
+  const creds = farmerDemoCredentials();
+  if (!creds) return "";
+  return `
+    <div class="demo-box demo-box-otp" id="farmerDemoAccount">
+      <div class="demo-box-title">🧪 ${ft("demo_account_title")}</div>
+      <div class="demo-box-row">
+        <span class="demo-box-label">${ft("demo_phone_label")}</span>
+        <span class="demo-box-value">${creds.mobile}</span>
+      </div>
+      <div class="demo-box-row">
+        <span class="demo-box-label">${ft("demo_otp_label")}</span>
+        <span class="demo-box-value">${creds.otp}</span>
+      </div>
+      <button id="otpUseDemoBtn" class="btn btn-ghost btn-sm demo-box-btn" type="button">
+        ${ft("demo_use_button")}
+      </button>
+      <div class="demo-box-note">${ft("demo_no_sms")}</div>
+    </div>`;
+}
+
+function renderFarmerDemoAccount() {
+  const slot = document.getElementById("farmerDemoAccountSlot");
+  if (!slot) return false;
+  const html = farmerDemoAccountSection();
+  slot.innerHTML = html;
+  slot.hidden = !html;
+  // Only wire the button when the box is actually on screen, so a disabled
+  // demo mode leaves no handler behind.
+  if (html) {
+    const btn = document.getElementById("otpUseDemoBtn");
+    if (btn) btn.addEventListener("click", useDemoFarmerAccount);
+  }
+  return Boolean(html);
+}
+
+// Fills the demo number into the normal farmer login form. It only types into
+// the field: the OTP request and the verification still go through the regular
+// endpoints, and the session still comes from the server.
+function useDemoFarmerAccount() {
+  const creds = farmerDemoCredentials();
+  const mobileInput = document.getElementById("otpMobile");
+  if (!creds || !mobileInput) return;
+  mobileInput.value = creds.mobile;
+  mobileInput.readOnly = false;
+  mobileInput.focus();
+  const sendBtn = document.getElementById("otpSendBtn");
+  if (sendBtn) sendBtn.focus();
+  toast(ft("demo_filled"));
 }
 
 function demoAccountBox(role) {
@@ -1371,6 +1475,9 @@ const OTP_ERROR_KEYS = {
   // Server-side readiness problem (unstable OTP pepper / unusable gateway):
   // the same neutral "OTP login is not available" copy is shown.
   OTP_PEPPER_UNSTABLE: "otp_unavailable",
+  // The demo number could not be provisioned (e.g. it is held by a staff
+  // account, which is never converted). Retry later.
+  DEMO_ACCOUNT_UNAVAILABLE: "otp_unavailable",
 };
 
 function otpDigits(value) { return String(value == null ? "" : value).replace(/\D/g, ""); }
@@ -1413,6 +1520,7 @@ function farmerOtpLoginForm(mode) {
       <div class="otp-hint" id="otpMobileHint">${signup ? ft("signup_mobile_hint") : ft("otp_mobile_hint")}</div>
     </div>
     <button id="otpSendBtn" class="btn btn-primary" type="button">${ft("send_otp")}</button>
+    <div id="farmerDemoAccountSlot" class="demo-slot" hidden></div>
     <div id="otpCodeStep" class="otp-code-step" hidden>
       <div class="otp-sent-note" id="otpSentNote" role="status"></div>
       <div class="field">
@@ -1540,6 +1648,9 @@ async function loadFarmerAuthConfig() {
     farmerAuthConfig = null; // the screen still works; only the hint is missing
   }
   renderFarmerOtpFallback(farmerAuthConfig && farmerAuthConfig.otp_login_enabled === false);
+  // The Demo Account section is shown only when the server says demo mode is
+  // on. If the request failed we know nothing, so nothing is advertised.
+  renderFarmerDemoAccount();
   return farmerAuthConfig;
 }
 
@@ -1576,9 +1687,13 @@ async function farmerRequestOtp(options = {}) {
     // The backend answers 200 for registered and unknown numbers alike and
     // never proves delivery, so the UI shows the conditional wording only —
     // never "OTP sent to <number>". `data.message` is the same sentence.
-    const note = isResend ? ft("otp_resent", { mobile }) : ft("otp_sent", { mobile });
+    // The demo farmer is the one exception, and the server says so explicitly
+    // (data.demo): no SMS is sent and the code is on this screen.
+    const note = data.demo
+      ? ft("demo_no_sms")
+      : isResend ? ft("otp_resent", { mobile }) : ft("otp_sent", { mobile });
     showFarmerOtpCodeStep(mobile, note);
-    startFarmerOtpCooldown(Number(data.resend_after) || 60);
+    startFarmerOtpCooldown(data.demo ? 0 : (Number(data.resend_after) || 60));
     toast(note);
     const codeInput = document.getElementById("otpCode");
     if (codeInput) codeInput.focus();
@@ -1638,7 +1753,7 @@ async function farmerVerifyOtp() {
     stopFarmerOtpCooldown();
     setAuth(data.token, data.user);
     const welcomeName = String(data.user.full_name || "").split(" ")[0];
-    toast(ft("welcome_toast", { name: welcomeName }));
+    toast(data.demo ? ft("demo_welcome") : ft("welcome_toast", { name: welcomeName }));
     location.hash = homeFor("owner");
   } catch (err) {
     if (codeInput) { codeInput.value = ""; codeInput.focus(); }
