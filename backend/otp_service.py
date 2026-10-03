@@ -19,15 +19,16 @@ SECURITY MODEL
 
 PROTOTYPE DEMO ACCOUNT
 ======================
-When ``DEMO_MODE`` is explicitly enabled (see ``demo_auth.py``), the single
-configured demo number is issued an OTP row whose code is the fixed demo value
-and whose SMS is *not* dispatched. The row is a normal row — salted, peppered
-hashed, expiring, single-use, attempt-limited — so verification goes through
-exactly the same code as every other farmer, and the JWT is minted from the
-database row exactly the same way. Nothing about the verification, the token or
-the role claims changes; only the *source* of the code changes. With demo mode
-off, no such row is ever created and the fixed code is rejected by the ordinary
-rules.
+When ``DEMO_MODE`` is explicitly enabled (see ``demo_auth.py``), only the
+configured demo number is issued a fixed-code OTP row and no SMS is dispatched.
+That row still enforces the usual request requirement, expiry, attempt limit,
+and single-use consumption. For this one exact number, verification compares
+the configured fixed code in constant time before the ordinary salted/peppered
+hash comparison. This avoids a correct demo code failing when OTP pepper state
+differs between workers, while ordinary Farmer OTP verification remains
+unchanged. The JWT and role claims still come from the same database-backed
+authentication path. With demo mode off, any outstanding demo-only row is
+rejected and the fixed code is not accepted.
 
 TABLES (created additively by ``database.init_db``)
 ==================================================
@@ -621,8 +622,10 @@ def request_otp(mobile_raw, *, ip: str | None = None,
         )
         purge_stale(conn)
         return {
-            "status": "SENT",
-            "sent": True,
+            "status": "DEMO_ISSUED" if demo_login else "SENT",
+            # ``sent`` means the OTP was handed off to an SMS gateway. Demo
+            # codes are issued without dispatching anything externally.
+            "sent": not demo_login,
             # True when the OTP was issued for a number without an account yet
             # (farmer profile creation) instead of an existing login.
             "signup": signup_otp,
@@ -818,6 +821,19 @@ def verify_otp(mobile_raw, code, *, ip: str | None = None,
             raise OtpError("OTP_INVALID", "The OTP is incorrect or has expired. Please request a new one.",
                            status=401, reason="no_otp_row")
 
+        # A DEMO row is not a real SMS-issued OTP. If demo mode has been turned
+        # off (or the configured demo number/code changed) since the request,
+        # never let its stored hash fall through to ordinary OTP validation.
+        # A real SMS OTP row is unaffected, even if a random code happens to
+        # equal the public demo code.
+        demo_row = str(_row_value(row, "gateway_mode") or "").upper() == "DEMO"
+        if demo_row and not demo_login:
+            _log_attempt(conn, mobile=e164, ip=ip, outcome="VERIFY_FAILED", purpose=purpose,
+                         detail="reason=demo_mode_disabled")
+            _log_verify_failure(e164, "demo_mode_disabled", "OTP_INVALID", row=row)
+            raise OtpError("OTP_INVALID", "The OTP is incorrect or has expired. Please request a new one.",
+                           status=401, reason="demo_mode_disabled")
+
         status = row["status"]
         expires_at = _parse_iso(row["expires_at"])
         row_age = _row_age_seconds(row)
@@ -866,13 +882,29 @@ def verify_otp(mobile_raw, code, *, ip: str | None = None,
                            reason="attempts_exhausted")
 
         # --- compare the submitted code --------------------------------------
-        if not _constant_time_match(submitted, row["otp_salt"], row["otp_hash"]):
+        # Check the configured demo value first, and only for a DEMO row issued
+        # to the exact number accepted by demo_auth.is_demo_farmer(). Do not send
+        # demo verification through the ordinary OTP hash validator: the fixed
+        # code is public, and hashing it against a per-process/rotated pepper
+        # made the correct code fail with the same generic message as a typo.
+        if demo_login and demo_row:
+            expected_demo_code = demo_auth.demo_farmer_otp()
+            code_matches = bool(expected_demo_code) and hmac.compare_digest(
+                submitted, expected_demo_code or "")
+        else:
+            # A normal SMS-issued row for this number (for example, one created
+            # before demo mode was enabled) still uses its ordinary hash. The
+            # fixed-code shortcut requires a row explicitly issued as DEMO.
+            code_matches = _constant_time_match(submitted, row["otp_salt"], row["otp_hash"])
+
+        if not code_matches:
             # Distinguish "wrong code" from "the pepper changed underneath us"
             # (rotated OTP_PEPPER, or a per-process ephemeral pepper with more
-            # than one Gunicorn worker). The latter fails every valid OTP.
+            # than one Gunicorn worker). Demo mismatches intentionally skip this
+            # diagnostic because their comparison does not depend on the pepper.
             reason = "code_mismatch"
             stored_fingerprint = _row_value(row, "pepper_fingerprint")
-            if stored_fingerprint and stored_fingerprint != pepper_fingerprint():
+            if not demo_login and stored_fingerprint and stored_fingerprint != pepper_fingerprint():
                 reason = "pepper_mismatch"
             remaining = max(0, max_attempts - (attempts + 1))
             new_status = _STATUS_LOCKED if remaining <= 0 else _STATUS_ACTIVE
@@ -981,15 +1013,16 @@ def verify_otp(mobile_raw, code, *, ip: str | None = None,
 # Introspection for the API/UI layer
 # --------------------------------------------------------------------------
 def otp_login_blockers() -> list[str]:
-    """Configuration problems that would make OTP login fail (secret-free).
+    """Configuration problems that would block ordinary farmer OTP login (secret-free).
 
     ``SMS_GATEWAY_NOT_CONFIGURED``  gateway disabled / unusable / MOCK in prod.
                                     Ignored while demo mode is on, because the
                                     demo farmer never receives an SMS.
-    ``OTP_PEPPER_UNSTABLE``         no stable pepper ⇒ valid codes fail with 401
-                                    whenever more than one worker is running.
-                                    Still applies in demo mode: the demo code is
-                                    stored as a normal peppered hash.
+    ``OTP_PEPPER_UNSTABLE``         no stable pepper ⇒ real SMS OTPs and signed
+                                    signup tokens can fail across workers.
+                                    The blocker is still reported for those
+                                    ordinary farmer paths; the exact demo
+                                    fixed-code comparison does not use it.
     """
     blockers: list[str] = []
     try:

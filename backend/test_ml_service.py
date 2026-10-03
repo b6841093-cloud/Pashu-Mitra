@@ -106,7 +106,9 @@ class MLFailureTests(unittest.TestCase):
                 patch.object(backend.requests, "get", return_value=readiness) as get, \
                 self.assertLogs(backend.app.logger, level="WARNING"):
             status = self.client.get("/api/govt/ai/status", headers=self.headers)
-        self.assertEqual(status.get_json(), {"online": False})
+        self.assertEqual(status.status_code, 200)
+        self.assertFalse(status.get_json()["online"])
+        self.assertIsNone(status.get_json()["last_successful_prediction"])
         get.assert_called_once_with("https://ml.example.invalid/api/health", timeout=5)
 
     def test_status_is_offline_when_not_configured(self):

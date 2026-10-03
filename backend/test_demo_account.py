@@ -49,6 +49,7 @@ import sms_gateway  # noqa: E402
 DEMO_MOBILE = "8341564042"
 DEMO_MOBILE_E164 = "+918341564042"
 DEMO_OTP = "123456"
+PREVIOUS_DEMO_MOBILE = "9999999999"
 FARMER_MOBILE = "9800000001"          # seeded owner (Rajesh Patil)
 FARMER_2_MOBILE = "9800000002"        # seeded second owner (Sunita More)
 FARMER_3_MOBILE = "9800000003"        # no account yet
@@ -230,6 +231,36 @@ class DemoAccountTestCase(unittest.TestCase):
         self.assertNotIn("otp", body)
         self.assertNotIn("password_hash", body["user"])
         self.assertNotIn("salt", body["user"])
+
+    def test_01b_demo_fixed_code_precedes_hash_check_and_normalizes_mobile(self):
+        self.demo_on()
+        # A second Gunicorn worker or a redeploy can have a different pepper.
+        # Demo verification must still match the fixed configured value, while
+        # the OTP row continues to enforce request, expiry and single use.
+        with mock.patch.dict(os.environ, {"OTP_PEPPER": "demo-request-worker-pepper"}):
+            requested = self.request_otp("+91 (834) 156-4042")
+        self.assertEqual(requested.status_code, 200, requested.get_json())
+        self.assertTrue(requested.get_json()["demo"])
+
+        with mock.patch.dict(os.environ, {"OTP_PEPPER": "demo-verify-worker-pepper"}):
+            verified = self.verify_otp(DEMO_OTP, mobile="0091-834-156-4042")
+        self.assertEqual(verified.status_code, 200, verified.get_json())
+        self.assertEqual(verified.get_json()["user"]["mobile"], DEMO_MOBILE)
+        self.assertEqual(verified.get_json()["user"]["role"], "owner")
+
+    def test_01c_fixed_code_requires_a_demo_issued_request_row(self):
+        # A real signup OTP created while demo mode was off must not become a
+        # demo-code authorization merely because the flag is enabled later.
+        with mock.patch.object(otp_service, "generate_otp", return_value="654321"):
+            requested = self.request_otp(intent="signup")
+        self.assertEqual(requested.status_code, 200, requested.get_json())
+        self.assertFalse(requested.get_json()["demo"])
+
+        self.demo_on()
+        self.assertEqual(self.verify_otp(DEMO_OTP).status_code, 401)
+        verified = self.verify_otp("654321")
+        self.assertEqual(verified.status_code, 200, verified.get_json())
+        self.assertTrue(verified.get_json()["registration_required"])
 
     def test_02_demo_number_never_receives_an_sms(self):
         self.demo_on()
@@ -453,6 +484,18 @@ class DemoAccountTestCase(unittest.TestCase):
         self.assertEqual(self.verify_otp(DEMO_OTP).status_code, 401)
         self.assertEqual(self._demo_farmer_rows(), [])
 
+    def test_15b_pending_demo_code_is_rejected_after_demo_mode_is_disabled(self):
+        # Turning the flag off between request and verification must not let a
+        # stored demo row fall through to the ordinary generated-code matcher.
+        self.demo_on()
+        self.assertTrue(self.request_otp().get_json()["demo"])
+        self.demo_off()
+
+        response = self.verify_otp(DEMO_OTP)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.get_json()["code"], "OTP_INVALID")
+        self.assertNotIn("token", response.get_json())
+
     def test_16_demo_mode_is_refused_on_a_production_process_without_opt_in(self):
         # A public deployment can never turn the fixed OTP on by accident.
         self.demo_on()
@@ -496,7 +539,21 @@ class DemoAccountTestCase(unittest.TestCase):
     # ================================================================
     # 7. the fixed code belongs to the demo number only
     # ================================================================
-    def test_18_fixed_otp_never_works_for_another_number(self):
+    def test_18_previous_demo_number_is_not_configured_or_fixed_code_enabled(self):
+        self.demo_on()
+        self.assertFalse(demo_auth.is_demo_farmer(PREVIOUS_DEMO_MOBILE))
+
+        # Treat the former number like an ordinary signup number: its OTP is
+        # generated and sent by the real SMS path, never the fixed demo path.
+        with mock.patch.object(otp_service, "generate_otp", return_value="654321"):
+            response = self.request_otp(PREVIOUS_DEMO_MOBILE, intent="signup")
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertFalse(response.get_json()["demo"])
+        self.assertEqual(self.gateway.last_code, "654321")
+        self.assertEqual(self.verify_otp(DEMO_OTP, PREVIOUS_DEMO_MOBILE).status_code, 401)
+        self.assertEqual(self._user_count(PREVIOUS_DEMO_MOBILE), 0)
+
+    def test_18b_fixed_otp_never_works_for_another_number(self):
         self.demo_on()
         # A registered farmer's real SMS OTP: 123456 is not it.
         self.assertEqual(self.request_otp(FARMER_MOBILE).status_code, 200)
@@ -661,6 +718,8 @@ class DemoAccountTestCase(unittest.TestCase):
         self.assertNotIn(DEMO_OTP, text, "the fixed OTP must never be logged")
         self.assertNotIn(DEMO_MOBILE, text, "the full demo number must never be logged")
         self.assertIn("4042", text, "the masked number is still traceable")
+        self.assertIn("dispatch=not_dispatched", text,
+                      "demo request logs must not imply that an SMS gateway was called")
 
     def test_28_demo_state_is_reported_without_exposing_the_code(self):
         self.demo_on()

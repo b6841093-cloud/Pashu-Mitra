@@ -2,7 +2,7 @@
    PashuMitra Service Worker — Offline Support
    ================================================================= */
 
-const CACHE_NAME = "pashu-mitra-v5";  // bumped: prototype farmer Demo Account box (DEMO_MODE)
+const CACHE_NAME = "pashu-mitra-v6";  // bumped: use backend-only demo Farmer credentials
 const STATIC_ASSETS = [
   "/",
   "/index.html",

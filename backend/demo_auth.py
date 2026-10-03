@@ -10,17 +10,20 @@ value ``DEMO_FARMER_OTP`` (default ``123456``) and the SMS is never dispatched.
 
 WHAT THIS IS NOT
 ================
-* It is not a second authentication system. The fixed code is never checked
-  against a request body. A real ``otp_codes`` row is created for the demo
-  number, carrying the normal PBKDF2+pepper hash, TTL, attempt counter and
-  single-use consumption. Verification therefore runs through the *unchanged*
-  :func:`otp_service.verify_otp` path, and the session JWT is minted by the
-  unchanged :func:`app.make_token` from the database row, exactly like a
-  normal OTP login. Authorization is therefore untouched.
-* It is not automatic. The fixed code only ever exists as the hash of a row
-  that ``otp_service.request_otp`` created *because* demo mode was enabled for
-  that number. Calling ``verify-otp`` with the demo number and ``123456``
-  without a prior (demo-mode approved) request is rejected with the ordinary
+* It is not a second authentication system. A real ``otp_codes`` row is
+  created for the demo number, carrying the normal PBKDF2+pepper hash, TTL,
+  attempt counter and single-use state. The shared
+  :func:`otp_service.verify_otp` path enforces those lifecycle checks, then
+  compares the configured fixed code in constant time before its ordinary
+  generated-OTP hash comparison. This demo-only comparison is scoped to the
+  exact configured number and does not depend on a worker-local OTP pepper.
+  The session JWT is still minted by the unchanged :func:`app.make_token` from
+  the database user row, exactly like a normal OTP login. Authorization is
+  therefore untouched.
+* It is not automatic. The fixed code is accepted only when a normal,
+  demo-marked ``otp_codes`` row exists that ``otp_service.request_otp`` created
+  because demo mode was enabled for that exact number. Calling ``verify-otp``
+  without a prior (demo-mode-approved) request is rejected with the ordinary
   ``OTP_INVALID`` rules, exactly like any wrong code.
 * It is not on by default. ``DEMO_MODE`` defaults to ``false``.
 * It is not a production default. On a process that looks like production
@@ -120,6 +123,7 @@ def demo_mode_status() -> dict:
     requested = demo_mode_requested()
     production = sms_gateway.is_production()
     allowed = demo_mode_allowed_in_production()
+    configured_code = (os.environ.get("DEMO_FARMER_OTP") or DEFAULT_DEMO_OTP).strip()
     if not requested:
         disabled_reason = DEMO_DISABLED
     elif production and not allowed:
@@ -137,7 +141,7 @@ def demo_mode_status() -> dict:
         # flag above still reports what was asked for.
         "usable": (disabled_reason is None and requested
                    and bool(demo_farmer_mobile())
-                   and (os.environ.get("DEMO_FARMER_OTP") or DEFAULT_DEMO_OTP).strip().isdigit()),
+                   and configured_code.isdigit() and len(configured_code) == OTP_LENGTH),
     }
 
 
