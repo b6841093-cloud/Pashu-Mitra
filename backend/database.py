@@ -992,9 +992,49 @@ def ensure_otp_tables(conn):
 
     ``SCHEMA`` already uses ``CREATE TABLE IF NOT EXISTS``; this function makes
     the OTP migration explicit for databases created by older revisions and
-    guarantees the supporting indexes exist.
+    guarantees the supporting indexes and diagnostics columns exist.
     """
     conn.executescript(SCHEMA_OTP)
+    _ensure_otp_diagnostic_columns(conn)
+    conn.commit()
+
+
+# Gateway diagnostics columns: they record *how* an OTP was handed to the SMS
+# gateway (status code, message id/state, error category) and a safe pepper
+# fingerprint, so a 401 during verification can be traced to an exact cause
+# (no row / wrong code / expired / rotated pepper / send failure). No column
+# stores the OTP, its hash (already in otp_hash), credentials or a full number.
+OTP_CODE_DIAGNOSTIC_COLUMNS = {
+    "gateway_message_id": "TEXT",
+    "gateway_state": "TEXT",
+    "gateway_mode": "TEXT",
+    "gateway_http_status": "INTEGER",
+    "gateway_device_configured": "INTEGER",
+    "send_error_code": "TEXT",
+    "send_error_category": "TEXT",
+    "pepper_fingerprint": "TEXT",
+}
+
+OTP_LOG_DIAGNOSTIC_COLUMNS = {
+    "gateway_http_status": "INTEGER",
+    "gateway_state": "TEXT",
+    "error_category": "TEXT",
+}
+
+
+def _ensure_otp_diagnostic_columns(conn):
+    """Add the diagnostics columns to pre-existing OTP tables (idempotent)."""
+    for table, columns in (("otp_codes", OTP_CODE_DIAGNOSTIC_COLUMNS),
+                           ("otp_request_log", OTP_LOG_DIAGNOSTIC_COLUMNS)):
+        try:
+            existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        except sqlite3.Error:
+            continue
+        if not existing:
+            continue
+        for column, column_type in columns.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
     conn.commit()
 
 

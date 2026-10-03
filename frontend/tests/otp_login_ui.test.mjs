@@ -88,6 +88,7 @@ test("localisation: every OTP key exists in en, mr, hi and te", () => {
     "farmer.otp_locked", "farmer.otp_used", "farmer.otp_cooldown",
     "farmer.otp_rate_limited", "farmer.otp_unavailable", "farmer.otp_send_failed",
     "farmer.password_login_link", "farmer.otp_login_link", "farmer.demo_mobile",
+    "farmer.otp_missing_hint",
   ];
   for (const lang of ["en", "mr", "hi", "te"]) {
     assert.ok(I18N[lang], `missing language block: ${lang}`);
@@ -181,6 +182,36 @@ test("renderAuth mounts the farmer OTP screen without throwing", () => {
   }
   assert.doesNotThrow(() => app.run('renderAuth("register", "owner")'));
   assert.match(app.run('document.getElementById("app").innerHTML'), /id="registerForm"/);
+});
+
+test("the OTP screen never claims an SMS was delivered", () => {
+  // A gateway 2xx only means "queued"; the number may not even be registered.
+  // The copy must therefore stay conditional in every language.
+  for (const lang of ["en", "mr", "hi", "te"]) {
+    for (const key of ["farmer.otp_sent", "farmer.otp_resent"]) {
+      assert.doesNotMatch(I18N[lang][key], /OTP sent to \+91|पाठवला आहे\..*OTP|भेजा गया है\..*OTP/,
+        `${lang}.${key} must not state an unconditional delivery`);
+    }
+  }
+  assert.match(I18N.en["farmer.otp_sent"], /registered/);
+  assert.match(I18N.en["farmer.otp_resent"], /registered/);
+  // The request handler must not fabricate a delivery message either.
+  // Comments are stripped so the assertion checks executed code, not prose.
+  const handler = appSource.slice(appSource.indexOf("async function farmerRequestOtp"),
+    appSource.indexOf("async function farmerVerifyOtp")).replace(/\/\/[^\n]*/g, "");
+  assert.doesNotMatch(handler, /OTP sent to/i);
+  assert.match(handler, /ft\("otp_sent", \{ mobile \}\)/);
+  // The backend readiness codes keep the password fallback reachable.
+  const mapping = app.run("OTP_ERROR_KEYS");
+  assert.equal(mapping.OTP_PEPPER_UNSTABLE, "otp_unavailable");
+  assert.equal(mapping.SMS_GATEWAY_REJECTED, "otp_send_failed");
+});
+
+test("the OTP code step explains what to do when the SMS does not arrive", () => {
+  const html = app.run("farmerOtpLoginForm()");
+  assert.match(html, /id="otpMissingHint"/);
+  assert.match(html, /farmer\.otp_missing_hint|Didn't get the SMS\?/);
+  assert.match(I18N.en["farmer.otp_missing_hint"], /Resend OTP/);
 });
 
 test("error codes map to localised farmer messages", () => {

@@ -1,5 +1,6 @@
 import os
 import json
+import hmac
 import math
 import uuid
 import jwt
@@ -26,7 +27,7 @@ from database import (
 )
 from case_service import create_case_record
 from ivr_config import LANGUAGE_NAMES, SUPPORTED_LANGUAGES, get_ivr_settings
-from ivr_security import ivr_webhook_required
+from ivr_security import ivr_webhook_required, shared_rate_limit_ok
 from ivr_service import (
     apply_call_input, call_response, finalize_report, get_call_for_user,
     handle_call_event, helpline_analytics, list_reports_for_user,
@@ -36,7 +37,9 @@ import weather
 import animal_ai
 import sms_gateway
 from otp_service import (
-    OtpError, otp_login_available, public_settings as otp_public_settings,
+    OtpError, otp_login_available, otp_login_status,
+    diagnostics as otp_diagnostics,
+    public_settings as otp_public_settings,
     request_otp as request_farmer_otp, resend_otp as resend_farmer_otp,
     verify_otp as verify_farmer_otp,
 )
@@ -329,6 +332,7 @@ def health():
     except sqlite3.Error:
         database_ok = False
     gateway = sms_gateway.gateway_public_info()
+    otp_status = otp_login_status()
     return jsonify({
         "status": "ok" if database_ok else "degraded",
         "service": "pashu-shield-backend",
@@ -339,10 +343,21 @@ def health():
             "mode": gateway["mode"],
             "configured": gateway["configured"],
             "usable": gateway["usable"],
+            # Documented multi-device behaviour: unpinned ⇒ random device.
+            "device_pinned": gateway["device_pinned"],
         },
         "farmer_otp_login": {
             "enabled": otp_login_available(),
             "password_fallback_enabled": _farmer_password_fallback_allowed(),
+            # Secret-free readiness flags: an unstable pepper (or a database
+            # outside the persistent disk) silently breaks OTP verification.
+            "pepper_stable": otp_status["pepper_stable"],
+            "blockers": otp_status["blockers"],
+            "database_path_configured": bool((os.environ.get("SIH_DB_PATH") or "").strip()),
+            "persistent_mount_configured": bool(
+                (os.environ.get("SIH_DB_PATH") or "").strip()
+                and (not os.environ.get("RENDER") or DB_PATH.startswith("/var/data"))
+            ),
         },
     }), 200 if database_ok else 503
 
@@ -462,6 +477,41 @@ def _farmer_password_fallback_allowed() -> bool:
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _otp_route_readiness_error():
+    """503 payload when OTP login cannot work, with the exact (safe) reason."""
+    status = otp_login_status()
+    code = status["blockers"][0] if status["blockers"] else "SMS_GATEWAY_NOT_CONFIGURED"
+    return jsonify({
+        "error": "OTP login is not available right now. Please use password login.",
+        "code": code,
+        "password_fallback_enabled": _farmer_password_fallback_allowed(),
+    }), 503
+
+
+def _otp_neutral_message(result, *, resend: bool = False) -> str:
+    """Delivery-agnostic wording, identical for registered and unknown numbers.
+
+    A 200 from this API means "request accepted" — never "the SMS arrived".
+    """
+    minutes = max(1, int(round((result.get("expires_in") or 300) / 60)))
+    prefix = ("If this mobile number is registered, a new OTP has been sent"
+              if resend else "If this mobile number is registered, an OTP has been sent")
+    return f"{prefix}. It is valid for {minutes} minutes."
+
+
+def _log_otp_dispatch(action: str, mobile, result: dict) -> None:
+    """Structured, secret-free record of what actually left the server."""
+    logging.getLogger(__name__).info(
+        "%s recipient=%s dispatch=%s gateway_mode=%s gateway_state=%s message_id=%s "
+        "http_status=%s simulated=%s",
+        action, sms_gateway.mask_phone(mobile),
+        "submitted_to_gateway" if result.get("sent") else "not_dispatched",
+        result.get("gateway_mode"), result.get("gateway_state"),
+        result.get("gateway_message_id"), result.get("gateway_http_status"),
+        bool(result.get("simulated")),
+    )
+
+
 def _audit_otp_event(action, *, user_id=None, mobile=None, details=None):
     """Audit OTP lifecycle events. Mobile numbers are masked, codes never logged."""
     safe_mobile = sms_gateway.mask_phone(mobile) if mobile else None
@@ -496,28 +546,39 @@ def farmer_request_otp_route():
         return jsonify({"error": "Mobile number is required.", "code": "INVALID_MOBILE"}), 400
 
     if not otp_login_available():
-        # Fail loudly instead of pretending an SMS was sent.
-        return jsonify({
-            "error": "OTP login is not available right now. Please use password login.",
-            "code": "SMS_GATEWAY_NOT_CONFIGURED",
-            "password_fallback_enabled": _farmer_password_fallback_allowed(),
-        }), 503
+        # Fail loudly instead of pretending an SMS was sent. The code tells the
+        # operator exactly what to fix (gateway config vs. unstable OTP pepper).
+        return _otp_route_readiness_error()
 
     try:
         result = request_farmer_otp(mobile, ip=_client_ip())
     except OtpError as exc:
+        logging.getLogger(__name__).warning(
+            "farmer_otp_request_failed recipient=%s error_code=%s reason=%s http_status=%s",
+            sms_gateway.mask_phone(mobile), exc.code, exc.reason, exc.status,
+        )
         if exc.code not in ("COOLDOWN_ACTIVE", "RATE_LIMITED"):
-            _audit_otp_event("OTP_REQUEST_FAILED", mobile=mobile, details={"code": exc.code})
+            _audit_otp_event("OTP_REQUEST_FAILED", mobile=mobile,
+                             details={"code": exc.code, "reason": exc.reason})
         return jsonify(exc.to_payload()), exc.status
 
+    _log_otp_dispatch("farmer_otp_request_accepted", mobile, result)
     if result.get("sent"):
         _audit_otp_event("OTP_REQUESTED", mobile=mobile,
-                         details={"purpose": "farmer_login", "expires_in": result.get("expires_in")})
+                         details={"purpose": "farmer_login",
+                                  "expires_in": result.get("expires_in"),
+                                  "message_id": result.get("gateway_message_id"),
+                                  "message_state": result.get("gateway_state"),
+                                  "http_status": result.get("gateway_http_status"),
+                                  "simulated": bool(result.get("simulated"))})
 
     # Identical response whether or not the number is registered (no enumeration).
+    # delivery_confirmed is always False: a 200 means the request was accepted,
+    # never that an SMS was delivered.
     return jsonify({
         "ok": True,
-        "message": "If this mobile number is registered, an OTP has been sent.",
+        "message": _otp_neutral_message(result),
+        "delivery_confirmed": False,
         "expires_in": result.get("expires_in"),
         "resend_after": result.get("resend_after"),
     })
@@ -533,25 +594,32 @@ def farmer_resend_otp_route():
         return jsonify({"error": "Mobile number is required.", "code": "INVALID_MOBILE"}), 400
 
     if not otp_login_available():
-        return jsonify({
-            "error": "OTP login is not available right now. Please use password login.",
-            "code": "SMS_GATEWAY_NOT_CONFIGURED",
-            "password_fallback_enabled": _farmer_password_fallback_allowed(),
-        }), 503
+        return _otp_route_readiness_error()
 
     try:
         result = resend_farmer_otp(mobile, ip=_client_ip())
     except OtpError as exc:
+        logging.getLogger(__name__).warning(
+            "farmer_otp_resend_failed recipient=%s error_code=%s reason=%s http_status=%s",
+            sms_gateway.mask_phone(mobile), exc.code, exc.reason, exc.status,
+        )
         if exc.code != "COOLDOWN_ACTIVE":
-            _audit_otp_event("OTP_RESEND_FAILED", mobile=mobile, details={"code": exc.code})
+            _audit_otp_event("OTP_RESEND_FAILED", mobile=mobile,
+                             details={"code": exc.code, "reason": exc.reason})
         return jsonify(exc.to_payload()), exc.status
 
+    _log_otp_dispatch("farmer_otp_resend_accepted", mobile, result)
     if result.get("sent"):
-        _audit_otp_event("OTP_RESENT", mobile=mobile, details={"purpose": "farmer_login"})
+        _audit_otp_event("OTP_RESENT", mobile=mobile,
+                         details={"purpose": "farmer_login",
+                                  "message_id": result.get("gateway_message_id"),
+                                  "message_state": result.get("gateway_state"),
+                                  "simulated": bool(result.get("simulated"))})
 
     return jsonify({
         "ok": True,
-        "message": "If this mobile number is registered, a new OTP has been sent.",
+        "message": _otp_neutral_message(result, resend=True),
+        "delivery_confirmed": False,
         "expires_in": result.get("expires_in"),
         "resend_after": result.get("resend_after"),
     })
@@ -572,7 +640,15 @@ def farmer_verify_otp_route():
     try:
         result = verify_farmer_otp(mobile, code, ip=_client_ip())
     except OtpError as exc:
-        _audit_otp_event("OTP_VERIFY_FAILED", mobile=mobile, details={"code": exc.code})
+        # The exact cause (no_otp_row / code_mismatch / pepper_mismatch /
+        # expired / status=SEND_FAILED ...) goes to the log and the audit trail,
+        # never to the client — the response stays generic (no enumeration).
+        logging.getLogger(__name__).warning(
+            "farmer_otp_verify_failed recipient=%s error_code=%s reason=%s http_status=%s",
+            sms_gateway.mask_phone(mobile), exc.code, exc.reason, exc.status,
+        )
+        _audit_otp_event("OTP_VERIFY_FAILED", mobile=mobile,
+                         details={"code": exc.code, "reason": exc.reason})
         return jsonify(exc.to_payload()), exc.status
 
     user = result["user"]
@@ -3443,18 +3519,214 @@ def sms_gateway_test():
         )
     except sms_gateway.SmsGatewayError as exc:
         return jsonify({
+            "accepted": False,
             "delivered": False,
             "code": exc.code,
+            "category": exc.category,
+            "api_status": exc.status,
+            "gateway_http_status": exc.upstream_status,
+            "reason": exc.reason,
             "error": "The SMS gateway did not accept the test message.",
         }), (503 if exc.code == "SMS_GATEWAY_NOT_CONFIGURED" else 502)
-    return jsonify({
-        "delivered": bool(result.get("delivered")),
+
+    body = {
+        "accepted": bool(result.get("accepted")),
+        # A gateway 2xx only queues the message; delivery must be observed via
+        # the message state (Pending → Processed → Sent → Delivered/Failed).
+        "delivered": False,
         "simulated": bool(result.get("simulated")),
         "mode": result.get("mode"),
         "message_id": result.get("message_id"),
         "state": result.get("state"),
-        "note": "delivered=true means the gateway queued the SMS for the Android device.",
-    })
+        "gateway_http_status": result.get("http_status"),
+        "device_pinned": bool(result.get("device_id_configured")),
+        "note": ("accepted=true means the gateway queued the SMS for an Android handset. "
+                 "Delivery is proven only by state=Sent/Delivered below."),
+    }
+    if result.get("message_id"):
+        try:
+            body["status_check"] = sms_gateway.get_message_status(result["message_id"])
+        except sms_gateway.SmsGatewayError as exc:
+            body["status_check"] = {"ok": False, **exc.diagnostics()}
+    return jsonify(body)
+
+
+# --------------------------------------------- OTP delivery diagnostics ----
+def otp_diagnostics_required(fn):
+    """Allow access with a government JWT **or** the OTP_DIAG_TOKEN secret.
+
+    The shared secret is read from the environment (Render → Environment) so no
+    credential is ever committed; ``IVR_WEBHOOK_SECRET`` is accepted as a
+    fallback because it is already provisioned as a Render-generated secret.
+    """
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        expected = (os.environ.get("OTP_DIAG_TOKEN")
+                    or os.environ.get("IVR_WEBHOOK_SECRET") or "").strip()
+        provided = (request.headers.get("X-Diag-Token") or "").strip()
+        if expected and provided and hmac.compare_digest(provided, expected):
+            return fn(*args, **kwargs)
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            payload = decode_token(auth.split(" ", 1)[1])
+            if not payload:
+                return jsonify({"error": "Invalid or expired token"}), 401
+            if payload.get("role") != "govt":
+                return jsonify({"error": "Forbidden for this role"}), 403
+            g.user = payload
+            return fn(*args, **kwargs)
+        if not expected:
+            return jsonify({
+                "error": "Diagnostics access is not configured. Set OTP_DIAG_TOKEN in the "
+                         "Render environment (or log in as a government user).",
+                "code": "DIAGNOSTICS_NOT_CONFIGURED",
+            }), 503
+        return jsonify({"error": "Missing or invalid credentials", "code": "UNAUTHORIZED"}), 401
+    return wrapper
+
+
+def _otp_diagnostic_findings(report: dict) -> list[str]:
+    """Plain-language findings derived from a diagnostics report."""
+    findings: list[str] = []
+    database = report.get("database") or {}
+    otp = report.get("otp") or {}
+
+    if not database.get("path_configured"):
+        findings.append(
+            "SIH_DB_PATH is not set: the SQLite file lives inside the container and is "
+            "wiped on every Render deploy/restart, which destroys in-flight OTPs."
+        )
+    elif not database.get("persistent_mount_configured"):
+        findings.append(
+            "SIH_DB_PATH does not point inside the Render disk mount (/var/data): OTP rows "
+            "and farmer data are lost on redeploy."
+        )
+    if not otp.get("pepper_stable"):
+        findings.append(
+            "The OTP pepper is generated per process (OTP_PEPPER/SIH_SECRET_KEY unset): with "
+            "more than one Gunicorn worker, a correct OTP issued by one worker is rejected by "
+            "the other with 401. Set a stable OTP_PEPPER."
+        )
+    gateway = otp.get("gateway") or {}
+    mode = str(gateway.get("mode") or "").upper()
+    if not gateway.get("usable", True):
+        findings.append("The SMS gateway is not usable with the current environment variables.")
+    if mode == "MOCK":
+        findings.append(
+            "SMS_GATEWAY_MODE=MOCK: no SMS leaves the server. The API still accepts the request "
+            "and the UI shows conditional wording, but nothing was dispatched — switch to CLOUD "
+            "with real credentials for production delivery."
+        )
+    if mode == "DISABLED":
+        findings.append("SMS_GATEWAY_MODE=DISABLED: OTP requests are refused with HTTP 503.")
+    if mode == "CLOUD" and gateway.get("usable") and not gateway.get("device_pinned"):
+        findings.append(
+            "SMS_GATEWAY_DEVICE_ID is not set: the cloud server picks a random device of the "
+            "account, so a stale handset can receive the dispatch. Pin the OTP handset using "
+            "GET /3rdparty/v1/devices."
+        )
+
+    if report.get("mobile_masked"):
+        if report.get("owner_registered") is False:
+            findings.append(
+                "No farmer (role=owner) account matches this mobile number in the production "
+                "database: request-otp returns the generic 200 but sends no SMS and stores no "
+                "OTP, so verification always fails with 401 OTP_INVALID (reason=no_otp_row)."
+            )
+        latest = report.get("latest_otp")
+        if not latest:
+            findings.append("No OTP row was ever written for this number.")
+        else:
+            if latest.get("pepper_fingerprint_matches") is False:
+                findings.append(
+                    "The stored pepper fingerprint differs from this process: the OTP was hashed "
+                    "with a different/rotated pepper, so the code cannot verify (reason=pepper_mismatch)."
+                )
+            if latest.get("send_error_code"):
+                findings.append(
+                    f"The SMS gateway rejected the last OTP send ({latest['send_error_code']}, "
+                    f"category={latest.get('send_error_category')}, "
+                    f"http={latest.get('gateway_http_status')}): the row is SEND_FAILED and no code "
+                    "was delivered."
+                )
+            if latest.get("status") == "ACTIVE" and not latest.get("gateway_state"):
+                findings.append(
+                    "The ACTIVE OTP row has no gateway state recorded (issued before gateway "
+                    "diagnostics existed, or the send did not reach the gateway)."
+                )
+            if latest.get("expired"):
+                findings.append("The latest OTP has expired (5-minute TTL).")
+
+    devices = ((report.get("live_checks") or {}).get("devices") or {})
+    if devices.get("ok") and devices.get("count") == 0:
+        findings.append(
+            "The gateway account lists no devices: the SMS stays Pending on the cloud "
+            "server and is never handed to a handset."
+        )
+    status = ((report.get("live_checks") or {}).get("message_status") or {})
+    if status.get("ok"):
+        state = str(status.get("state") or "")
+        if state.lower() == "pending":
+            findings.append(
+                "The last message is still Pending at the gateway: it was queued but no handset "
+                "has sent it (device offline, wrong device, or device-side queue/rate limits)."
+            )
+        elif state.lower() == "failed":
+            findings.append(f"The gateway reports the last message as Failed ({status.get('reason')}).")
+        elif state.lower() in ("sent", "delivered", "processed"):
+            findings.append(
+                f"The gateway reports the last message as {state}: the handset handed the SMS to "
+                "the carrier. If it never arrived, check the handset/SIM/number (DND, wrong number)."
+            )
+    return findings
+
+
+@app.get("/api/admin/otp-diagnostics")
+@otp_diagnostics_required
+def otp_diagnostics_endpoint():
+    """Trace a farmer OTP request/verification failure to its exact cause.
+
+    Read-only and secret-free: states, counts, masked recipients and gateway
+    status codes only — never an OTP, hash, credential or full phone number.
+    ``?live=1`` additionally queries the gateway (device list + message state),
+    which is the only way to obtain delivery evidence.
+    """
+    mobile = request.args.get("mobile") or request.args.get("phone")
+    try:
+        events = int(request.args.get("events") or 5)
+    except (TypeError, ValueError):
+        events = 5
+    live = str(request.args.get("live") or "").strip().lower() in ("1", "true", "yes", "on")
+
+    report = otp_diagnostics(mobile, recent_limit=max(1, min(20, events)))
+    if live:
+        live_report: dict = {"requested": True}
+        # Live checks are bounded: they call the gateway synchronously, so a
+        # leaked token must not become a request amplifier (60/min per IP).
+        if not shared_rate_limit_ok(f"otp-diag-live:{request.remote_addr or 'unknown'}"):
+            live_report = {"ok": False, "code": "RATE_LIMITED",
+                           "reason": "too many live gateway checks; retry in a minute"}
+        else:
+            try:
+                live_report["devices"] = sms_gateway.list_devices(timeout=10)
+            except sms_gateway.SmsGatewayError as exc:
+                live_report["devices"] = {"ok": False, **exc.diagnostics()}
+            message_id = (request.args.get("message_id")
+                          or (report.get("latest_otp") or {}).get("gateway_message_id"))
+            if message_id:
+                try:
+                    live_report["message_status"] = sms_gateway.get_message_status(
+                        message_id, timeout=10)
+                except sms_gateway.SmsGatewayError as exc:
+                    live_report["message_status"] = {"ok": False, **exc.diagnostics()}
+            else:
+                live_report["message_status"] = {
+                    "ok": False, "code": "NO_MESSAGE_ID",
+                    "reason": "no gateway message id recorded for this number",
+                }
+        report["live_checks"] = live_report
+    report["findings"] = _otp_diagnostic_findings(report)
+    return jsonify(report)
 
 
 # ================================================================

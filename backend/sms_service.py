@@ -230,9 +230,15 @@ class AndroidSmsGatewayAdapter(SmsAdapter):
     def send(self, to_e164: str, body: str) -> tuple[bool, str | None, str | None]:
         try:
             result = self._client.send_text_message(to_e164, body)
-            return (True, result.get("message_id"), None)
+            # ``accepted`` (queued by the gateway) is the strongest signal a
+            # synchronous submit can give; real delivery is tracked by message
+            # state at the gateway (see sms_gateway.get_message_status).
+            accepted = bool(result.get("accepted", result.get("delivered")))
+            return (accepted, result.get("message_id"), None)
         except self._client.SmsGatewayError as exc:
-            logger.warning("AndroidSmsGateway FAILED → %s: %s", to_e164, exc.code)
+            # Recipient masked, no credentials or codes in the log line.
+            logger.warning("AndroidSmsGateway FAILED → %s: %s (%s)",
+                           self._client.mask_phone(to_e164), exc.code, exc.category)
             return (False, None, f"{exc.code}: {exc}")
 
 

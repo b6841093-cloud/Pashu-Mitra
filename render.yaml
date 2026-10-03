@@ -43,11 +43,26 @@ services:
         sync: false
       - key: SMS_GATEWAY_PASSWORD
         sync: false
+      # Pin the OTP handset. Without it the cloud server picks a device at
+      # random from the account (documented multi-device behaviour).
       - key: SMS_GATEWAY_DEVICE_ID
         sync: false
       - key: SMS_GATEWAY_TIMEOUT
         value: "15"
+      - key: SMS_GATEWAY_CONNECT_TIMEOUT
+        value: "5"
+      # OTPs must not sit in the device queue for hours; 5 minutes matches the
+      # OTP TTL, and priority 100 bypasses device-side delays/rate limits.
+      - key: SMS_GATEWAY_TTL_SECONDS
+        value: "300"
+      - key: SMS_GATEWAY_PRIORITY
+        value: "100"
+      # Stable pepper for OTP hashing. A per-process (ephemeral) pepper makes
+      # valid OTPs fail with 401 whenever more than one worker is running.
       - key: OTP_PEPPER
+        generateValue: true
+      # Secret for GET /api/admin/otp-diagnostics (delivery tracing).
+      - key: OTP_DIAG_TOKEN
         generateValue: true
       - key: OTP_TTL_SECONDS
         value: "300"

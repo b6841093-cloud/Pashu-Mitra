@@ -32,6 +32,7 @@ os.environ.setdefault("SIH_DB_PATH", os.path.join(os.path.dirname(__file__), "te
 import app as app_module  # noqa: E402  (import after env setup)
 import database  # noqa: E402
 import ivr_config  # noqa: E402
+import otp_service  # noqa: E402
 import sms_gateway  # noqa: E402
 
 FARMER_MOBILE = "9800000001"          # seeded owner (Rajesh Patil)
@@ -513,8 +514,14 @@ class SmsGatewayClientUnitTests(unittest.TestCase):
         self.assertEqual(kwargs["json"]["phoneNumbers"], ["+919800000001"])
         self.assertEqual(kwargs["json"]["deviceId"], "dev-123")
         self.assertNotIn("message", kwargs["json"])   # legacy shape not used
-        self.assertEqual(kwargs["timeout"], 9.0)
-        self.assertTrue(result["delivered"])
+        # (connect, read) timeout tuple — a hung TCP connect must not hold the
+        # Gunicorn worker for the full read timeout.
+        self.assertEqual(kwargs["timeout"], (5.0, 9.0))
+        # A gateway 2xx means queued, never delivered.
+        self.assertTrue(result["accepted"])
+        self.assertFalse(result["delivered"])
+        self.assertEqual(result["delivery_state"], "Pending")
+        self.assertEqual(result["http_status"], 200)
         self.assertEqual(result["message_id"], "abc")
 
     def test_g02_local_server_endpoint_uses_singular_path(self):
@@ -581,6 +588,96 @@ class SmsGatewayClientUnitTests(unittest.TestCase):
         self.assertNotIn("424242", sms_gateway.scrub("bad code 424242 for +919800000001"))
         self.assertIn("******0001", sms_gateway.mask_phone("+919800000001"))
 
+    # ------------------------------------------- URL/contract normalisation
+    def test_g11_base_url_shapes_resolve_to_the_documented_endpoints(self):
+        cases = {
+            "https://api.sms-gate.app": "https://api.sms-gate.app/3rdparty/v1/messages",
+            "https://api.sms-gate.app/": "https://api.sms-gate.app/3rdparty/v1/messages",
+            "https://api.sms-gate.app/3rdparty/v1": "https://api.sms-gate.app/3rdparty/v1/messages",
+            "https://api.sms-gate.app/3rdparty/v1/": "https://api.sms-gate.app/3rdparty/v1/messages",
+            "https://api.sms-gate.app/3rdparty/v1/messages":
+                "https://api.sms-gate.app/3rdparty/v1/messages",
+            "http://192.168.1.20:8080": "http://192.168.1.20:8080/message",
+            "http://192.168.1.20:8080/message": "http://192.168.1.20:8080/message",
+        }
+        for base, expected in cases.items():
+            with self.subTest(base=base):
+                with mock.patch.dict(os.environ, {"SMS_GATEWAY_BASE_URL": base}):
+                    config = sms_gateway.get_gateway_config()
+                self.assertEqual(config.messages_endpoint(), expected)
+                self.assertEqual(config.endpoint(), expected)  # backwards-compatible alias
+
+    def test_g12_status_and_device_endpoints_follow_the_documented_paths(self):
+        config = sms_gateway.get_gateway_config()
+        self.assertEqual(config.message_status_endpoint("zX1"),
+                         "https://api.sms-gate.app/3rdparty/v1/messages/zX1")
+        self.assertEqual(config.devices_endpoint(), "https://api.sms-gate.app/3rdparty/v1/devices")
+        with mock.patch.dict(os.environ, {"SMS_GATEWAY_BASE_URL": "http://192.168.1.20:8080"}):
+            local = sms_gateway.get_gateway_config()
+        # The local server has no device listing endpoint.
+        self.assertIsNone(local.devices_endpoint())
+
+    def test_g13_message_status_parsing_reports_gateway_state(self):
+        with mock.patch("sms_gateway.requests.get") as get:
+            get.return_value = mock.Mock(status_code=200, json=lambda: {
+                "id": "m1", "state": "Sent",
+                "states": {"Pending": "2026-10-03T10:00:00Z", "Sent": "2026-10-03T10:00:05Z"},
+                "recipients": [{"phoneNumber": "+919800000001", "state": "Sent"}],
+            })
+            status = sms_gateway.get_message_status("m1")
+            args, kwargs = get.call_args
+        self.assertEqual(args[0], "https://api.sms-gate.app/3rdparty/v1/messages/m1")
+        self.assertEqual(kwargs["auth"], ("user", "pass"))
+        self.assertTrue(status["ok"])
+        self.assertEqual(status["state"], "Sent")
+        self.assertIn("Sent", status["states"])
+        # Recipient numbers are masked even in diagnostics.
+        self.assertNotIn("+919800000001", str(status))
+
+    def test_g14_device_listing_whitelists_non_secret_fields(self):
+        with mock.patch("sms_gateway.requests.get") as get:
+            get.return_value = mock.Mock(status_code=200, json=lambda: [
+                {"id": "dev-1", "name": "Farm phone", "online": True,
+                 "pushToken": "SECRET-PUSH-TOKEN", "password": "SECRET-PASSWORD"},
+                {"id": "dev-2", "lastSeen": "2026-10-01T09:00:00Z"},
+            ])
+            devices = sms_gateway.list_devices()
+        self.assertTrue(devices["ok"])
+        self.assertEqual(devices["count"], 2)
+        self.assertEqual(devices["devices"][0]["id"], "dev-1")
+        self.assertTrue(devices["devices"][0]["online"])
+        rendered = str(devices)
+        self.assertNotIn("SECRET-PUSH-TOKEN", rendered)
+        self.assertNotIn("SECRET-PASSWORD", rendered)
+
+    def test_g15_error_diagnostics_are_structured_and_secret_free(self):
+        with mock.patch("sms_gateway.requests.post") as post:
+            post.return_value = mock.Mock(status_code=503,
+                                          json=lambda: {"error": "QueueLimitExceeded",
+                                                        "message": "queue limits exceeded: 120 / 100"},
+                                          text="queue limits exceeded")
+            with self.assertRaises(sms_gateway.SmsGatewayUnavailable) as ctx:
+                sms_gateway.send_text_message("+919800000001", "x")
+        diag = ctx.exception.diagnostics()
+        self.assertEqual(diag["category"], sms_gateway.CATEGORY_QUEUE_LIMIT)
+        self.assertEqual(diag["gateway_http_status"], 503)
+        self.assertEqual(diag["api_status"], 502)
+        self.assertTrue(diag["retryable"])
+        self.assertNotIn("pass", str(diag))
+
+    def test_g16_synchronously_failed_state_is_not_an_acceptance(self):
+        with mock.patch("sms_gateway.requests.post") as post:
+            post.return_value = mock.Mock(status_code=202,
+                                          json=lambda: {"id": "m9", "state": "Failed",
+                                                        "reason": "Invalid number"},
+                                          text="")
+            with self.assertRaises(sms_gateway.SmsGatewayRejected) as ctx:
+                sms_gateway.send_text_message("+919800000001", "x")
+        self.assertEqual(ctx.exception.code, "SMS_GATEWAY_REJECTED")
+        self.assertEqual(ctx.exception.upstream_status, 202)
+        # The (scrubbed) gateway reason is preserved for support.
+        self.assertIn("Invalid number", ctx.exception.reason)
+
 
 class OtpServiceUnitTests(unittest.TestCase):
     """Focused unit tests for OTP hashing and normalisation helpers."""
@@ -608,6 +705,321 @@ class OtpServiceUnitTests(unittest.TestCase):
         for bad in ("12345", "", None, "abcd", "1234567890123456"):
             self.assertIsNone(otp_service.normalize_mobile(bad), bad)
         self.assertEqual(ivr_config.local_number("+919800000001"), "9800000001")
+
+
+class FakeHttpGateway:
+    """Stands in for api.sms-gate.app at the ``requests`` level (no network).
+
+    Unlike :class:`FakeGateway` this exercises the *real* client — endpoint
+    building, Basic auth, payload shape, timeout and response parsing — while
+    capturing the request so the test can read the OTP exactly like a handset.
+    """
+
+    def __init__(self, status_code=202, payload=None, raises=None):
+        self.status_code = status_code
+        self.payload = payload if payload is not None else {"id": "gw-1", "state": "Pending"}
+        self.raises = raises
+        self.calls: list[tuple[str, dict]] = []
+
+    def post(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        if self.raises is not None:
+            raise self.raises
+        return self.response()
+
+    def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return self.response()
+
+    def response(self):
+        return mock.Mock(status_code=self.status_code, json=lambda: self.payload,
+                         text=str(self.payload))
+
+    @property
+    def last_code(self) -> str | None:
+        if not self.calls:
+            return None
+        body = self.calls[-1][1].get("json") or {}
+        text = (body.get("textMessage") or {}).get("text", "")
+        match = re.search(r"\b(\d{6})\b", text)
+        return match.group(1) if match else None
+
+    @property
+    def last_body(self) -> dict:
+        return (self.calls[-1][1].get("json") or {}) if self.calls else {}
+
+    @property
+    def last_url(self) -> str | None:
+        return self.calls[-1][0] if self.calls else None
+
+
+class OtpDeliveryEvidenceTests(unittest.TestCase):
+    """Regression tests: gateway failure handling, delivery evidence, 401 tracing."""
+
+    def setUp(self):
+        database.init_db()
+        self.client = app_module.app.test_client()
+        self.http = FakeHttpGateway()
+        self._post = mock.patch("sms_gateway.requests.post", side_effect=self.http.post)
+        self._post.start()
+        self.addCleanup(self._post.stop)
+        self._env = mock.patch.dict(os.environ, {
+            "SMS_GATEWAY_MODE": "CLOUD",
+            "SMS_GATEWAY_BASE_URL": "https://api.sms-gate.app/3rdparty/v1",
+            "SMS_GATEWAY_USERNAME": "test-user",
+            "SMS_GATEWAY_PASSWORD": "test-pass",
+            "SMS_GATEWAY_DEVICE_ID": "dev-1",
+            "OTP_RESEND_COOLDOWN_SECONDS": "60",
+        }, clear=False)
+        self._env.start()
+        self.addCleanup(self._env.stop)
+        self._reset_otp_tables()
+
+    def _reset_otp_tables(self):
+        conn = database.get_db()
+        conn.execute("DELETE FROM otp_codes")
+        conn.execute("DELETE FROM otp_request_log")
+        conn.commit()
+        conn.close()
+
+    def _request_otp(self, mobile=FARMER_MOBILE):
+        return self.client.post("/api/auth/farmer/request-otp", json={"mobile": mobile})
+
+    def _verify_otp(self, code, mobile=FARMER_MOBILE):
+        return self.client.post("/api/auth/farmer/verify-otp", json={"mobile": mobile, "otp": code})
+
+    def _row(self, mobile=FARMER_MOBILE_E164):
+        conn = database.get_db()
+        row = conn.execute("SELECT * FROM otp_codes WHERE mobile_e164=? ORDER BY id DESC LIMIT 1",
+                           (mobile,)).fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def _log_rows(self, mobile=FARMER_MOBILE_E164):
+        conn = database.get_db()
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM otp_request_log WHERE mobile_e164=? ORDER BY id", (mobile,)).fetchall()]
+        conn.close()
+        return rows
+
+    # ------------------------------------------------ 1. gateway failures
+    def test_31_gateway_auth_failure_is_reported_and_recorded(self):
+        self.http.status_code = 401
+        self.http.payload = {"message": "unauthorized"}
+        response = self._request_otp()
+        self.assertEqual(response.status_code, 502)
+        body = response.get_json()
+        self.assertEqual(body["code"], "SMS_GATEWAY_AUTH_FAILED")
+        self.assertNotIn("ok", body)
+        row = self._row()
+        self.assertEqual(row["status"], "SEND_FAILED")
+        self.assertEqual(row["send_error_code"], "SMS_GATEWAY_AUTH_FAILED")
+        self.assertEqual(row["send_error_category"], "AUTH")
+        self.assertEqual(row["gateway_http_status"], 401)
+        self.assertNotIn("test-pass", str(body))
+        self.assertNotIn("test-user", str(body))
+
+    def test_32_gateway_server_rate_limit_and_timeout_failures(self):
+        cases = [
+            (500, None, "SMS_GATEWAY_UNAVAILABLE", "SERVER"),
+            (429, None, "SMS_GATEWAY_UNAVAILABLE", "RATE_LIMIT"),
+            (503, {"error": "QueueLimitExceeded", "message": "queue limits exceeded: 120 / 100"},
+             "SMS_GATEWAY_UNAVAILABLE", "QUEUE_LIMIT"),
+            (400, {"message": "Validation error: invalid phone number"},
+             "SMS_GATEWAY_REJECTED", "INVALID_REQUEST"),
+        ]
+        for status, payload, code, category in cases:
+            with self.subTest(status=status):
+                self._reset_otp_tables()
+                self.http.calls.clear()
+                self.http.status_code = status
+                self.http.payload = payload or {"message": "gateway failure"}
+                response = self._request_otp()
+                body = response.get_json()
+                self.assertGreaterEqual(response.status_code, 500)
+                self.assertEqual(body["code"], code)
+                self.assertNotIn("ok", body)
+                self.assertEqual(self._row()["status"], "SEND_FAILED")
+                self.assertEqual(self._row()["send_error_category"], category)
+
+        # A connection timeout is reported, never swallowed.
+        self._reset_otp_tables()
+        self.http.raises = sms_gateway.requests.exceptions.Timeout()
+        response = self._request_otp()
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.get_json()["code"], "SMS_GATEWAY_UNAVAILABLE")
+        self.assertEqual(self._row()["send_error_category"], "TIMEOUT")
+
+    def test_33_a_queued_message_is_not_reported_as_delivered(self):
+        response = self._request_otp()
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertTrue(body["ok"])
+        # Neutral, conditional wording — never "OTP sent to +91 …".
+        self.assertIn("If this mobile number is registered", body["message"])
+        self.assertIs(body["delivery_confirmed"], False)
+        # The OTP is never returned by the API.
+        code = self.http.last_code
+        self.assertIsNotNone(code)
+        self.assertNotIn(code, str(body))
+        # The submission is recorded with the gateway's evidence.
+        row = self._row()
+        row_json = str(row)
+        self.assertEqual(row["gateway_message_id"], "gw-1")
+        self.assertEqual(row["gateway_state"], "Pending")
+        self.assertEqual(row["gateway_http_status"], 202)
+        self.assertEqual(row["gateway_device_configured"], 1)
+        self.assertNotIn(code, row_json)
+        self.assertNotIn("test-pass", row_json)
+        sent = [r for r in self._log_rows() if r["outcome"] == "SENT"]
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]["gateway_state"], "Pending")
+        self.assertEqual(sent[0]["gateway_http_status"], 202)
+
+    def test_34_unknown_number_still_never_reports_a_dispatch(self):
+        known = self._request_otp(FARMER_MOBILE)
+        self._reset_otp_tables()
+        conn = database.get_db()
+        conn.execute("DELETE FROM otp_request_log")
+        conn.commit()
+        conn.close()
+        unknown = self._request_otp("9999999999")
+        # Identical response (no account enumeration) …
+        self.assertEqual(known.status_code, unknown.status_code)
+        self.assertEqual(known.get_json(), unknown.get_json())
+        # … but nothing was sent and no OTP row exists, so verification reports
+        # the exact internal reason while the API stays generic.
+        self.assertEqual(self._row("+919999999999"), None)
+        with self.assertRaises(otp_service.OtpError) as ctx:
+            otp_service.verify_otp("9999999999", "123456")
+        self.assertEqual(ctx.exception.code, "OTP_INVALID")
+        self.assertEqual(ctx.exception.reason, "no_otp_row")
+        response = self._verify_otp("123456", mobile="9999999999")
+        self.assertEqual(response.status_code, 401)
+        self.assertNotIn("reason", response.get_json())
+
+    # ------------------------------------- 2. valid / invalid verification
+    def test_35_valid_otp_logs_in_and_invalid_otp_is_rejected(self):
+        self.assertEqual(self._request_otp().status_code, 200)
+        code = self.http.last_code
+        wrong = "000000" if code != "000000" else "111111"
+
+        invalid = self._verify_otp(wrong)
+        self.assertEqual(invalid.status_code, 401)
+        self.assertEqual(invalid.get_json()["code"], "OTP_INVALID")
+        self.assertEqual(self._row()["attempts"], 1)
+
+        valid = self._verify_otp(code)
+        self.assertEqual(valid.status_code, 200)
+        token = valid.get_json()["token"]
+        me = self.client.get("/api/users/me", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(me.status_code, 200)
+        self.assertEqual(me.get_json()["mobile"], FARMER_MOBILE)
+
+        replay = self._verify_otp(code)
+        self.assertEqual(replay.status_code, 401)
+        self.assertEqual(replay.get_json()["code"], "OTP_ALREADY_USED")
+
+    def test_36_mobile_variants_resolve_to_one_normalised_otp_row(self):
+        self.assertEqual(self._request_otp("09800000001").status_code, 200)
+        self.assertEqual(self._row()["mobile_e164"], FARMER_MOBILE_E164)
+        conn = database.get_db()
+        count = conn.execute("SELECT COUNT(*) c FROM otp_codes WHERE mobile_e164=?",
+                             (FARMER_MOBILE_E164,)).fetchone()["c"]
+        conn.close()
+        self.assertEqual(count, 1)
+        # Verification accepts the same number in a different notation.
+        response = self._verify_otp(self.http.last_code, mobile="+91 98000 00001")
+        self.assertEqual(response.status_code, 200)
+
+    def test_37_rotated_pepper_is_diagnosed_as_pepper_mismatch(self):
+        self.assertEqual(self._request_otp().status_code, 200)
+        code = self.http.last_code
+        # A redeploy that generates a new OTP_PEPPER invalidates in-flight codes:
+        # the farmer's correct OTP is rejected, and the reason must be exact.
+        with mock.patch.dict(os.environ, {"OTP_PEPPER": "rotated-pepper-value"}):
+            with self.assertRaises(otp_service.OtpError) as ctx:
+                otp_service.verify_otp(FARMER_MOBILE, code)
+            self.assertEqual(ctx.exception.code, "OTP_INVALID")
+            self.assertEqual(ctx.exception.reason, "pepper_mismatch")
+            response = self._verify_otp(code)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.get_json()["code"], "OTP_INVALID")
+        self.assertNotIn("reason", response.get_json())
+        self.assertNotIn("pepper", str(response.get_json()))
+
+    def test_38_production_refuses_an_ephemeral_pepper(self):
+        with mock.patch.dict(os.environ, {"OTP_PEPPER": "", "SIH_SECRET_KEY": ""}), \
+                mock.patch.object(sms_gateway, "is_production", return_value=True):
+            config = self.client.get("/api/auth/farmer/config").get_json()
+            self.assertFalse(config["otp_login_enabled"])
+            self.assertFalse(config["pepper_stable"])
+            response = self._request_otp()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.get_json()["code"], "OTP_PEPPER_UNSTABLE")
+        self.assertNotIn("ok", response.get_json())
+        self.assertIsNone(self._row())
+
+    # --------------------------------------------- 3. diagnostics endpoint
+    def test_39_diagnostics_endpoint_is_guarded_and_secret_free(self):
+        self.assertEqual(self._request_otp().status_code, 200)
+        code = self.http.last_code
+        with mock.patch.dict(os.environ, {"OTP_DIAG_TOKEN": "diag-secret"}):
+            self.assertEqual(self.client.get("/api/admin/otp-diagnostics").status_code, 401)
+            self.assertEqual(
+                self.client.get("/api/admin/otp-diagnostics",
+                                headers={"X-Diag-Token": "wrong"}).status_code, 401)
+            response = self.client.get(
+                f"/api/admin/otp-diagnostics?mobile={FARMER_MOBILE}",
+                headers={"X-Diag-Token": "diag-secret"})
+            self.assertEqual(response.status_code, 200)
+            report = response.get_json()
+            rendered = str(report)
+            self.assertNotIn(code, rendered)
+            self.assertNotIn("test-pass", rendered)
+            self.assertNotIn(FARMER_MOBILE_E164, rendered)      # masked only
+            self.assertIn("********0001", rendered)
+            self.assertEqual(report["latest_otp"]["status"], "ACTIVE")
+            self.assertEqual(report["latest_otp"]["gateway_message_id"], "gw-1")
+            self.assertTrue(report["latest_otp"]["pepper_fingerprint_matches"])
+            self.assertTrue(report["owner_registered"])
+            self.assertIn("database", report)
+            self.assertEqual(report["mobile_masked"], "********0001")
+            # Unknown numbers are reported as such (no OTP row anywhere).
+            unknown = self.client.get("/api/admin/otp-diagnostics?mobile=9999999999",
+                                      headers={"X-Diag-Token": "diag-secret"}).get_json()
+            self.assertFalse(unknown["owner_registered"])
+            self.assertIsNone(unknown["latest_otp"])
+            self.assertTrue(any("No farmer (role=owner) account" in f for f in unknown["findings"]))
+
+    def test_40_live_checks_surface_pending_device_evidence(self):
+        self.assertEqual(self._request_otp().status_code, 200)
+        with mock.patch.dict(os.environ, {"OTP_DIAG_TOKEN": "diag-secret"}), \
+                mock.patch("sms_gateway.requests.get") as get:
+            get.return_value = mock.Mock(status_code=200, json=lambda: {"id": "gw-1",
+                                                                        "state": "Pending"})
+            report = self.client.get(
+                f"/api/admin/otp-diagnostics?mobile={FARMER_MOBILE}&live=1",
+                headers={"X-Diag-Token": "diag-secret"}).get_json()
+        self.assertTrue(report["live_checks"]["message_status"]["ok"])
+        self.assertEqual(report["live_checks"]["message_status"]["state"], "Pending")
+        self.assertTrue(any("still Pending" in f for f in report["findings"]))
+
+    def test_41_diagnostic_columns_exist_after_migration(self):
+        conn = database.get_db()
+        code_columns = {row["name"] for row in conn.execute("PRAGMA table_info(otp_codes)").fetchall()}
+        log_columns = {row["name"] for row in
+                       conn.execute("PRAGMA table_info(otp_request_log)").fetchall()}
+        conn.close()
+        for column in ("gateway_message_id", "gateway_state", "gateway_http_status",
+                       "send_error_code", "send_error_category", "pepper_fingerprint"):
+            self.assertIn(column, code_columns)
+        for column in ("gateway_http_status", "gateway_state", "error_category"):
+            self.assertIn(column, log_columns)
+        # The migration must be re-runnable (two Gunicorn workers boot together).
+        conn = database.get_db()
+        database.ensure_otp_tables(conn)
+        conn.close()
 
 
 if __name__ == "__main__":

@@ -15,10 +15,10 @@ prescription, lab report and notification is untouched.
 
 | Layer | File | Change |
 |---|---|---|
-| SMS gateway client | `backend/sms_gateway.py` *(new)* | Official capcom6 Cloud/Local Server REST client: Basic auth, documented `textMessage.text` + `phoneNumbers` payload, timeout, safe error mapping, no credential/OTP logging |
+| SMS gateway client | `backend/sms_gateway.py` *(new)* | Official capcom6 Cloud/Local Server REST client: Basic auth, documented `textMessage.text` + `phoneNumbers` payload, connect/read timeouts, URL normalisation, message-status and device-listing helpers, structured error categories, safe error mapping, no credential/OTP logging |
 | OTP service | `backend/otp_service.py` *(new)* | CSPRNG six-digit codes, salted + peppered PBKDF2 hashes, 5-minute expiry, 5 attempts, single-use atomic consumption, 60-second resend cooldown, per-mobile / per-IP / per-mobile-failure rate limits, anti-enumeration responses |
-| Database | `backend/database.py` | Additive `otp_codes` + `otp_request_log` tables and indexes (`ensure_otp_tables`, part of `SCHEMA`) |
-| API | `backend/app.py` | `GET /api/auth/farmer/config`, `POST /api/auth/farmer/request-otp`, `POST /api/auth/farmer/resend-otp`, `POST /api/auth/farmer/verify-otp`, `POST /api/admin/sms-gateway/test`; `/api/health` and `/api/admin/sms-log` now report secret-free gateway status |
+| Database | `backend/database.py` | Additive `otp_codes` + `otp_request_log` tables and indexes (`ensure_otp_tables`, part of `SCHEMA`), plus additive gateway-diagnostics columns (message id/state, HTTP status, error category, pepper fingerprint) |
+| API | `backend/app.py` | `GET /api/auth/farmer/config`, `POST /api/auth/farmer/request-otp`, `POST /api/auth/farmer/resend-otp`, `POST /api/auth/farmer/verify-otp`, `POST /api/admin/sms-gateway/test`, `GET /api/admin/otp-diagnostics`; `/api/health` and `/api/admin/sms-log` now report secret-free gateway status |
 | Notification SMS | `backend/sms_service.py` | Optional `SMS_PROVIDER_MODE=GATEWAY` adapter that routes the existing notification queue through the same gateway (opt-in; default behaviour unchanged) |
 | Phone normalisation | `backend/ivr_config.py` | `normalize_indian_number` also accepts the national `0`-prefixed form (`09800000001`) |
 | Farmer login UI | `frontend/app.js`, `frontend/style.css` | Mobile-number OTP screen (send → verify → resend countdown → change number), loading/success/error states, localisation for English / मराठी / हिन्दी / తెలుగు; password form kept as a fallback route `#/login/owner/password` |
@@ -40,14 +40,23 @@ No ML code, ML models, or unrelated dashboard screens were modified.
 ```json
 {
   "ok": true,
-  "message": "If this mobile number is registered, an OTP has been sent.",
+  "message": "If this mobile number is registered, an OTP has been sent. It is valid for 5 minutes.",
+  "delivery_confirmed": false,
   "expires_in": 300,
   "resend_after": 60
 }
 ```
+`delivery_confirmed` is always `false`: the endpoint reports that the *request
+was accepted*. When the number belongs to a farmer the SMS is submitted to the
+gateway; when it does not, no SMS is dispatched at all — the response is the
+same on purpose (no account enumeration) and the UI uses the same conditional
+wording, so a delivery is never claimed without evidence.
+
 Errors: `400 INVALID_MOBILE`, `429 COOLDOWN_ACTIVE` / `RATE_LIMITED` (with
 `retry_after`), `502 SMS_GATEWAY_UNAVAILABLE` / `SMS_GATEWAY_AUTH_FAILED` /
-`SMS_GATEWAY_REJECTED`, `503 SMS_GATEWAY_NOT_CONFIGURED`.
+`SMS_GATEWAY_REJECTED`, `503 SMS_GATEWAY_NOT_CONFIGURED` /
+`OTP_PEPPER_UNSTABLE` (a stable `OTP_PEPPER` is missing in production, which
+would make every issued code unverifiable).
 
 ### `POST /api/auth/farmer/resend-otp`
 Same contract; always enforces the 60-second cooldown.
@@ -70,7 +79,22 @@ Public, non-secret UI settings: `otp_login_enabled`, `otp_length`,
 
 ### `POST /api/admin/sms-gateway/test` (role `govt`)
 Sends one **fixed-text** test SMS so a deployment team can verify real delivery
-without exposing OTPs. Body `{"mobile": "…"}`.
+without exposing OTPs. Body `{"mobile": "…"}`. The response reports the raw
+gateway HTTP status, the queued message id/state and an immediate
+`status_check` (`Pending` → `Processed` → `Sent` → `Delivered`/`Failed`):
+`accepted: true` means *queued*, never delivered.
+
+### `GET /api/admin/otp-diagnostics?mobile=…&live=1&events=5`
+Access: a `govt` JWT **or** the `X-Diag-Token` header matching `OTP_DIAG_TOKEN`
+(falls back to `IVR_WEBHOOK_SECRET`). Returns a secret-free trace of the OTP
+flow: pepper source/stability/fingerprint match, database path/mount
+configuration, whether the mobile is a registered farmer, the latest OTP row
+(status, attempts, expiry, age, gateway mode/state/message id/HTTP status,
+send-error code/category), the last events, and — with `live=1` — the gateway
+device list and the real message state. `findings` turns that into
+plain-language causes (no OTP row, rotated pepper, send failure, no device,
+message still `Pending`, …). No OTP, hash, credential or full phone number is
+ever returned.
 
 The OTP value is never returned by any endpoint, never written to a log, and
 never stored in `localStorage` — verification state lives only in SQLite.
@@ -95,14 +119,30 @@ Content-Type: application/json
 }
 ```
 
-* 200/201/202 → the gateway accepted (queued) the message; `id`/`state` are read
-  from the response and logged.
-* 401/403 → `SMS_GATEWAY_AUTH_FAILED`, 429/5xx → `SMS_GATEWAY_UNAVAILABLE`
-  (retryable), other 4xx → `SMS_GATEWAY_REJECTED`. The scrubbed remote reason is
-  logged, never the message body.
-* Requests use `SMS_GATEWAY_TIMEOUT` (default 15 s). Optional documented fields
+* 200/201/202 → the gateway **queued** the message; `id`/`state` (and the raw
+  HTTP status) are stored on the OTP row and logged. Queued is *not* delivered:
+  the documented lifecycle is `Pending` → `Processed` → `Sent` →
+  `Delivered`/`Failed`, and a message stays `Pending` until a handset picks it
+  up (the public cloud server rejects messages still pending after 24 h). Use
+  `GET /3rdparty/v1/messages/{id}` (admin diagnostics `live=1`, or
+  `sms_gateway.get_message_status`) to obtain delivery evidence — the app never
+  guesses `Delivered`.
+* A 2xx that already carries a terminal `Failed` state is treated as a
+  rejection, never as success.
+* 401/403 → `SMS_GATEWAY_AUTH_FAILED`, 429 → `SMS_GATEWAY_UNAVAILABLE`
+  (`RATE_LIMIT`), 503 + `QueueLimitExceeded` → `SMS_GATEWAY_UNAVAILABLE`
+  (`QUEUE_LIMIT`), other 5xx → `SMS_GATEWAY_UNAVAILABLE` (`SERVER`), 400 →
+  `SMS_GATEWAY_REJECTED` (`INVALID_REQUEST`). Each error carries a stable
+  `code`, a coarse `category`, the raw gateway HTTP status and a *scrubbed*
+  remote reason — never the message body, credentials or full number.
+* Requests use `SMS_GATEWAY_TIMEOUT` (read, default 15 s) and
+  `SMS_GATEWAY_CONNECT_TIMEOUT` (default 5 s). Optional documented fields
   (`simNumber`, `ttl`, `priority`) are only sent when configured; nothing is
   invented.
+* Device routing: with `SMS_GATEWAY_DEVICE_ID` unset the cloud server picks a
+  device **at random from the account**, so an old handset can take the
+  dispatch. Set `SMS_GATEWAY_DEVICE_ID` to the OTP handset (list the account's
+  devices with `GET /3rdparty/v1/devices`).
 * For LAN mode, set `SMS_GATEWAY_BASE_URL=http://<device-ip>:8080` (the client
   then posts to the documented `/message` path) and
   `SMS_GATEWAY_ALLOW_INSECURE=true`.
@@ -146,10 +186,13 @@ exists for local development only.
 | Variable | Required | Value / notes |
 |---|---|---|
 | `SMS_GATEWAY_MODE` | yes | `CLOUD` |
+| `SMS_GATEWAY_CONNECT_TIMEOUT` | no | Default `5` s (TCP connect) |
+| `SMS_GATEWAY_TTL_SECONDS` / `SMS_GATEWAY_PRIORITY` | recommended | `300` / `100` for OTPs (drop stale codes, bypass device rate limits) |
+| `OTP_DIAG_TOKEN` | recommended | Shared secret for `GET /api/admin/otp-diagnostics` |
 | `SMS_GATEWAY_BASE_URL` | yes | `https://api.sms-gate.app/3rdparty/v1` |
 | `SMS_GATEWAY_USERNAME` | yes | Cloud Server credentials shown in the Android app |
 | `SMS_GATEWAY_PASSWORD` | yes | (secret, `sync: false`) |
-| `SMS_GATEWAY_DEVICE_ID` | no | Only if messages must go to one specific handset |
+| `SMS_GATEWAY_DEVICE_ID` | recommended | Pin the handset that sends OTPs (otherwise the cloud chooses randomly) |
 | `SMS_GATEWAY_TIMEOUT` | no | Default `15` seconds |
 | `SMS_GATEWAY_SIM_NUMBER` / `SMS_GATEWAY_TTL_SECONDS` / `SMS_GATEWAY_PRIORITY` | no | Omitted from the request when blank |
 | `SMS_GATEWAY_ALLOW_INSECURE` | no | `true` only for a trusted-LAN `http://` local server |
@@ -205,20 +248,39 @@ Rollback:
 ## 7. Deployment steps
 
 1. In the Android SMS Gateway app: enable **Cloud Server**, tap **Online**, and
-   copy the Basic-auth username/password.
+   copy the Basic-auth username/password. Keep the app running (FCM/SSE or the
+   15-minute polling fallback) and grant the SMS permission.
 2. In the Render dashboard → `pashu-shield-backend` → Environment, add
    `SMS_GATEWAY_MODE=CLOUD`, `SMS_GATEWAY_BASE_URL=https://api.sms-gate.app/3rdparty/v1`,
    `SMS_GATEWAY_USERNAME`, `SMS_GATEWAY_PASSWORD`, and confirm `OTP_PEPPER` exists
    (`render.yaml` generates it; if it was already deployed without it, add a
-   random 32+ character value).
+   random 32+ character value) — without a stable pepper every issued OTP is
+   unverifiable and OTP login is refused with `OTP_PEPPER_UNSTABLE`.
+   Also confirm `SIH_DB_PATH=/var/data/animal_health.db` and that the Render
+   disk is attached: on an ephemeral path the SQLite file (and every in-flight
+   OTP) is wiped on each deploy/restart.
+3. Pin the OTP handset:
+   ```bash
+   curl -s -u "$SMS_GATEWAY_USERNAME:$SMS_GATEWAY_PASSWORD" \
+     https://api.sms-gate.app/3rdparty/v1/devices | jq
+   # copy the "id" of the phone that must send the OTPs
+   ```
+   and set `SMS_GATEWAY_DEVICE_ID` to it (recommended: `SMS_GATEWAY_TTL_SECONDS=300`,
+   `SMS_GATEWAY_PRIORITY=100`).
 3. Deploy the branch (`main` after merge). `render.yaml` also carries the new keys
    for blueprint-based deploys; secrets stay `sync: false`.
-4. Verify configuration and delivery:
+4. Deploy, then verify configuration and delivery evidence:
    ```bash
-   curl -s https://pashu-shield-backend-hjgr.onrender.com/api/health | jq .sms_gateway
-   # → {"mode":"CLOUD","configured":true,"usable":true}
+   curl -s https://pashu-shield-backend-hjgr.onrender.com/api/health | jq '.sms_gateway, .farmer_otp_login'
+   # → mode CLOUD, usable true, pepper_stable true, persistent_mount_configured true
 
    curl -s https://pashu-shield-backend-hjgr.onrender.com/api/auth/farmer/config | jq
+
+   # Trace one real attempt (registered farmer mobile):
+   curl -s "https://pashu-shield-backend-hjgr.onrender.com/api/admin/otp-diagnostics?mobile=<10-digit>&live=1" \
+     -H "X-Diag-Token: $OTP_DIAG_TOKEN" | jq '.findings, .latest_otp, .live_checks'
+   # → findings name the exact cause; latest_otp.gateway_state must move
+   #   Pending → Sent/Delivered for a real delivery.
    ```
 5. Government-only real delivery test:
    ```bash
@@ -226,7 +288,9 @@ Rollback:
      -H "Authorization: Bearer <govt-token>" -H 'Content-Type: application/json' \
      -d '{"mobile":"<your test handset>"}'
    ```
-   `delivered: true` means the gateway queued the SMS for the Android device.
+   `accepted: true` means the gateway queued the SMS for a handset; the returned
+   `status_check.state` (`Pending`/`Processed`/`Sent`/`Delivered`/`Failed`) is
+   the evidence. There is no "delivered" claim on acceptance.
 6. End-to-end farmer login: open
    `https://pashu-mitra-smoky.vercel.app/#/login/owner`, enter a registered farmer
    mobile (seeded demo: `9800000001`), receive the SMS, enter the code, confirm
@@ -239,20 +303,27 @@ Rollback:
 
 ```bash
 cd backend
-../backend/.venv/bin/python -m unittest test_farmer_otp_login -v   # 43 tests
+../backend/.venv/bin/python -m unittest test_farmer_otp_login -v   # 60 tests
 ../backend/.venv/bin/python -m unittest test_regression test_all_features -v
 
 cd ../   # repository root
-node --test frontend/tests/otp_login_ui.test.mjs                  # 8 UI tests
+node --test frontend/tests/otp_login_ui.test.mjs                  # 11 UI tests
 node --check frontend/app.js && node --check frontend/sw.js
 ```
 
-The OTP suite stubs the SMS gateway and covers: valid OTP, incorrect OTP,
-malformed OTP, expired OTP, replayed OTP, attempt limit/lock, cooldown, resend,
-per-mobile and per-IP rate limits, gateway unavailability/auth failure/not
-configured, unknown numbers, other roles, no plaintext storage, single-use
-consumption, log redaction, config/health secrecy, and preservation of
-Vet/Govt/Lab password login plus farmer livestock/case access.
+The OTP suite stubs the SMS gateway at the HTTP boundary (the real client still
+builds the request, so the endpoint, Basic auth, payload and timeout are
+covered) and asserts: valid OTP login, incorrect/replayed/expired/locked OTP,
+attempt limits, cooldown, resend, per-mobile and per-IP rate limits, gateway
+auth/server/rate-limit/queue-limit/validation failures (each must return
+502/503 and retire the row as `SEND_FAILED` — never `200`), queued-message
+evidence (message id/state/HTTP status recorded, `delivery_confirmed: false`),
+unknown numbers and other roles, no plaintext storage, single-use consumption,
+pepper-rotation diagnosis (`pepper_mismatch`), mobile-number normalisation
+equivalence, production refusal of an ephemeral pepper, the guarded
+diagnostics endpoint, the additive schema migration, log redaction and
+config/health secrecy, plus preservation of Vet/Govt/Lab password login and
+farmer livestock/case access.
 
 **Real SMS delivery has not been verified from this environment** — no gateway
 credentials or Android handset were available. Step 4/5 above is the pending
