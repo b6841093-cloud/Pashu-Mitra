@@ -434,3 +434,22 @@ body.farmer-portal .owner-bottom-nav .nav-item .ic{font-size:19px;}
 .ml-status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;}
 .ml-status-dot.online{background:#43a047;}
 .ml-status-dot.offline{background:#e53935;}
+
+/* ---------- farmer OTP login ---------- */
+.otp-card-title{font-weight:800;font-size:15px;color:var(--primary-dark);margin:0 0 14px;}
+.otp-mobile-row{display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #d7dbec;border-radius:12px;padding:0 12px;}
+.otp-mobile-row:focus-within{border-color:var(--primary-light);}
+.otp-mobile-row .otp-prefix{font-weight:700;color:var(--muted);font-size:15px;padding-right:8px;border-right:1px solid #e4e7f3;}
+.otp-mobile-row input{border:none!important;box-shadow:none!important;flex:1;min-width:0;padding:13px 0!important;font-size:16px;letter-spacing:0.5px;background:transparent;}
+.otp-mobile-row input:focus{outline:none;}
+.otp-hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.45;}
+.otp-code-step{margin-top:18px;border-top:1px dashed #dfe3f1;padding-top:16px;}
+.otp-sent-note{background:var(--green-bg);color:#0f7a51;border-radius:12px;padding:10px 12px;font-size:12.5px;font-weight:600;margin-bottom:14px;line-height:1.45;}
+.otp-code-input{letter-spacing:10px;text-align:center;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;}
+.otp-resend-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap;}
+.otp-resend-hint{font-size:12.5px;color:var(--muted);}
+.otp-unavailable{background:var(--orange-bg);color:#8a5306;border-radius:12px;padding:10px 12px;font-size:12.5px;font-weight:600;margin:0 0 14px;line-height:1.45;}
+.otp-fallback{margin-top:4px;}
+.btn.is-busy{opacity:0.75;cursor:progress;}
+body.farmer-portal .otp-resend-row .btn-sm{min-height:40px;}
+@media (max-width:380px){.otp-code-input{letter-spacing:7px;font-size:20px;}}

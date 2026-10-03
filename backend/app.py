@@ -34,6 +34,12 @@ from ivr_service import (
 )
 import weather
 import animal_ai
+import sms_gateway
+from otp_service import (
+    OtpError, otp_login_available, public_settings as otp_public_settings,
+    request_otp as request_farmer_otp, resend_otp as resend_farmer_otp,
+    verify_otp as verify_farmer_otp,
+)
 from sms_service import send_sms, send_sms_urgent, get_sent_log, get_dead_letters, get_worker_stats, get_sms_provider_info
 from push_service import is_push_configured, get_public_key, push_notification
 from disease_knowledge import DiseaseKnowledge
@@ -322,11 +328,22 @@ def health():
         database_ok = True
     except sqlite3.Error:
         database_ok = False
+    gateway = sms_gateway.gateway_public_info()
     return jsonify({
         "status": "ok" if database_ok else "degraded",
         "service": "pashu-shield-backend",
         "database": "ok" if database_ok else "unavailable",
         "provider_mode": get_ivr_settings().provider_mode,
+        # Secret-free SMS gateway status (no credentials, no endpoint URL).
+        "sms_gateway": {
+            "mode": gateway["mode"],
+            "configured": gateway["configured"],
+            "usable": gateway["usable"],
+        },
+        "farmer_otp_login": {
+            "enabled": otp_login_available(),
+            "password_fallback_enabled": _farmer_password_fallback_allowed(),
+        },
     }), 200 if database_ok else 503
 
 
@@ -417,6 +434,157 @@ def login():
     conn.commit()
     conn.close()
     return jsonify({"token": token, "user": public_user(user)})
+
+
+# ------------------------------------------- farmer OTP login (mobile) ----
+# Farmers sign in with a mobile number + SMS OTP issued through the capcom6
+# Android SMS Gateway (Cloud Server). Vet / Govt / Lab keep password login.
+# See otp_service.py for the security model and sms_gateway.py for the API
+# contract. OTP values are never returned by these endpoints nor logged.
+
+def _client_ip():
+    """Best-effort client IP for rate limiting (Render terminates TLS)."""
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    candidate = forwarded.split(",")[0].strip() if forwarded else (request.remote_addr or "")
+    if not candidate:
+        return None
+    try:
+        return str(ip_address(candidate))
+    except ValueError:
+        return None
+
+
+def _farmer_password_fallback_allowed() -> bool:
+    """Whether the legacy farmer password form stays reachable as a fallback."""
+    raw = os.environ.get("FARMER_PASSWORD_FALLBACK")
+    if raw is None:
+        return True
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _audit_otp_event(action, *, user_id=None, mobile=None, details=None):
+    """Audit OTP lifecycle events. Mobile numbers are masked, codes never logged."""
+    safe_mobile = sms_gateway.mask_phone(mobile) if mobile else None
+    payload = dict(details or {})
+    if safe_mobile:
+        payload["mobile"] = safe_mobile
+    try:
+        conn = get_db()
+        audit_log(conn, action, "user", user_id or "-", actor_id=user_id,
+                  actor_role="owner", details=payload, ip=_client_ip())
+        conn.commit()
+        conn.close()
+    except Exception:  # never block login on an audit failure
+        logging.getLogger(__name__).warning("Failed to write %s audit event", action)
+
+
+@app.get("/api/auth/farmer/config")
+def farmer_auth_config():
+    """Public, non-secret OTP login settings used by the farmer login screen."""
+    settings = otp_public_settings()
+    settings["password_fallback_enabled"] = _farmer_password_fallback_allowed()
+    return jsonify(settings)
+
+
+@app.post("/api/auth/farmer/request-otp")
+def farmer_request_otp_route():
+    """Send a login OTP to a registered farmer's mobile number."""
+    data = request.get_json(silent=True) or {}
+    mobile = data.get("mobile") or data.get("phone") or data.get("identifier")
+
+    if not mobile:
+        return jsonify({"error": "Mobile number is required.", "code": "INVALID_MOBILE"}), 400
+
+    if not otp_login_available():
+        # Fail loudly instead of pretending an SMS was sent.
+        return jsonify({
+            "error": "OTP login is not available right now. Please use password login.",
+            "code": "SMS_GATEWAY_NOT_CONFIGURED",
+            "password_fallback_enabled": _farmer_password_fallback_allowed(),
+        }), 503
+
+    try:
+        result = request_farmer_otp(mobile, ip=_client_ip())
+    except OtpError as exc:
+        if exc.code not in ("COOLDOWN_ACTIVE", "RATE_LIMITED"):
+            _audit_otp_event("OTP_REQUEST_FAILED", mobile=mobile, details={"code": exc.code})
+        return jsonify(exc.to_payload()), exc.status
+
+    if result.get("sent"):
+        _audit_otp_event("OTP_REQUESTED", mobile=mobile,
+                         details={"purpose": "farmer_login", "expires_in": result.get("expires_in")})
+
+    # Identical response whether or not the number is registered (no enumeration).
+    return jsonify({
+        "ok": True,
+        "message": "If this mobile number is registered, an OTP has been sent.",
+        "expires_in": result.get("expires_in"),
+        "resend_after": result.get("resend_after"),
+    })
+
+
+@app.post("/api/auth/farmer/resend-otp")
+def farmer_resend_otp_route():
+    """Resend a login OTP. Enforces the 60-second resend cooldown."""
+    data = request.get_json(silent=True) or {}
+    mobile = data.get("mobile") or data.get("phone") or data.get("identifier")
+
+    if not mobile:
+        return jsonify({"error": "Mobile number is required.", "code": "INVALID_MOBILE"}), 400
+
+    if not otp_login_available():
+        return jsonify({
+            "error": "OTP login is not available right now. Please use password login.",
+            "code": "SMS_GATEWAY_NOT_CONFIGURED",
+            "password_fallback_enabled": _farmer_password_fallback_allowed(),
+        }), 503
+
+    try:
+        result = resend_farmer_otp(mobile, ip=_client_ip())
+    except OtpError as exc:
+        if exc.code != "COOLDOWN_ACTIVE":
+            _audit_otp_event("OTP_RESEND_FAILED", mobile=mobile, details={"code": exc.code})
+        return jsonify(exc.to_payload()), exc.status
+
+    if result.get("sent"):
+        _audit_otp_event("OTP_RESENT", mobile=mobile, details={"purpose": "farmer_login"})
+
+    return jsonify({
+        "ok": True,
+        "message": "If this mobile number is registered, a new OTP has been sent.",
+        "expires_in": result.get("expires_in"),
+        "resend_after": result.get("resend_after"),
+    })
+
+
+@app.post("/api/auth/farmer/verify-otp")
+def farmer_verify_otp_route():
+    """Verify the OTP and issue the same JWT the password login returns."""
+    data = request.get_json(silent=True) or {}
+    mobile = data.get("mobile") or data.get("phone")
+    code = data.get("otp") or data.get("code") or data.get("otp_code")
+
+    if not mobile:
+        return jsonify({"error": "Mobile number is required.", "code": "INVALID_MOBILE"}), 400
+    if not code:
+        return jsonify({"error": "The OTP is required.", "code": "INVALID_OTP_FORMAT"}), 400
+
+    try:
+        result = verify_farmer_otp(mobile, code, ip=_client_ip())
+    except OtpError as exc:
+        _audit_otp_event("OTP_VERIFY_FAILED", mobile=mobile, details={"code": exc.code})
+        return jsonify(exc.to_payload()), exc.status
+
+    user = result["user"]
+    # Defence in depth: a farmer OTP must never authenticate another role.
+    if user.get("role") != "owner":
+        _audit_otp_event("OTP_ROLE_REJECTED", user_id=user.get("id"), mobile=mobile)
+        return jsonify({"error": "Forbidden for this role", "code": "FORBIDDEN_ROLE"}), 403
+
+    token = make_token(user)
+    _audit_otp_event("LOGIN", user_id=user["id"], mobile=mobile,
+                     details={"method": "otp", "purpose": "farmer_login"})
+    return jsonify({"token": token, "user": public_user(user), "login_method": "otp"})
 
 
 @app.get("/api/users/me")
@@ -3248,6 +3416,44 @@ def sms_log_endpoint():
         "stats": get_worker_stats(),
         "recent": get_sent_log()[:50],
         "dead_letters": get_dead_letters()[:20],
+        # Android SMS Gateway (capcom6) status — never exposes credentials.
+        "otp_gateway": sms_gateway.gateway_public_info(),
+    })
+
+
+@app.post("/api/admin/sms-gateway/test")
+@auth_required(roles=["govt"])
+def sms_gateway_test():
+    """Send one fixed-text test SMS so deployment teams can verify real delivery.
+
+    Government users only. The message body is fixed and contains no OTP, and
+    the response never includes gateway credentials.
+    """
+    from ivr_config import normalize_indian_number
+
+    data = request.get_json(silent=True) or {}
+    mobile = data.get("mobile") or data.get("phone")
+    e164 = normalize_indian_number(mobile)
+    if not e164:
+        return jsonify({"error": "Enter a valid 10-digit Indian mobile number.",
+                        "code": "INVALID_MOBILE"}), 400
+    try:
+        result = sms_gateway.send_text_message(
+            e164, "PashuMitra SMS gateway test message. No action required."
+        )
+    except sms_gateway.SmsGatewayError as exc:
+        return jsonify({
+            "delivered": False,
+            "code": exc.code,
+            "error": "The SMS gateway did not accept the test message.",
+        }), (503 if exc.code == "SMS_GATEWAY_NOT_CONFIGURED" else 502)
+    return jsonify({
+        "delivered": bool(result.get("delivered")),
+        "simulated": bool(result.get("simulated")),
+        "mode": result.get("mode"),
+        "message_id": result.get("message_id"),
+        "state": result.get("state"),
+        "note": "delivered=true means the gateway queued the SMS for the Android device.",
     })
 
 

@@ -52,6 +52,43 @@ def _database_init_lock():
                 pass
             lock_file.close()
 
+# Farmer OTP login (mobile-number OTP). Only a salted, peppered hash of the
+# code is stored; verification state is server-side and single-use.
+SCHEMA_OTP = """
+CREATE TABLE IF NOT EXISTS otp_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    role TEXT NOT NULL,
+    mobile_e164 TEXT NOT NULL,
+    otp_hash TEXT NOT NULL,
+    otp_salt TEXT NOT NULL,
+    purpose TEXT NOT NULL DEFAULT 'farmer_login',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 5,
+    status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK(status IN ('ACTIVE','USED','INVALIDATED','EXPIRED','LOCKED','SEND_FAILED')),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT,
+    request_ip TEXT
+);
+
+CREATE TABLE IF NOT EXISTS otp_request_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mobile_e164 TEXT,
+    ip_address TEXT,
+    outcome TEXT NOT NULL,
+    purpose TEXT NOT NULL DEFAULT 'farmer_login',
+    detail TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_otp_codes_mobile ON otp_codes(mobile_e164, purpose, status);
+CREATE INDEX IF NOT EXISTS idx_otp_codes_user ON otp_codes(user_id, purpose, status);
+CREATE INDEX IF NOT EXISTS idx_otp_log_mobile ON otp_request_log(mobile_e164, created_at);
+CREATE INDEX IF NOT EXISTS idx_otp_log_ip ON otp_request_log(ip_address, created_at);
+"""
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -610,7 +647,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 
 CREATE INDEX IF NOT EXISTS idx_farmer_feedback_case ON farmer_feedback(case_id);
 CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id);
-"""
+""" + SCHEMA_OTP
 
 
 def get_db():
@@ -696,6 +733,7 @@ def init_db(reset=False):
             ensure_animals_columns(conn)
             migrate_users_role(conn)
             ensure_new_columns(conn)
+            ensure_otp_tables(conn)
             conn.commit()
             if first_time:
                 seed(conn)
@@ -946,6 +984,17 @@ def ensure_new_columns(conn):
     if "sms_enabled" not in u_cols:
         conn.execute("ALTER TABLE users ADD COLUMN sms_enabled INTEGER DEFAULT 0")
 
+    conn.commit()
+
+
+def ensure_otp_tables(conn):
+    """Additive migration for farmer OTP login tables (safe to re-run).
+
+    ``SCHEMA`` already uses ``CREATE TABLE IF NOT EXISTS``; this function makes
+    the OTP migration explicit for databases created by older revisions and
+    guarantees the supporting indexes exist.
+    """
+    conn.executescript(SCHEMA_OTP)
     conn.commit()
 
 

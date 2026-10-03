@@ -2,7 +2,7 @@
    PashuMitra Service Worker — Offline Support
    ================================================================= */
 
-const CACHE_NAME = "pashumitra-v1";
+const CACHE_NAME = "pashumitra-v2";  // bumped for the farmer OTP login release
 const STATIC_ASSETS = [
   "/",
   "/index.html",
