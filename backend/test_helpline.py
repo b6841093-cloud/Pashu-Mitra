@@ -92,8 +92,12 @@ class TestHelplineRestoration(unittest.TestCase):
     def test_04_demo_account_details_visible_on_auth(self):
         text = Path("../frontend/app.js").read_text(encoding="utf-8")
         self.assertIn("Demo Account", text)
-        self.assertIn("Username:", text)
-        self.assertIn("Password:", text)
+        # The staff labels are assembled at render time from these keys, so
+        # the punctuation is in the interpolation rather than a literal string.
+        self.assertIn('username: "Username"', text)
+        self.assertIn('password: "Password"', text)
+        self.assertIn('${label("username")}:', text)
+        self.assertIn('${label("password")}:', text)
         self.assertGreaterEqual(text.count("demoAccountBox(role)"), 3)
 
     def test_05_demo_login(self):

@@ -28,14 +28,10 @@ const DEMO_ACCOUNTS = {
   govt: { username: "govt@example.com", password: "password123" },
   lab: { username: "lab@example.com", password: "password123" },
 };
-// Prototype demo farmer (backend flag: DEMO_MODE, default false). These are the
-// documented prototype credentials shown on the farmer login screen; the server
-// is the authority and sends them in /api/auth/farmer/config while demo mode is
-// on. The values below are only the fallback used to fill the form, so the
-// screen still works if the config request is slow. They are not secrets: the
-// whole point of the demo account is that they are printed on screen, and the
-// backend rejects them outright whenever demo mode is off.
-const DEMO_FARMER = { mobile: "8341564042", otp: "123456" };
+// The backend is the sole authority for demo Farmer credentials and returns
+// them in /api/auth/farmer/config only while demo mode is enabled. Do not keep a
+// second hard-coded frontend copy: a missing/malformed server config must hide
+// the demo box instead of displaying credentials that may not be accepted.
 let ivrInfoPromise = null;
 
 const state = {
@@ -1071,9 +1067,9 @@ function helplineCard(info = DEFAULT_IVR_INFO) {
 function farmerDemoCredentials() {
   const demo = (farmerAuthConfig && farmerAuthConfig.demo) || null;
   if (!demo || demo.enabled !== true) return null;
-  const mobile = String(demo.mobile || DEMO_FARMER.mobile).replace(/\D/g, "").slice(-10);
-  const otp = String(demo.otp || DEMO_FARMER.otp);
-  if (mobile.length !== 10 || !otp) return null;
+  const mobile = String(demo.mobile || "").replace(/\D/g, "").slice(-10);
+  const otp = String(demo.otp || "");
+  if (mobile.length !== 10 || !/^\d{6}$/.test(otp)) return null;
   return { mobile, otp };
 }
 

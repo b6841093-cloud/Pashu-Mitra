@@ -57,8 +57,8 @@ services:
         value: "300"
       - key: SMS_GATEWAY_PRIORITY
         value: "100"
-      # Stable pepper for OTP hashing. A per-process (ephemeral) pepper makes
-      # valid OTPs fail with 401 whenever more than one worker is running.
+      # Stable pepper for real Farmer OTP hashing and signup tokens. A per-process
+      # pepper can make a genuine SMS OTP fail across Gunicorn workers.
       - key: OTP_PEPPER
         generateValue: true
       # Secret for GET /api/admin/otp-diagnostics (delivery tracing).
@@ -77,11 +77,16 @@ services:
       # Ships OFF. Set DEMO_MODE=true AND DEMO_MODE_ALLOW_PRODUCTION=true in the
       # Render dashboard to show the Demo Account box (fixed OTP) on a prototype
       # deployment; set both back to false before any public production use.
+      # The documented credentials are explicit here as well as in .env.example.
       # See DEMO_ACCOUNT.md.
       - key: DEMO_MODE
         value: "false"
       - key: DEMO_MODE_ALLOW_PRODUCTION
         value: "false"
+      - key: DEMO_FARMER_MOBILE
+        value: "8341564042"
+      - key: DEMO_FARMER_OTP
+        value: "123456"
 
   # Existing trained-model API. If this service is already deployed separately,
   # create only the backend service above and point SIH_ML_BACKEND at its URL.

@@ -81,6 +81,7 @@ function loadApp() {
     };
   };
   const requests = [];
+  let fetchHandler = () => Promise.reject(new Error("network not stubbed"));
   const sandbox = {
     console,
     setTimeout,
@@ -89,7 +90,7 @@ function loadApp() {
     clearInterval,
     fetch: (url, options = {}) => {
       requests.push({ url, options });
-      return Promise.reject(new Error("network not stubbed"));
+      return fetchHandler(url, options);
     },
     localStorage: storage,
     navigator: { onLine: true, serviceWorker: undefined },
@@ -114,6 +115,7 @@ function loadApp() {
     context,
     storage,
     requests,
+    setFetch: (handler) => { fetchHandler = handler; },
     el: (id) => sandbox.document.getElementById(id),
     run: (expression) => vm.runInContext(expression, context),
   };
@@ -215,6 +217,15 @@ test("no demo box when the backend reports demo mode as disabled", () => {
     "no click handler may be wired when demo mode is off");
 });
 
+test("an incomplete demo config is hidden instead of using duplicate frontend credentials", () => {
+  const fresh = loadApp();
+  openFarmerLogin(fresh, { ...DEMO_CONFIG_ON, demo: { enabled: true } });
+  assert.equal(fresh.el("farmerDemoAccountSlot").innerHTML, "");
+  assert.equal(fresh.el("farmerDemoAccountSlot").hidden, true);
+  assert.doesNotMatch(fresh.el("app").innerHTML, new RegExp(DEMO_MOBILE));
+  assert.doesNotMatch(fresh.el("app").innerHTML, new RegExp(DEMO_OTP));
+});
+
 test("the screen cannot grant itself a session from the demo credentials", () => {
   const fresh = loadApp();
   openFarmerLogin(fresh, DEMO_CONFIG_ON);
@@ -231,6 +242,35 @@ test("the screen cannot grant itself a session from the demo credentials", () =>
   // The OTP is still typed and verified through the normal endpoints.
   assert.match(appSource, /api\("\/auth\/farmer\/verify-otp"/);
   assert.match(appSource, /queueOffline: false, \/\/ never claim an SMS that was not dispatched/);
+});
+
+test("successful demo verification stores the Farmer session and opens its dashboard", async () => {
+  const fresh = loadApp();
+  openFarmerLogin(fresh, DEMO_CONFIG_ON);
+  fresh.run(`farmerOtpState.mobile = "${DEMO_MOBILE}"`);
+  fresh.el("otpCode").value = DEMO_OTP;
+
+  let verifyRequest;
+  fresh.setFetch(async (url, options) => {
+    verifyRequest = { url, options };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        token: "test-farmer-session-token",
+        user: { id: 42, role: "owner", full_name: "Demo Farmer", mobile: DEMO_MOBILE },
+        login_method: "otp",
+        demo: true,
+      }),
+    };
+  });
+
+  await fresh.run("farmerVerifyOtp()");
+  assert.equal(verifyRequest.url, "/api/auth/farmer/verify-otp");
+  assert.deepEqual(JSON.parse(verifyRequest.options.body), { mobile: DEMO_MOBILE, otp: DEMO_OTP });
+  assert.equal(fresh.storage.getItem("token"), "test-farmer-session-token");
+  assert.equal(JSON.parse(fresh.storage.getItem("user")).role, "owner");
+  assert.equal(fresh.run("location.hash"), "#/owner/dashboard");
 });
 
 test("the demo credentials are read from the server config, not hardcoded into the markup", () => {

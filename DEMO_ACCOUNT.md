@@ -11,10 +11,12 @@ prototype demonstration never depends on a real SMS reaching a real handset.
 | Ships | **disabled** (`DEMO_MODE=false`) |
 
 Everything else about farmer login is unchanged: farmers are still OTP-only,
-the demo code is stored as a salted + peppered hash in a normal, expiring,
-single-use OTP row, the session JWT is minted by the same `make_token()` as a
-real farmer login, and Vet / Government / Laboratory keep their original
-password login and dashboards untouched.
+the demo request creates a normal expiring, attempt-limited, single-use OTP
+row, the session JWT is minted by the same `make_token()` as a real farmer
+login, and Vet / Government / Laboratory keep their original password login
+and dashboards untouched. For the exact configured demo number, the verifier
+uses a constant-time fixed-code comparison before the ordinary generated-OTP
+hash check; the demo login therefore does not fail on an OTP pepper mismatch.
 
 ---
 
@@ -31,9 +33,9 @@ python app.py          # or: gunicorn app:app --bind 0.0.0.0:5001
 No SMS gateway is required: the demo number never triggers an SMS, and the
 login screen no longer shows the "OTP login is unavailable" warning.
 
-> Keep `OTP_PEPPER` (or `SIH_SECRET_KEY`) set to a **stable** value even in demo
-> mode. The fixed code is stored as a peppered hash; an ephemeral per-process
-> pepper breaks verification as soon as more than one worker is running.
+> Keep `OTP_PEPPER` (or `SIH_SECRET_KEY`) set to a **stable** value for real
+> Farmer SMS OTPs and signup tokens. The demo fixed-code comparison itself does
+> not rely on that pepper, but the real Farmer authentication paths do.
 
 ### A public prototype deployment (Render or similar)
 
@@ -88,11 +90,11 @@ DEMO_MODE_ALLOW_PRODUCTION=false
 `render.yaml` and `.env.example` both ship with `false`, so a fresh deploy is
 never in demo mode.
 
-After disabling, the fixed OTP is rejected by the ordinary authentication
-rules: `POST /api/auth/farmer/verify-otp` with `8341564042` / `123456` returns
-`401 OTP_INVALID` (there is no OTP row for that number at all), the Demo
-Account box disappears from the login screen, and the existing farmer SMS OTP
-flow is exactly as it was.
+After disabling, the demo-only OTP path is rejected. `POST /api/auth/farmer/verify-otp`
+with `8341564042` / `123456` returns `401 OTP_INVALID`, including if an
+unexpired demo request row was created before disabling. The Demo Account box
+disappears from the login screen, and real Farmer SMS OTP authentication
+follows its ordinary validation path.
 
 To remove the demo farmer record from a database entirely:
 
@@ -120,14 +122,15 @@ Any unrecognised value (`maybe`, `2`, …) is treated as **disabled** and logged
 
 ## 4. Safety model
 
-* **Not a second auth system.** The fixed code is never compared against a
-  request body. A real `otp_codes` row is created for the demo number, with the
-  normal PBKDF2 + pepper hash, TTL, attempt counter, and single-use
-  consumption. Verification runs through the unchanged `verify_otp()`, and the
-  JWT comes from the unchanged `make_token()`.
-* **Not automatic.** The row only exists because a `request-otp` for that
-  number was approved by the demo-mode check. Posting `123456` straight to
-  `verify-otp` is rejected with the ordinary `OTP_INVALID` rules.
+* **Not a second auth system.** A real `otp_codes` row is created for the demo
+  number, with its hash, TTL, attempt counter, and single-use consumption.
+  `verify_otp()` first enforces the row's normal lifecycle checks, then uses a
+  constant-time comparison against the configured demo code before ordinary
+  generated-OTP hash validation. The JWT comes from the unchanged
+  `make_token()`.
+* **Not automatic.** The demo-marked row only exists because a `request-otp`
+  for that number was approved by the demo-mode check. Posting `123456` straight
+  to `verify-otp` without that row is rejected with `OTP_INVALID`.
 * **Scoped to one number.** The fixed code is never issued to any other number,
   and never authenticates a Vet / Government / Laboratory account.
 * **No password.** The demo farmer is a normal `role='owner'` row with a
