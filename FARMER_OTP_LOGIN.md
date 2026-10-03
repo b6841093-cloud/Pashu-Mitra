@@ -368,7 +368,7 @@ curl -s -X POST http://127.0.0.1:5001/api/auth/farmer/verify-otp \
 ## 10. Prototype demo account (fixed OTP)
 
 For demonstrations that must not depend on real SMS delivery, the farmer login
-screen can show a **Demo Account** box (`9999999999` / `123456`). It is gated
+screen can show a **Demo Account** box (`8341564042` / `123456`). It is gated
 behind an explicit `DEMO_MODE` flag that ships as `false`, reuses the ordinary
 OTP row, JWT and role claims, and covers the farmer role only.
 

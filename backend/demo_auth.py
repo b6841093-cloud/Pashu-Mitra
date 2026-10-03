@@ -61,7 +61,7 @@ DEMO_MODE_ALLOW_PRODUCTION_ENV = "DEMO_MODE_ALLOW_PRODUCTION"
 # Documented prototype credentials. They are configuration, not secrets: the
 # whole point of the demo account is that they are printed on the login screen.
 # They are kept out of the OTP pepper, the JWT secret and every real user row.
-DEFAULT_DEMO_MOBILE = "9999999999"
+DEFAULT_DEMO_MOBILE = "8341564042"
 DEFAULT_DEMO_OTP = "123456"
 DEFAULT_DEMO_FARMER_NAME = "Demo Farmer"
 DEFAULT_DEMO_DISTRICT = "Pune"

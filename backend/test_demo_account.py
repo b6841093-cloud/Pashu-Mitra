@@ -16,7 +16,7 @@ deployment configuration.
 
 Mapping to the acceptance criteria
 ----------------------------------
- 3. 9999999999 + 123456 works when demo mode is enabled
+ 3. 8341564042 + 123456 works when demo mode is enabled
  4. the demo farmer gets a valid farmer token and can open the dashboard
  5. repeated demo logins do not create duplicate accounts
  6. the fixed OTP is rejected when demo mode is disabled
@@ -46,8 +46,8 @@ import demo_auth  # noqa: E402
 import otp_service  # noqa: E402
 import sms_gateway  # noqa: E402
 
-DEMO_MOBILE = "9999999999"
-DEMO_MOBILE_E164 = "+919999999999"
+DEMO_MOBILE = "8341564042"
+DEMO_MOBILE_E164 = "+918341564042"
 DEMO_OTP = "123456"
 FARMER_MOBILE = "9800000001"          # seeded owner (Rajesh Patil)
 FARMER_2_MOBILE = "9800000002"        # seeded second owner (Sunita More)
@@ -234,7 +234,7 @@ class DemoAccountTestCase(unittest.TestCase):
     def test_02_demo_number_never_receives_an_sms(self):
         self.demo_on()
         self.request_otp()
-        # The gateway was never called: 9999999999 may be a real handset.
+        # The gateway was never called: the demo number may be a real handset.
         self.assertEqual(self.gateway.messages, [])
         # And the API says so instead of claiming a delivery.
         body = self.request_otp().get_json()
@@ -660,7 +660,7 @@ class DemoAccountTestCase(unittest.TestCase):
         text = "\n".join(captured.output)
         self.assertNotIn(DEMO_OTP, text, "the fixed OTP must never be logged")
         self.assertNotIn(DEMO_MOBILE, text, "the full demo number must never be logged")
-        self.assertIn("9999", text, "the masked number is still traceable")
+        self.assertIn("4042", text, "the masked number is still traceable")
 
     def test_28_demo_state_is_reported_without_exposing_the_code(self):
         self.demo_on()

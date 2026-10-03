@@ -5,7 +5,7 @@ prototype demonstration never depends on a real SMS reaching a real handset.
 
 | | |
 |---|---|
-| Demo phone number | `9999999999` |
+| Demo phone number | `8341564042` |
 | Demo OTP | `123456` |
 | Applies to | the Farmer / Animal Owner role **only** |
 | Ships | **disabled** (`DEMO_MODE=false`) |
@@ -64,10 +64,10 @@ curl -s localhost:5001/api/health | python -m json.tool | grep -A5 demo_mode
 
 # Full farmer login, exactly as the browser does it:
 curl -s -X POST localhost:5001/api/auth/farmer/request-otp \
-     -H 'Content-Type: application/json' -d '{"mobile":"9999999999"}'
+     -H 'Content-Type: application/json' -d '{"mobile":"8341564042"}'
 curl -s -X POST localhost:5001/api/auth/farmer/verify-otp \
      -H 'Content-Type: application/json' \
-     -d '{"mobile":"9999999999","otp":"123456"}'   # -> {"token": ..., "user": {"role":"owner"}}
+     -d '{"mobile":"8341564042","otp":"123456"}'   # -> {"token": ..., "user": {"role":"owner"}}
 ```
 
 The farmer login screen now shows the **Demo Account** box with the number and
@@ -89,7 +89,7 @@ DEMO_MODE_ALLOW_PRODUCTION=false
 never in demo mode.
 
 After disabling, the fixed OTP is rejected by the ordinary authentication
-rules: `POST /api/auth/farmer/verify-otp` with `9999999999` / `123456` returns
+rules: `POST /api/auth/farmer/verify-otp` with `8341564042` / `123456` returns
 `401 OTP_INVALID` (there is no OTP row for that number at all), the Demo
 Account box disappears from the login screen, and the existing farmer SMS OTP
 flow is exactly as it was.
@@ -97,7 +97,7 @@ flow is exactly as it was.
 To remove the demo farmer record from a database entirely:
 
 ```sql
-DELETE FROM users WHERE role='owner' AND mobile IN ('9999999999','+919999999999');
+DELETE FROM users WHERE role='owner' AND mobile IN ('8341564042','+918341564042');
 ```
 
 ---
@@ -108,7 +108,7 @@ DELETE FROM users WHERE role='owner' AND mobile IN ('9999999999','+919999999999'
 |---|---|---|
 | `DEMO_MODE` | `false` | Master switch for the Demo Account box and the fixed OTP. |
 | `DEMO_MODE_ALLOW_PRODUCTION` | `false` | Second opt-in required when the process is production. |
-| `DEMO_FARMER_MOBILE` | `9999999999` | The one number the demo OTP is ever issued to. |
+| `DEMO_FARMER_MOBILE` | `8341564042` | The one number the demo OTP is ever issued to. Change it to any other number to move the demo account. |
 | `DEMO_FARMER_OTP` | `123456` | The fixed code. Shown on screen; stored only as a hash. |
 | `DEMO_FARMER_NAME` | `Demo Farmer` | Display name of the demo farmer profile. |
 | `DEMO_FARMER_DISTRICT` / `_VILLAGE` / `_BLOCK` | `Pune` / `Demo Village` / `Haveli` | Demo farmer profile fields. |
@@ -136,7 +136,7 @@ Any unrecognised value (`maybe`, `2`, …) is treated as **disabled** and logged
 * **No duplicates.** The account is created once and reused; a number already
   held by a staff account is refused (`503 DEMO_ACCOUNT_UNAVAILABLE`) rather
   than overwritten.
-* **No SMS.** The demo number is never messaged — `9999999999` may well be a
+* **No SMS.** The demo number is never messaged — `8341564042` may well be a
   real handset. The API answers `demo: true, sms_sent: false` and the screen
   says so explicitly instead of claiming a delivery.
 * **Nothing sensitive is logged.** The code, tokens, passwords and full phone
