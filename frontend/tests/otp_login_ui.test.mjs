@@ -163,6 +163,26 @@ test("cooldown countdown formats and restores from an absolute deadline", () => 
   assert.equal(app.run("farmerOtpState.sent"), false);
 });
 
+test("renderAuth mounts the farmer OTP screen without throwing", () => {
+  app.run('location.hash = "#/login/owner"');
+  assert.doesNotThrow(() => app.run('renderAuth("login", "owner")'));
+  const html = app.run('document.getElementById("app").innerHTML');
+  assert.match(html, /id="farmerOtpForm"/);
+  assert.match(html, /id="otpSendBtn"/);
+  // The farmer's primary login screen must not offer a password field.
+  assert.doesNotMatch(html, /name="password"/);
+
+  // Fallback screens and the other roles keep working.
+  assert.doesNotThrow(() => app.run('renderAuth("password", "owner")'));
+  assert.match(app.run('document.getElementById("app").innerHTML'), /name="password"/);
+  for (const role of ["vet", "govt", "lab"]) {
+    assert.doesNotThrow(() => app.run(`renderAuth("login", "${role}")`));
+    assert.match(app.run('document.getElementById("app").innerHTML'), /name="password"/, role);
+  }
+  assert.doesNotThrow(() => app.run('renderAuth("register", "owner")'));
+  assert.match(app.run('document.getElementById("app").innerHTML'), /id="registerForm"/);
+});
+
 test("error codes map to localised farmer messages", () => {
   const mapping = app.run("OTP_ERROR_KEYS");
   for (const code of ["INVALID_MOBILE", "OTP_INVALID", "OTP_EXPIRED", "OTP_LOCKED",
