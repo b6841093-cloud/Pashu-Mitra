@@ -21,9 +21,15 @@ HOW IT WORKS
 PROVIDERS
 =========
 * ``MockSmsAdapter`` — default.  Simulates delivery in ~50ms.  Used in
-  development and when SMS_PROVIDER_MODE is not TWILIO.
+  development and when SMS_PROVIDER_MODE is not TWILIO/GATEWAY.
 * ``TwilioSmsAdapter`` — real SMS via Twilio REST API.  Requires three
   environment variables: TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM.
+* ``AndroidSmsGatewayAdapter`` — real SMS via the SMS Gateway for Android™
+  (capcom6) app.  Opt in with SMS_PROVIDER_MODE=GATEWAY and configure
+  SMS_GATEWAY_MODE/SMS_GATEWAY_BASE_URL/SMS_GATEWAY_USERNAME/
+  SMS_GATEWAY_PASSWORD (see sms_gateway.py).  Farmer OTP login always uses
+  this gateway through sms_gateway.send_text_message regardless of
+  SMS_PROVIDER_MODE.
 
 ENVIRONMENT VARIABLES
 =====================
@@ -194,6 +200,43 @@ class TwilioSmsAdapter(SmsAdapter):
 
 
 # ------------------------------------------------------------------
+# Android SMS Gateway adapter (capcom6) — opt-in via SMS_PROVIDER_MODE=GATEWAY
+# ------------------------------------------------------------------
+
+class AndroidSmsGatewayAdapter(SmsAdapter):
+    """Delivers notification SMS through the SMS Gateway for Android™.
+
+    Uses the reusable :mod:`sms_gateway` client (Cloud Server or Local Server
+    mode), configured with SMS_GATEWAY_* environment variables. Farmer OTP
+    login uses the same client directly (synchronously) so delivery failures
+    are reported honestly.
+    """
+    mode = "GATEWAY"
+
+    def __init__(self):
+        import sms_gateway  # local import keeps module import cycles impossible
+
+        config = sms_gateway.get_gateway_config()
+        if config.is_disabled:
+            raise RuntimeError("SMS_GATEWAY_MODE=DISABLED")
+        if not config.is_mock and not config.credentials_configured:
+            raise RuntimeError(
+                "AndroidSmsGatewayAdapter requires SMS_GATEWAY_USERNAME and "
+                "SMS_GATEWAY_PASSWORD (or SMS_GATEWAY_MODE=MOCK)."
+            )
+        self._config = config
+        self._client = sms_gateway
+
+    def send(self, to_e164: str, body: str) -> tuple[bool, str | None, str | None]:
+        try:
+            result = self._client.send_text_message(to_e164, body)
+            return (True, result.get("message_id"), None)
+        except self._client.SmsGatewayError as exc:
+            logger.warning("AndroidSmsGateway FAILED → %s: %s", to_e164, exc.code)
+            return (False, None, f"{exc.code}: {exc}")
+
+
+# ------------------------------------------------------------------
 # Background worker thread (the real-time engine)
 # ------------------------------------------------------------------
 
@@ -277,6 +320,11 @@ _adapter: SmsAdapter | None = None
 
 def _build_adapter() -> SmsAdapter:
     mode = os.environ.get("SMS_PROVIDER_MODE", "MOCK").strip().upper()
+    if mode == "GATEWAY":
+        try:
+            return AndroidSmsGatewayAdapter()
+        except Exception as exc:
+            logger.warning("Android SMS Gateway init failed (%s); falling back to MockSmsAdapter.", exc)
     if mode == "TWILIO":
         try:
             return TwilioSmsAdapter()
@@ -407,8 +455,10 @@ def get_worker_stats() -> dict:
 
 
 def get_sms_provider_info() -> dict:
-    """Return current SMS provider configuration."""
+    """Return current SMS provider configuration (never credentials)."""
     _ensure_workers()
+    import sms_gateway  # local import: sms_gateway has no dependency on this module
+
     return {
         "provider": _adapter.mode if _adapter else "NOT_INITIALIZED",
         "workers": len(_workers),
@@ -418,4 +468,5 @@ def get_sms_provider_info() -> dict:
             os.environ.get("TWILIO_TOKEN"),
             os.environ.get("TWILIO_FROM"),
         ]),
+        "android_sms_gateway": sms_gateway.gateway_public_info(),
     }

@@ -31,6 +31,32 @@ services:
         value: "false"
       - key: FLASK_ENV
         value: production
+      # ------------------------------------------------ farmer OTP login ---
+      # Android SMS Gateway (capcom6) Cloud Server credentials.
+      # sync: false keeps the values out of Git — set them in the Render
+      # dashboard (or as secret files) before enabling OTP login.
+      - key: SMS_GATEWAY_MODE
+        value: CLOUD
+      - key: SMS_GATEWAY_BASE_URL
+        value: https://api.sms-gate.app/3rdparty/v1
+      - key: SMS_GATEWAY_USERNAME
+        sync: false
+      - key: SMS_GATEWAY_PASSWORD
+        sync: false
+      - key: SMS_GATEWAY_DEVICE_ID
+        sync: false
+      - key: SMS_GATEWAY_TIMEOUT
+        value: "15"
+      - key: OTP_PEPPER
+        generateValue: true
+      - key: OTP_TTL_SECONDS
+        value: "300"
+      - key: OTP_MAX_ATTEMPTS
+        value: "5"
+      - key: OTP_RESEND_COOLDOWN_SECONDS
+        value: "60"
+      - key: FARMER_PASSWORD_FALLBACK
+        value: "true"
 
   # Existing trained-model API. If this service is already deployed separately,
   # create only the backend service above and point SIH_ML_BACKEND at its URL.

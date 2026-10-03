@@ -105,6 +105,9 @@ def normalize_indian_number(value: str | None) -> str | None:
     digits = re.sub(r"\D", "", str(value))
     if digits.startswith("00"):
         digits = digits[2:]
+    # National dialling prefix typed by users: 0 + 10-digit mobile number.
+    if len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
     if len(digits) == 10:
         digits = "91" + digits
     if len(digits) == 12 and digits.startswith("91"):

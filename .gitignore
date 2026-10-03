@@ -13,3 +13,5 @@ __pycache__/
 htmlcov/
 .pytest_cache/
 .vercel/
+# Local OTP test database (auth tests use their own throwaway SQLite file)
+backend/test_otp_login.db*

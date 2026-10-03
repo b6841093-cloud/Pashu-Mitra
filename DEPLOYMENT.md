@@ -20,8 +20,39 @@ The SIP/RTP PBX is deliberately separate from Render. See `voice/README.md`.
 - `IVR_PROVIDER_MODE=MOCK` until a SIP/PBX integration is provisioned.
 - `IVR_WEBHOOK_SECRET`: long random HMAC secret shared only with the PBX adapter.
 - `IVR_PSTN_CONNECTED=false` until the real-phone acceptance gate passes.
+- `SMS_GATEWAY_MODE=CLOUD`, `SMS_GATEWAY_BASE_URL=https://api.sms-gate.app/3rdparty/v1`, `SMS_GATEWAY_USERNAME`, `SMS_GATEWAY_PASSWORD` (Render `sync: false` — set in the dashboard) for farmer OTP login. `SMS_GATEWAY_DEVICE_ID` is optional.
+- `OTP_PEPPER` (Render generates it): server-side pepper for OTP hashes. Changing it invalidates in-flight OTPs only.
 
 See `.env.example` for optional routing, weather, CORS, and model-path values. Do not commit a populated `.env` file.
+
+## Farmer OTP login (mobile + SMS)
+
+Farmers sign in with a registered mobile number and a six-digit SMS OTP delivered
+through the Android SMS Gateway™ (capcom6) Cloud Server API. Vet, Government and
+Lab password login is unchanged, and the farmer password endpoint still exists
+(disable the fallback UI with `FARMER_PASSWORD_FALLBACK=false` once OTP delivery
+is verified in production).
+
+Full details — API contract, security controls, migration, rollback, and the
+real-delivery verification checklist — are in [`FARMER_OTP_LOGIN.md`](FARMER_OTP_LOGIN.md).
+
+Quick production checks after deploying:
+
+```bash
+# Gateway configuration is reported without exposing credentials
+curl -s https://pashu-shield-backend-hjgr.onrender.com/api/health | jq .sms_gateway
+
+# Farmer login settings used by the UI
+curl -s https://pashu-shield-backend-hjgr.onrender.com/api/auth/farmer/config | jq
+
+# Government-only real delivery test (fixed text, no OTP)
+TOKEN=$(curl -s -X POST https://pashu-shield-backend-hjgr.onrender.com/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"identifier":"govt@example.com","password":"<password>"}' | jq -r .token)
+curl -s -X POST https://pashu-shield-backend-hjgr.onrender.com/api/admin/sms-gateway/test \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"mobile":"<verified test handset>"}' | jq
+```
 
 ## Database behavior
 
