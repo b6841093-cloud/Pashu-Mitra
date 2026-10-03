@@ -212,9 +212,21 @@ const I18N = {
     "farmer.otp_unavailable": "OTP SMS login is not available right now.",
     "farmer.otp_send_failed": "We could not send the OTP SMS. Please try again.",
     "farmer.otp_not_registered": "If this number is registered, you will receive an OTP.",
-    "farmer.password_login_link": "Login with password instead",
-    "farmer.otp_login_link": "Login with mobile OTP instead",
     "farmer.otp_offline": "You are offline. Connect to the internet to receive an OTP.",
+    // ---- OTP signup: farmer profile creation (phone verified) ----
+    "farmer.signup_title": "Create farmer account with mobile OTP",
+    "farmer.signup_mobile_hint": "Enter your 10-digit mobile number. We will send an OTP to verify it before creating your profile.",
+    "farmer.verify_mobile": "Verify mobile",
+    "farmer.profile_title": "Complete your farmer profile",
+    "farmer.profile_note": "+91 {mobile} is verified. Fill in your details to create your farmer account.",
+    "farmer.create_account": "Create farmer account",
+    "farmer.creating_account": "Creating account…",
+    "farmer.profile_missing": "Please enter your full name and district.",
+    "farmer.registration_expired": "This verification has expired. Please request a new OTP.",
+    "farmer.signup_success": "Welcome, {name}! Your farmer profile has been created.",
+    "farmer.signup_link": "New farmer? Create an account with mobile OTP",
+    "farmer.login_link": "Already registered? Login with mobile OTP",
+    "farmer.otp_unavailable_hint": "OTP SMS login is not available right now. Please try again shortly or call the helpline {helpline}.",
     "farmer.demo_mobile": "Demo mobile number",
     "farmer.notification_settings": "Notification settings", "farmer.push_notifications": "Push notifications",
     "farmer.push_available": "Turn on push notifications to receive alerts about reports, test results, and health updates.",
@@ -389,9 +401,20 @@ const I18N = {
     "farmer.otp_unavailable": "OTP SMS लॉगिन सध्या उपलब्ध नाही.",
     "farmer.otp_send_failed": "OTP SMS पाठवता आला नाही. कृपया पुन्हा प्रयत्न करा.",
     "farmer.otp_not_registered": "हा क्रमांक नोंदणीकृत असल्यास तुम्हाला OTP मिळेल.",
-    "farmer.password_login_link": "त्याऐवजी पासवर्डने लॉगिन करा",
-    "farmer.otp_login_link": "त्याऐवजी मोबाईल OTP ने लॉगिन करा",
     "farmer.otp_offline": "तुम्ही ऑफलाइन आहात. OTP मिळवण्यासाठी इंटरनेटशी जोडा.",
+    "farmer.signup_title": "मोबाईल OTP ने शेतकरी खाते तयार करा",
+    "farmer.signup_mobile_hint": "तुमचा १० अंकी मोबाईल क्रमांक लिहा. खाते तयार करण्यापूर्वी आम्ही OTP पाठवून पडताळणी करू.",
+    "farmer.verify_mobile": "मोबाईल पडताळा",
+    "farmer.profile_title": "तुमची शेतकरी माहिती पूर्ण करा",
+    "farmer.profile_note": "+91 {mobile} पडताळला गेला. शेतकरी खाते तयार करण्यासाठी माहिती भरा.",
+    "farmer.create_account": "शेतकरी खाते तयार करा",
+    "farmer.creating_account": "खाते तयार होत आहे…",
+    "farmer.profile_missing": "कृपया पूर्ण नाव आणि जिल्हा लिहा.",
+    "farmer.registration_expired": "ही पडताळणी कालबाह्य झाली. कृपया नवीन OTP मागवा.",
+    "farmer.signup_success": "स्वागत, {name}! तुमचे शेतकरी खाते तयार झाले.",
+    "farmer.signup_link": "नवीन शेतकरी? मोबाईल OTP ने खाते तयार करा",
+    "farmer.login_link": "आधीच नोंदणीकृत? मोबाईल OTP ने लॉगिन करा",
+    "farmer.otp_unavailable_hint": "OTP SMS लॉगिन सध्या उपलब्ध नाही. कृपया थोड्या वेळाने प्रयत्न करा किंवा हेल्पलाइन {helpline} वर कॉल करा.",
     "farmer.demo_mobile": "डेमो मोबाईल क्रमांक",
     "farmer.notification_settings": "सूचना सेटिंग्ज", "farmer.push_notifications": "पुश सूचना",
     "farmer.push_available": "अहवाल, तपासणीचे निकाल आणि आरोग्याची माहिती मिळवण्यासाठी पुश सूचना सुरू करा.",
@@ -566,9 +589,20 @@ const I18N = {
     "farmer.otp_unavailable": "OTP SMS लॉगिन अभी उपलब्ध नहीं है।",
     "farmer.otp_send_failed": "OTP SMS भेजा नहीं जा सका। कृपया फिर प्रयास करें।",
     "farmer.otp_not_registered": "यदि यह नंबर पंजीकृत है, तो आपको OTP मिलेगा।",
-    "farmer.password_login_link": "इसके बजाय पासवर्ड से लॉगिन करें",
-    "farmer.otp_login_link": "इसके बजाय मोबाइल OTP से लॉगिन करें",
     "farmer.otp_offline": "आप ऑफ़लाइन हैं। OTP पाने के लिए इंटरनेट से जुड़ें।",
+    "farmer.signup_title": "मोबाइल OTP से किसान खाता बनाएं",
+    "farmer.signup_mobile_hint": "अपना 10 अंकों का मोबाइल नंबर डालें। खाता बनाने से पहले हम OTP भेजकर पुष्टि करेंगे।",
+    "farmer.verify_mobile": "मोबाइल सत्यापित करें",
+    "farmer.profile_title": "अपनी किसान प्रोफ़ाइल पूरी करें",
+    "farmer.profile_note": "+91 {mobile} सत्यापित हो गया। किसान खाता बनाने के लिए जानकारी भरें।",
+    "farmer.create_account": "किसान खाता बनाएं",
+    "farmer.creating_account": "खाता बन रहा है…",
+    "farmer.profile_missing": "कृपया पूरा नाम और जिला भरें।",
+    "farmer.registration_expired": "यह सत्यापन समाप्त हो गया। कृपया नया OTP मांगें।",
+    "farmer.signup_success": "स्वागत, {name}! आपका किसान खाता बन गया।",
+    "farmer.signup_link": "नए किसान? मोबाइल OTP से खाता बनाएं",
+    "farmer.login_link": "पहले से पंजीकृत? मोबाइल OTP से लॉगिन करें",
+    "farmer.otp_unavailable_hint": "OTP SMS लॉगिन अभी उपलब्ध नहीं है। कृपया थोड़ी देर बाद प्रयास करें या हेल्पलाइन {helpline} पर कॉल करें।",
     "farmer.demo_mobile": "डेमो मोबाइल नंबर",
     "farmer.notification_settings": "सूचना सेटिंग", "farmer.push_notifications": "पुश सूचनाएं",
     "farmer.push_available": "रिपोर्ट, जांच के नतीजे और स्वास्थ्य की जानकारी पाने के लिए पुश सूचनाएं चालू करें।",
@@ -743,9 +777,20 @@ const I18N = {
     "farmer.otp_unavailable": "OTP SMS లాగిన్ ప్రస్తుతం అందుబాటులో లేదు.",
     "farmer.otp_send_failed": "OTP SMS పంపలేకపోయాం. మళ్లీ ప్రయత్నించండి.",
     "farmer.otp_not_registered": "ఈ నంబరు నమోదై ఉంటే మీకు OTP వస్తుంది.",
-    "farmer.password_login_link": "బదులుగా పాస్‌వర్డ్‌తో లాగిన్ చేయండి",
-    "farmer.otp_login_link": "బదులుగా మొబైల్ OTP తో లాగిన్ చేయండి",
     "farmer.otp_offline": "మీరు ఆఫ్‌లైన్‌లో ఉన్నారు. OTP పొందడానికి ఇంటర్నెట్‌కు కనెక్ట్ అవ్వండి.",
+    "farmer.signup_title": "మొబైల్ OTP తో రైతు ఖాతా సృష్టించండి",
+    "farmer.signup_mobile_hint": "మీ 10 అంకెల మొబైల్ నంబరు నమోదు చేయండి. ఖాతా సృష్టించే ముందు OTP పంపి ధృవీకరిస్తాము.",
+    "farmer.verify_mobile": "మొబైల్ ధృవీకరించండి",
+    "farmer.profile_title": "మీ రైతు ప్రొఫైల్ పూర్తి చేయండి",
+    "farmer.profile_note": "+91 {mobile} ధృవీకరించబడింది. రైతు ఖాతా సృష్టించడానికి వివరాలు నింపండి.",
+    "farmer.create_account": "రైతు ఖాతా సృష్టించండి",
+    "farmer.creating_account": "ఖాతా సృష్టిస్తోంది…",
+    "farmer.profile_missing": "దయచేసి పూర్తి పేరు మరియు జిల్లా నమోదు చేయండి.",
+    "farmer.registration_expired": "ఈ ధృవీకరణ గడువు ముగిసింది. దయచేసి కొత్త OTP అభ్యర్థించండి.",
+    "farmer.signup_success": "స్వాగతం, {name}! మీ రైతు ఖాతా సృష్టించబడింది.",
+    "farmer.signup_link": "కొత్త రైతా? మొబైల్ OTP తో ఖాతా సృష్టించండి",
+    "farmer.login_link": "ఇప్పటికే నమోదయ్యారా? మొబైల్ OTP తో లాగిన్ చేయండి",
+    "farmer.otp_unavailable_hint": "OTP SMS లాగిన్ ప్రస్తుతం అందుబాటులో లేదు. కొద్దిసేపటి తర్వాత ప్రయత్నించండి లేదా హెల్ప్‌లైన్ {helpline} కు కాల్ చేయండి.",
     "farmer.demo_mobile": "డెమో మొబైల్ నంబరు",
     "farmer.notification_settings": "సూచనల అమరికలు", "farmer.push_notifications": "పుష్ సూచనలు",
     "farmer.push_available": "నివేదికలు, పరీక్ష ఫలితాలు, ఆరోగ్య సమాచారం పొందడానికి పుష్ సూచనలను ప్రారంభించండి.",
@@ -1301,7 +1346,13 @@ function validRole(role) { return ROLES.includes(role); }
 // never stored in the browser: only the backend holds verification state.
 
 let farmerAuthConfig = null;
-const farmerOtpState = { mobile: "", sent: false, cooldownUntil: 0, timer: null };
+// "login"  -> OTP login for an existing farmer account (no signup on the wire)
+// "signup" -> OTP-verified farmer profile creation (#/register/owner)
+let farmerAuthMode = "login";
+const farmerOtpState = {
+  mobile: "", sent: false, cooldownUntil: 0, timer: null,
+  registrationToken: "", profileStep: false,
+};
 
 const OTP_ERROR_KEYS = {
   INVALID_MOBILE: "otp_invalid_mobile",
@@ -1346,10 +1397,11 @@ function setButtonBusy(btn, busy, busyLabel) {
   }
 }
 
-function farmerOtpLoginForm() {
+function farmerOtpLoginForm(mode) {
+  const signup = mode === "signup";
   return `
   <form id="farmerOtpForm" novalidate>
-    <div class="otp-card-title">📲 ${ft("otp_title")}</div>
+    <div class="otp-card-title">📲 ${signup ? ft("signup_title") : ft("otp_title")}</div>
     <div class="field">
       <label for="otpMobile">${ft("otp_mobile_label")}</label>
       <div class="otp-mobile-row">
@@ -1358,7 +1410,7 @@ function farmerOtpLoginForm() {
                maxlength="10" placeholder="${ft("otp_mobile_placeholder")}"
                aria-describedby="otpMobileHint" required />
       </div>
-      <div class="otp-hint" id="otpMobileHint">${ft("otp_mobile_hint")}</div>
+      <div class="otp-hint" id="otpMobileHint">${signup ? ft("signup_mobile_hint") : ft("otp_mobile_hint")}</div>
     </div>
     <button id="otpSendBtn" class="btn btn-primary" type="button">${ft("send_otp")}</button>
     <div id="otpCodeStep" class="otp-code-step" hidden>
@@ -1370,14 +1422,42 @@ function farmerOtpLoginForm() {
                placeholder="${ft("otp_placeholder")}" />
       </div>
       <div class="otp-hint" id="otpMissingHint">${ft("otp_missing_hint")}</div>
-      <button id="otpVerifyBtn" class="btn btn-primary" type="submit">${ft("verify_and_login")}</button>
+      <button id="otpVerifyBtn" class="btn btn-primary" type="submit">${signup ? ft("verify_mobile") : ft("verify_and_login")}</button>
       <div class="otp-resend-row">
         <span class="otp-resend-hint" id="otpResendHint"></span>
         <button id="otpResendBtn" class="btn btn-ghost btn-sm" type="button" disabled>${ft("resend_otp")}</button>
       </div>
       <div class="auth-switch"><a id="otpChangeMobile" role="button" tabindex="0">${ft("change_mobile")}</a></div>
     </div>
+    <div id="farmerProfileStep" class="otp-code-step" hidden>
+      <div class="otp-card-title">🧑‍🌾 ${ft("profile_title")}</div>
+      <div class="otp-sent-note" id="otpProfileNote" role="status"></div>
+      <div class="field">
+        <label for="farmerFullName">${authText("owner", "full_name", "Full Name")}</label>
+        <input id="farmerFullName" name="full_name" autocomplete="name" required />
+      </div>
+      <div class="form-row">
+        <div class="field"><label for="farmerVillage">${authText("owner", "village", "Village")}</label>
+          <input id="farmerVillage" name="village" autocomplete="address-level3" /></div>
+        <div class="field"><label for="farmerBlock">${authText("owner", "block", "Block")}</label>
+          <input id="farmerBlock" name="block" /></div>
+      </div>
+      <div class="field"><label for="farmerDistrict">${authText("owner", "district", "District")}</label>
+        <input id="farmerDistrict" name="district" placeholder="${ft("district")}" required /></div>
+      <div class="field"><label for="farmerEmail">${authText("owner", "email", "Email")}</label>
+        <input id="farmerEmail" name="email" type="email" autocomplete="email" /></div>
+      <div class="field"><label for="farmerLanguage">${ft("preferred_helpline_language")}</label>
+        <select id="farmerLanguage" name="preferred_language">
+          <option value="">${ft("ask_language_call")}</option>
+          <option value="en">English</option><option value="te">తెలుగు</option>
+          <option value="hi">हिन्दी</option><option value="mr">मराठी</option>
+        </select></div>
+      <button id="farmerCreateBtn" class="btn btn-primary" type="button">${ft("create_account")}</button>
+    </div>
     <div id="otpFallback" class="otp-fallback"></div>
+    <div class="auth-switch">
+      <a id="farmerModeSwitch" role="button" tabindex="0"></a>
+    </div>
   </form>`;
 }
 
@@ -1394,10 +1474,14 @@ function showFarmerOtpCodeStep(mobile, message) {
 function hideFarmerOtpCodeStep() {
   const step = document.getElementById("otpCodeStep");
   const sendBtn = document.getElementById("otpSendBtn");
+  const profileStep = document.getElementById("farmerProfileStep");
   if (step) step.hidden = true;
+  if (profileStep) profileStep.hidden = true;
   if (sendBtn) sendBtn.hidden = false;
   const codeInput = document.getElementById("otpCode");
   if (codeInput) codeInput.value = "";
+  farmerOtpState.registrationToken = "";
+  farmerOtpState.profileStep = false;
   stopFarmerOtpCooldown();
 }
 
@@ -1440,18 +1524,20 @@ function startFarmerOtpCooldown(seconds) {
 function renderFarmerOtpFallback(unavailable) {
   const box = document.getElementById("otpFallback");
   if (!box) return;
-  const config = farmerAuthConfig || {};
-  const passwordAllowed = config.password_fallback_enabled !== false;
-  box.innerHTML = `
-    ${unavailable ? `<div class="otp-unavailable" role="alert">⚠️ ${ft("otp_unavailable")}</div>` : ""}
-    ${passwordAllowed ? `<div class="auth-switch"><a role="button" tabindex="0" onclick="location.hash='#/login/owner/password'">${ft("password_login_link")}</a></div>` : ""}`;
+  // Farmer authentication is OTP-only — there is no password fallback. When the
+  // SMS gateway (or its configuration) is down the farmer is told to retry and
+  // given the helpline number instead.
+  const helpline = (farmerAuthConfig && farmerAuthConfig.helpline) || DEFAULT_IVR_INFO.display_number;
+  box.innerHTML = unavailable
+    ? `<div class="otp-unavailable" role="alert">⚠️ ${ft("otp_unavailable_hint", { helpline })}</div>`
+    : "";
 }
 
 async function loadFarmerAuthConfig() {
   try {
     farmerAuthConfig = await api("/auth/farmer/config", { queueOffline: false });
   } catch (err) {
-    farmerAuthConfig = null; // keep the password fallback visible on failure
+    farmerAuthConfig = null; // the screen still works; only the hint is missing
   }
   renderFarmerOtpFallback(farmerAuthConfig && farmerAuthConfig.otp_login_enabled === false);
   return farmerAuthConfig;
@@ -1481,7 +1567,9 @@ async function farmerRequestOtp(options = {}) {
   try {
     const data = await api(isResend ? "/auth/farmer/resend-otp" : "/auth/farmer/request-otp", {
       method: "POST",
-      body: { mobile },
+      // The signup intent lets the backend reach a number that has no farmer
+      // account yet; the login intent never does.
+      body: { mobile, intent: farmerAuthMode },
       queueOffline: false, // never claim an SMS that was not dispatched
     });
     farmerOtpState.mobile = mobile;
@@ -1534,6 +1622,15 @@ async function farmerVerifyOtp() {
       body: { mobile, otp: code },
       queueOffline: false,
     });
+    if (data.registration_required) {
+      // Phone verified but no farmer account exists for this number: continue
+      // to the profile step. The backend issues no session here — only a
+      // short-lived token bound to the verified number.
+      farmerAuthMode = "signup";
+      farmerOtpState.registrationToken = data.registration_token || "";
+      showFarmerProfileStep(data.mobile || mobile);
+      return;
+    }
     if (!data.user || data.user.role !== "owner") {
       toast(ft("portal_mismatch"), true);
       return;
@@ -1547,6 +1644,72 @@ async function farmerVerifyOtp() {
     if (codeInput) { codeInput.value = ""; codeInput.focus(); }
     if (err && err.data && ["SMS_GATEWAY_NOT_CONFIGURED", "OTP_PEPPER_UNSTABLE"].includes(err.data.code)) {
       renderFarmerOtpFallback(true);
+    }
+    toast(otpErrorMessage(err), true);
+  } finally {
+    setButtonBusy(btn, false);
+  }
+}
+
+function showFarmerProfileStep(mobile, message) {
+  const step = document.getElementById("farmerProfileStep");
+  const codeStep = document.getElementById("otpCodeStep");
+  const note = document.getElementById("otpProfileNote");
+  const mobileInput = document.getElementById("otpMobile");
+  if (codeStep) codeStep.hidden = true;
+  if (step) step.hidden = false;
+  if (note) note.textContent = message || ft("profile_note", { mobile });
+  farmerOtpState.profileStep = true;
+  if (mobileInput) mobileInput.readOnly = true;
+  const nameInput = document.getElementById("farmerFullName");
+  if (nameInput) nameInput.focus();
+}
+
+async function farmerCreateProfile() {
+  const value = (id) => {
+    const el = document.getElementById(id);
+    return el ? String(el.value || "").trim() : "";
+  };
+  const fullName = value("farmerFullName");
+  const district = value("farmerDistrict");
+  if (fullName.length < 2 || !district) { toast(ft("profile_missing"), true); return; }
+  if (!farmerOtpState.registrationToken) { toast(ft("registration_expired"), true); return; }
+  if (!navigator.onLine) { toast(ft("otp_offline"), true); return; }
+
+  const btn = document.getElementById("farmerCreateBtn");
+  if (btn && btn.disabled) return;
+  setButtonBusy(btn, true, ft("creating_account"));
+
+  try {
+    const data = await api("/auth/farmer/register", {
+      method: "POST",
+      body: {
+        registration_token: farmerOtpState.registrationToken,
+        full_name: fullName,
+        village: value("farmerVillage"),
+        block: value("farmerBlock"),
+        district,
+        email: value("farmerEmail"),
+        preferred_language: value("farmerLanguage"),
+      },
+      queueOffline: false,
+    });
+    if (!data.user || data.user.role !== "owner") {
+      toast(ft("portal_mismatch"), true);
+      return;
+    }
+    stopFarmerOtpCooldown();
+    farmerOtpState.registrationToken = "";
+    farmerOtpState.profileStep = false;
+    setAuth(data.token, data.user);
+    const welcomeName = String(data.user.full_name || "").split(" ")[0];
+    toast(ft("signup_success", { name: welcomeName }));
+    location.hash = homeFor("owner");
+  } catch (err) {
+    if (err && err.data && err.data.code === "REGISTRATION_TOKEN_INVALID") {
+      farmerOtpState.registrationToken = "";
+      toast(ft("registration_expired"), true);
+      return;
     }
     toast(otpErrorMessage(err), true);
   } finally {
@@ -1596,7 +1759,28 @@ function wireFarmerOtpForm() {
   }
   if (form) form.addEventListener("submit", (event) => { event.preventDefault(); farmerVerifyOtp(); });
 
-  if (farmerOtpState.sent && farmerOtpState.mobile) {
+  const createBtn = document.getElementById("farmerCreateBtn");
+  if (createBtn) createBtn.addEventListener("click", farmerCreateProfile);
+
+  const modeSwitch = document.getElementById("farmerModeSwitch");
+  if (modeSwitch) {
+    // While the profile step is open the verified number is already committed
+    // to signup, so no switch is offered.
+    modeSwitch.hidden = !!farmerOtpState.profileStep;
+    modeSwitch.textContent = farmerAuthMode === "signup" ? ft("login_link") : ft("signup_link");
+    const switchMode = () => {
+      location.hash = farmerAuthMode === "signup" ? "#/login/owner" : "#/register/owner";
+    };
+    modeSwitch.addEventListener("click", switchMode);
+    modeSwitch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); switchMode(); }
+    });
+  }
+
+  if (farmerOtpState.profileStep && farmerOtpState.registrationToken) {
+    // Restore the profile step after a re-render (e.g. a language switch).
+    showFarmerProfileStep(farmerOtpState.mobile);
+  } else if (farmerOtpState.sent && farmerOtpState.mobile) {
     // Restore the OTP step (and any running cooldown) after a re-render,
     // e.g. when the farmer switches language.
     showFarmerOtpCodeStep(farmerOtpState.mobile);
@@ -1608,11 +1792,13 @@ function wireFarmerOtpForm() {
 // =================================================== AUTH SCREENS ========
 function renderAuth(mode, role) {
   if (!validRole(role)) { location.hash = "#/"; return; }
-  const isLogin = mode === "login";
-  // Farmer password login is retained as a fallback screen only; the primary
-  // farmer entry point is the mobile OTP screen below.
-  const isFarmerPassword = mode === "password" && role === "owner";
-  const isFarmerOtp = isLogin && role === "owner";
+  // Role-specific authentication:
+  //   Farmer  -> mobile number + OTP for both login and profile creation.
+  //   Vet / Government / Laboratory -> the original password login and signup.
+  const isFarmerOtp = role === "owner";
+  // A number that verified as "not registered yet" stays in signup mode across
+  // re-renders (e.g. a language switch) until the profile is created.
+  farmerAuthMode = (mode === "register" || farmerOtpState.profileStep) ? "signup" : "login";
   const meta = ROLE_META[role];
   render(`
   <div class="auth-wrap">
@@ -1625,7 +1811,7 @@ function renderAuth(mode, role) {
     <div class="role-banner" style="background:${meta.color}1a;color:${meta.color}">
       ${meta.emoji} ${t(meta.label)} ${role === "owner" ? ft("farmer_portal") : "portal"}
     </div>
-    ${isFarmerOtp ? farmerOtpLoginForm() : (isLogin || isFarmerPassword ? loginForm(role, { farmerPasswordFallback: isFarmerPassword }) : registerForm(role))}
+    ${isFarmerOtp ? farmerOtpLoginForm(mode) : (mode === "login" ? loginForm(role) : registerForm(role))}
     ${role === "owner" ? "" : langToggle()}
   </div>`);
 
@@ -1634,11 +1820,7 @@ function renderAuth(mode, role) {
     return;
   }
 
-  if (isLogin || isFarmerPassword) {
-    if (isFarmerPassword) {
-      const backLink = document.getElementById("farmerOtpLink");
-      if (backLink) backLink.addEventListener("click", () => { location.hash = "#/login/owner"; });
-    }
+  if (mode === "login") {
     document.getElementById("loginForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = Object.fromEntries(new FormData(e.target));
@@ -1677,17 +1859,15 @@ function renderAuth(mode, role) {
   }
 }
 
-function loginForm(role, options = {}) {
-  const farmerFallback = !!options.farmerPasswordFallback;
+function loginForm(role) {
+  // Vet / Government / Laboratory keep the original password login. Farmers
+  // never reach this form: #/login/owner renders the OTP screen instead.
   return `
   <form id="loginForm">
-    ${farmerFallback ? `<div class="otp-unavailable" role="note">⚠️ ${ft("otp_unavailable")}</div>` : ""}
     <div class="field"><label>${authText(role, "email_or_mobile", "Email or Mobile")}</label><input name="identifier" autocomplete="username" required /></div>
     <div class="field"><label>${authText(role, "password", "Password")}</label><input name="password" type="password" autocomplete="current-password" required /></div>
     <button class="btn btn-primary" type="submit">${t("btn.login")}</button>
-    ${farmerFallback
-      ? `<div class="auth-switch"><a id="farmerOtpLink" role="button" tabindex="0">${ft("otp_login_link")}</a></div>`
-      : `<div class="auth-switch">${t("auth.newHere")} <a onclick="location.hash='#/register/${role}'">${t("auth.createAccount")}</a></div>`}
+    <div class="auth-switch">${t("auth.newHere")} <a onclick="location.hash='#/register/${role}'">${t("auth.createAccount")}</a></div>
     ${demoAccountBox(role)}
   </form>`;
 }
@@ -1719,8 +1899,11 @@ function registerForm(role) {
 
 route("#/", () => renderRoleSelect());
 route("#/login/:role", ({ role }) => renderAuth("login", role));
-// Farmer password login is kept only as a fallback path when OTP SMS is down.
-route("#/login/:role/password", ({ role }) => renderAuth("password", role));
+// Legacy bookmark: the farmer password screen no longer exists. Send it to the
+// OTP screen (never to a password form) and staff to their own login.
+route("#/login/:role/password", ({ role }) => {
+  location.hash = role === "owner" ? "#/login/owner" : `#/login/${role}`;
+});
 route("#/register/:role", ({ role }) => renderAuth("register", role));
 
 // ============================================================ DASHBOARDS ==

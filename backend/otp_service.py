@@ -24,6 +24,7 @@ TABLES (created additively by ``database.init_db``)
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import logging
@@ -357,8 +358,15 @@ def _last_sent_at(conn, mobile: str, purpose: str) -> datetime | None:
 # Public API: request / resend
 # --------------------------------------------------------------------------
 def request_otp(mobile_raw, *, ip: str | None = None,
-                purpose: str = PURPOSE_FARMER_LOGIN) -> dict:
-    """Issue (and send) a new login OTP for an existing farmer account.
+                purpose: str = PURPOSE_FARMER_LOGIN,
+                allow_unregistered: bool = False) -> dict:
+    """Issue (and send) a new OTP for a farmer mobile number.
+
+    When ``allow_unregistered`` is true (farmer profile creation) a number with
+    no account yet also receives a real OTP: the row carries ``user_id = NULL``
+    and verification returns a short-lived registration token instead of a
+    session. Every rate limit, cooldown and anti-enumeration rule applies to
+    both intents identically.
 
     Returns a dict with ``status`` and timing metadata. It never raises for an
     unknown or non-farmer number — the caller must return an identical, generic
@@ -434,22 +442,25 @@ def request_otp(mobile_raw, *, ip: str | None = None,
             (FARMER_ROLE, e164_form, local_form),
         ).fetchone()
 
+        signup_otp = False
         if not user:
-            # Anti-enumeration: identical success shape, no SMS is sent.
-            _log_attempt(conn, mobile=e164, ip=ip, outcome="UNKNOWN_ACCOUNT", purpose=purpose)
-            purge_stale(conn)
-            return {
-                "status": "ACCEPTED",
-                # No SMS is dispatched for an unknown (or non-farmer) number and
-                # the caller must not describe this as a delivery.
-                "sent": False,
-                "accepted": False,
-                "delivery_confirmed": False,
-                "gateway_message_id": None,
-                "gateway_state": None,
-                "expires_in": otp_ttl_seconds(),
-                "resend_after": cooldown,
-            }
+            if not allow_unregistered:
+                # Anti-enumeration: identical success shape, no SMS is sent.
+                _log_attempt(conn, mobile=e164, ip=ip, outcome="UNKNOWN_ACCOUNT", purpose=purpose)
+                purge_stale(conn)
+                return {
+                    "status": "ACCEPTED",
+                    # No SMS is dispatched for an unknown (or non-farmer) number and
+                    # the caller must not describe this as a delivery.
+                    "sent": False,
+                    "accepted": False,
+                    "delivery_confirmed": False,
+                    "gateway_message_id": None,
+                    "gateway_state": None,
+                    "expires_in": otp_ttl_seconds(),
+                    "resend_after": cooldown,
+                }
+            signup_otp = True
 
         # --- issue the OTP ---------------------------------------------------
         code = generate_otp()
@@ -460,16 +471,24 @@ def request_otp(mobile_raw, *, ip: str | None = None,
 
         conn.execute("BEGIN IMMEDIATE")
         try:
-            conn.execute(
-                "UPDATE otp_codes SET status=? WHERE user_id=? AND purpose=? AND status=?",
-                (_STATUS_INVALIDATED, user["id"], purpose, _STATUS_ACTIVE),
-            )
+            if user:
+                conn.execute(
+                    "UPDATE otp_codes SET status=? WHERE user_id=? AND purpose=? AND status=?",
+                    (_STATUS_INVALIDATED, user["id"], purpose, _STATUS_ACTIVE),
+                )
+            else:
+                # No account yet: invalidate by number so only the newest code works.
+                conn.execute(
+                    "UPDATE otp_codes SET status=? WHERE mobile_e164=? AND purpose=? AND status=?",
+                    (_STATUS_INVALIDATED, e164, purpose, _STATUS_ACTIVE),
+                )
             cursor = conn.execute(
                 "INSERT INTO otp_codes (user_id, role, mobile_e164, otp_hash, otp_salt, purpose, "
                 "attempts, max_attempts, status, created_at, expires_at, request_ip, "
                 "pepper_fingerprint) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (user["id"], user["role"], e164, otp_hash, salt, purpose,
+                (user["id"] if user else None, user["role"] if user else FARMER_ROLE,
+                 e164, otp_hash, salt, purpose,
                  0, otp_max_attempts(), _STATUS_ACTIVE, _iso(now), _iso(expires_at), ip,
                  fingerprint),
             )
@@ -484,7 +503,8 @@ def request_otp(mobile_raw, *, ip: str | None = None,
 
         # --- deliver ---------------------------------------------------------
         try:
-            delivery = _send_otp_sms(e164, code, user["preferred_language"], purpose)
+            delivery = _send_otp_sms(e164, code,
+                                     user["preferred_language"] if user else None, purpose)
         except sms_gateway.SmsGatewayError as exc:
             # Never claim delivery; the issued OTP is unusable and is retired.
             diag = exc.diagnostics()
@@ -502,7 +522,8 @@ def request_otp(mobile_raw, *, ip: str | None = None,
             logger.error(
                 "otp_sms_submission_failed user_id=%s error_code=%s category=%s "
                 "gateway_http_status=%s recipient=%s retryable=%s detail=%s",
-                user["id"], diag["code"], diag["category"], diag["gateway_http_status"],
+                user["id"] if user else "signup", diag["code"], diag["category"],
+                diag["gateway_http_status"],
                 sms_gateway.mask_phone(e164), diag["retryable"], diag["reason"],
             )
             safe_status = 503 if exc.code == "SMS_GATEWAY_NOT_CONFIGURED" else 502
@@ -522,16 +543,19 @@ def request_otp(mobile_raw, *, ip: str | None = None,
             (delivery.get("message_id"), message_state, mode, delivery.get("http_status"),
              1 if delivery.get("device_id_configured") else 0, otp_id),
         )
-        _log_attempt(conn, mobile=e164, ip=ip, outcome="SENT", purpose=purpose,
+        _log_attempt(conn, mobile=e164, ip=ip,
+                     outcome="SENT_SIGNUP" if signup_otp else "SENT", purpose=purpose,
                      detail=f"mode={mode} accepted={accepted} state={message_state}",
                      gateway_http_status=delivery.get("http_status"),
                      gateway_state=message_state)
         # A gateway 2xx = queued, not delivered. The message id is the handle for
         # provider-side tracing (GET /3rdparty/v1/messages/{id}).
         logger.info(
-            "otp_sms_submitted user_id=%s purpose=%s mode=%s simulated=%s accepted=%s "
+            "otp_sms_submitted user_id=%s purpose=%s intent=%s mode=%s simulated=%s accepted=%s "
             "message_id=%s message_state=%s device_pinned=%s note=queued_not_delivered",
-            user["id"], purpose, mode, bool(delivery.get("simulated")), accepted,
+            user["id"] if user else "signup", purpose,
+            "signup" if signup_otp else "login",
+            mode, bool(delivery.get("simulated")), accepted,
             delivery.get("message_id"), message_state,
             bool(delivery.get("device_id_configured")),
         )
@@ -539,6 +563,9 @@ def request_otp(mobile_raw, *, ip: str | None = None,
         return {
             "status": "SENT",
             "sent": True,
+            # True when the OTP was issued for a number without an account yet
+            # (farmer profile creation) instead of an existing login.
+            "signup": signup_otp,
             "simulated": bool(delivery.get("simulated")),
             "accepted": accepted,
             "delivery_confirmed": False,
@@ -557,10 +584,101 @@ def request_otp(mobile_raw, *, ip: str | None = None,
 
 
 def resend_otp(mobile_raw, *, ip: str | None = None,
-               purpose: str = PURPOSE_FARMER_LOGIN) -> dict:
+               purpose: str = PURPOSE_FARMER_LOGIN,
+               allow_unregistered: bool = False) -> dict:
     """Resend an OTP — identical to :func:`request_otp` but intended for the
     explicit "resend" action; the shared 60-second cooldown still applies."""
-    return request_otp(mobile_raw, ip=ip, purpose=purpose)
+    return request_otp(mobile_raw, ip=ip, purpose=purpose,
+                       allow_unregistered=allow_unregistered)
+
+
+# --------------------------------------------------------------------------
+# Farmer profile creation after phone verification
+# --------------------------------------------------------------------------
+# A signup OTP proves control of a mobile number, not the right to an account.
+# Verification therefore issues a short-lived, HMAC-signed token bound to the
+# exact verified number; the profile endpoint refuses anything else and always
+# creates the account with the farmer role — never the role the client asked
+# for. The token is signed with the OTP pepper (stable ``OTP_PEPPER`` or
+# ``SIH_SECRET_KEY``), so it survives restarts and multiple workers exactly
+# like OTP verification does.
+DEFAULT_REGISTRATION_TOKEN_TTL = 900   # 15 minutes
+_REGISTRATION_TOKEN_CONTEXT = b"pashumitra-farmer-registration-v1"
+
+
+def registration_token_ttl_seconds() -> int:
+    return _int_env("OTP_REGISTRATION_TOKEN_TTL_SECONDS", DEFAULT_REGISTRATION_TOKEN_TTL,
+                    minimum=60, maximum=24 * 3600)
+
+
+def issue_registration_token(e164: str) -> str:
+    """Return a signed, expiring token that authorizes one farmer profile."""
+    expires = int(_utcnow().timestamp()) + registration_token_ttl_seconds()
+    message = f"{e164}|{expires}".encode("utf-8")
+    signature = hmac.new(_pepper(), _REGISTRATION_TOKEN_CONTEXT + b":" + message,
+                         "sha256").hexdigest()
+    payload = base64.urlsafe_b64encode(message).decode("ascii").rstrip("=")
+    return f"{payload}.{signature}"
+
+
+def _token_fingerprint(token: str) -> str:
+    return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
+
+
+def consume_registration_token(conn, token) -> str | None:
+    """Validate **and spend** a registration token, returning the E.164 number.
+
+    A token is single use: it is accepted only while the OTP row it was issued
+    from has no ``registration_used_at``, and claiming is atomic
+    (``UPDATE ... WHERE registration_used_at IS NULL`` + rowcount check), so two
+    concurrent signups with the same token cannot both proceed.
+
+    It runs on the caller's connection so the claim belongs to the caller's
+    transaction: profile validation errors do not burn the token, while a
+    successful signup (or a login for a number that just gained an account)
+    always does. Returns ``None`` for a missing, expired, tampered, unknown or
+    already-used token.
+    """
+    e164 = verify_registration_token(token)
+    if not e164:
+        return None
+    fingerprint = _token_fingerprint(token)
+    row = conn.execute(
+        "SELECT id FROM otp_codes WHERE mobile_e164=? AND purpose=? "
+        "AND registration_token_hash=? AND registration_used_at IS NULL "
+        "ORDER BY id DESC LIMIT 1",
+        (e164, PURPOSE_FARMER_LOGIN, fingerprint),
+    ).fetchone()
+    if not row:
+        return None
+    cursor = conn.execute(
+        "UPDATE otp_codes SET registration_used_at=? WHERE id=? AND registration_used_at IS NULL",
+        (_iso(_utcnow()), row["id"]),
+    )
+    return e164 if cursor.rowcount == 1 else None
+
+
+def verify_registration_token(token) -> str | None:
+    """Return the verified E.164 number, or None when invalid/expired/tampered."""
+    raw = str(token or "").strip()
+    if not raw or "." not in raw:
+        return None
+    payload, _, signature = raw.rpartition(".")
+    try:
+        message = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)).decode("utf-8")
+    except Exception:
+        return None
+    expected = hmac.new(_pepper(), _REGISTRATION_TOKEN_CONTEXT + b":" + message.encode("utf-8"),
+                        "sha256").hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        return None
+    e164, _, expires = message.partition("|")
+    try:
+        if int(expires) < int(_utcnow().timestamp()):
+            return None
+    except (TypeError, ValueError):
+        return None
+    return e164 if e164.startswith("+") else None
 
 
 # --------------------------------------------------------------------------
@@ -572,6 +690,12 @@ def verify_otp(mobile_raw, code, *, ip: str | None = None,
 
     On success returns the authenticated farmer record as a dict:
     ``{"user": {...}, "user_id": int, "consumed_at": iso}``.
+
+    A *signup* OTP (issued with ``allow_unregistered=True`` for a number without
+    an account) returns ``{"user": None, "registration_required": True,
+    "registration_token": ..., "mobile_e164": ..., "role": "owner"}`` instead:
+    the caller can then create the farmer profile, and the token — never the
+    client's word — decides which number the new account belongs to.
 
     The generic failure codes (:class:`OtpError`) are: ``INVALID_MOBILE``,
     ``OTP_INVALID``, ``OTP_EXPIRED``, ``OTP_LOCKED``, ``OTP_ALREADY_USED``,
@@ -719,14 +843,56 @@ def verify_otp(mobile_raw, code, *, ip: str | None = None,
             raise OtpError("OTP_ALREADY_USED", "This OTP has already been used. Please request a new one.",
                            status=401, reason="consumption_race")
 
-        user = conn.execute("SELECT * FROM users WHERE id=?", (row["user_id"],)).fetchone()
-        if not user or user["role"] != FARMER_ROLE:
-            # Defensive: an OTP must never authenticate a non-farmer account.
-            _log_attempt(conn, mobile=e164, ip=ip, outcome="VERIFY_ROLE_MISMATCH", purpose=purpose,
-                         detail="reason=role_mismatch")
-            _log_verify_failure(e164, "role_mismatch", "OTP_INVALID", row=row)
-            raise OtpError("OTP_INVALID", "The OTP is incorrect or has expired. Please request a new one.",
-                           status=401, reason="role_mismatch")
+        user = None
+        row_user_id = _row_value(row, "user_id")
+        if row_user_id is not None:
+            user = conn.execute("SELECT * FROM users WHERE id=?", (row_user_id,)).fetchone()
+            if not user or user["role"] != FARMER_ROLE:
+                # Defensive: an OTP must never authenticate a non-farmer account.
+                _log_attempt(conn, mobile=e164, ip=ip, outcome="VERIFY_ROLE_MISMATCH",
+                             purpose=purpose, detail="reason=role_mismatch")
+                _log_verify_failure(e164, "role_mismatch", "OTP_INVALID", row=row)
+                raise OtpError("OTP_INVALID", "The OTP is incorrect or has expired. Please request a new one.",
+                               status=401, reason="role_mismatch")
+        else:
+            # Signup OTP: issued for a number without an account yet. Another
+            # role may never be signed in through the farmer OTP flow.
+            account = conn.execute(
+                "SELECT * FROM users WHERE mobile=? OR mobile=? LIMIT 1",
+                (e164, e164[-10:]),
+            ).fetchone()
+            if account and account["role"] != FARMER_ROLE:
+                _log_attempt(conn, mobile=e164, ip=ip, outcome="VERIFY_ROLE_MISMATCH",
+                             purpose=purpose, detail="reason=role_mismatch_signup")
+                _log_verify_failure(e164, "role_mismatch", "OTP_INVALID", row=row)
+                raise OtpError("OTP_INVALID", "The OTP is incorrect or has expired. Please request a new one.",
+                               status=401, reason="role_mismatch")
+            if account:
+                user = account  # registered between request and verify → login
+
+        if user is None:
+            _log_attempt(conn, mobile=e164, ip=ip, outcome="VERIFIED_SIGNUP", purpose=purpose)
+            purge_stale(conn)
+            token = issue_registration_token(e164)
+            # Bind the token to this OTP row: it is accepted once and only once.
+            conn.execute("UPDATE otp_codes SET registration_token_hash=? WHERE id=?",
+                         (_token_fingerprint(token), row["id"]))
+            conn.commit()
+            logger.info(
+                "otp_verified_signup purpose=%s recipient=%s otp_id=%s issued_age_seconds=%s "
+                "registration_token_ttl=%ss status=verified_unregistered",
+                purpose, sms_gateway.mask_phone(e164), row["id"], row_age,
+                registration_token_ttl_seconds(),
+            )
+            return {
+                "user": None,
+                "user_id": None,
+                "registration_required": True,
+                "registration_token": token,
+                "mobile_e164": e164,
+                "role": FARMER_ROLE,
+                "consumed_at": consumed_at,
+            }
 
         _log_attempt(conn, mobile=e164, ip=ip, outcome="VERIFIED", purpose=purpose)
         purge_stale(conn)

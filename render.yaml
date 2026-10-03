@@ -70,8 +70,9 @@ services:
         value: "5"
       - key: OTP_RESEND_COOLDOWN_SECONDS
         value: "60"
-      - key: FARMER_PASSWORD_FALLBACK
-        value: "true"
+      # Farmer auth is OTP-only (no password fallback); staff keep password login.
+      - key: OTP_REGISTRATION_TOKEN_TTL_SECONDS
+        value: "900"
 
   # Existing trained-model API. If this service is already deployed separately,
   # create only the backend service above and point SIH_ML_BACKEND at its URL.

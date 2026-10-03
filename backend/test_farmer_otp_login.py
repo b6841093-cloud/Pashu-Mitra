@@ -14,7 +14,8 @@ never returned by the API.
 Coverage: valid OTP, wrong OTP, expired OTP, replayed OTP, attempt limit,
 resend cooldown, SMS gateway failure, unknown numbers / other roles,
 rate limiting, single-use + race safety, and preservation of the existing
-password login for Vet / Government / Lab (and the farmer password fallback).
+password login for Vet / Government / Lab. Farmer authentication is OTP-only
+(no password fallback); the role-routing matrix lives in test_role_auth.py.
 """
 from __future__ import annotations
 
@@ -316,7 +317,9 @@ class OtpTestCase(unittest.TestCase):
             response = self.request_otp()
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.get_json()["code"], "SMS_GATEWAY_NOT_CONFIGURED")
-        self.assertFalse(response.get_json()["password_fallback_enabled"] is None)
+        # No password fallback exists for farmers any more.
+        self.assertNotIn("password_fallback_enabled", response.get_json())
+        self.assertIn("helpline", response.get_json())
 
     def test_16_gateway_auth_failure_is_reported_safely(self):
         self.gateway.fail_with = "SMS_GATEWAY_AUTH_FAILED"
@@ -404,12 +407,14 @@ class OtpTestCase(unittest.TestCase):
             self.assertEqual(body["user"]["role"], role)
             self.assertIn("token", body)
 
-    def test_24_farmer_password_login_still_works_as_fallback(self):
+    def test_24_farmer_password_login_is_refused(self):
+        """Farmers are OTP-only: even a correct legacy password mints no session."""
         response = self.client.post("/api/auth/login",
                                     json={"identifier": FARMER_MOBILE, "password": DEMO_PASSWORD})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()["user"]["role"], "owner")
-        self.assertEqual(response.get_json()["user"]["id"], self.farmer["id"])
+        self.assertEqual(response.status_code, 403)
+        body = response.get_json()
+        self.assertEqual(body["code"], "FARMER_OTP_REQUIRED")
+        self.assertNotIn("token", body)
 
     def test_25_farmer_otp_does_not_issue_other_role_tokens(self):
         """A farmer OTP session must not be able to reach vet/govt endpoints."""
@@ -440,12 +445,14 @@ class OtpTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertIn("otp_login_enabled", body)
-        self.assertIn("password_fallback_enabled", body)
+        self.assertIn("signup_enabled", body)
+        self.assertFalse(body["password_login_enabled"])
+        self.assertNotIn("password_fallback_enabled", body)
         self.assertEqual(body["otp_length"], 6)
         self.assertEqual(body["resend_cooldown_seconds"], 60)
         text = str(body).lower()
-        for secret in ("password", "username", "base_url", "sms_gateway_mode"):
-            self.assertNotIn(f'"{secret}"', text.replace('"password_fallback_enabled"', ""))
+        for secret in ("username", "base_url", "sms_gateway_mode"):
+            self.assertNotIn(f'"{secret}"', text)
 
     def test_28_health_reports_gateway_state_without_credentials(self):
         response = self.client.get("/api/health")

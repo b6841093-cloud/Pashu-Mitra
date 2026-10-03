@@ -23,7 +23,8 @@ from sklearn.cluster import DBSCAN
 
 from database import (
     get_db, init_db, hash_password, verify_password, next_code,
-    audit_log, calculate_expected_delivery, DB_PATH
+    audit_log, calculate_expected_delivery, DB_PATH,
+    find_user_by_mobile, otp_only_credentials,
 )
 from case_service import create_case_record
 from ivr_config import LANGUAGE_NAMES, SUPPORTED_LANGUAGES, get_ivr_settings
@@ -41,6 +42,8 @@ from otp_service import (
     diagnostics as otp_diagnostics,
     public_settings as otp_public_settings,
     request_otp as request_farmer_otp, resend_otp as resend_farmer_otp,
+    registration_token_ttl_seconds,
+    consume_registration_token,
     verify_otp as verify_farmer_otp,
 )
 from sms_service import send_sms, send_sms_urgent, get_sent_log, get_dead_letters, get_worker_stats, get_sms_provider_info
@@ -346,9 +349,17 @@ def health():
             # Documented multi-device behaviour: unpinned ⇒ random device.
             "device_pinned": gateway["device_pinned"],
         },
+        "auth": {
+            # Role-specific authentication (restored): farmers are OTP-only,
+            # Vet / Govt / Lab keep the original password login on /api/auth/login.
+            "farmer": {"login": "mobile_otp", "signup": "mobile_otp", "password_login": False},
+            "staff_login_method": "password",
+            "staff_self_register_roles": list(SELF_REGISTER_ROLES),
+        },
         "farmer_otp_login": {
             "enabled": otp_login_available(),
-            "password_fallback_enabled": _farmer_password_fallback_allowed(),
+            "password_login_enabled": False,
+            "signup_enabled": True,
             # Secret-free readiness flags: an unstable pepper (or a database
             # outside the persistent disk) silently breaks OTP verification.
             "pepper_stable": otp_status["pepper_stable"],
@@ -379,9 +390,29 @@ def ivr_info():
 
 
 # ------------------------------------------------------------------ auth --
+# Role-specific authentication (restored):
+#   * Farmer / Animal Owner  -> mobile number + SMS OTP only. There is no
+#     password login and no password signup for farmers; both routes refuse it.
+#   * Veterinarian / Government / Laboratory -> the original email-or-mobile +
+#     password login and signup, unchanged.
+# The role always comes from the database row, never from the request body, and
+# the JWT is minted from that row (see make_token).
+SELF_REGISTER_ROLES = ("vet", "govt", "lab")   # password signup (original flow)
+FARMER_ROLE = "owner"
+
+
 @app.post("/api/auth/register")
 def register():
     data = request.get_json(force=True) or {}
+    requested_role = str(data.get("role") or "").strip().lower()
+    if requested_role == FARMER_ROLE:
+        # Farmers create their profile with a phone-verified OTP flow; the
+        # password endpoint must never create or authenticate a farmer.
+        return jsonify({
+            "error": ("Farmers create their profile with a mobile number and OTP. "
+                      "Use /api/auth/farmer/request-otp and /api/auth/farmer/register."),
+            "code": "FARMER_OTP_SIGNUP_REQUIRED",
+        }), 403
     required = ["full_name", "mobile", "email", "password", "confirm_password", "role"]
     missing = [f for f in required if not data.get(f)]
     if missing:
@@ -390,7 +421,8 @@ def register():
         return jsonify({"error": "Passwords do not match"}), 400
     if len(data["password"]) < 6:
         return jsonify({"error": "Password must be at least 6 characters"}), 400
-    if data["role"] not in ("owner", "vet", "govt", "lab"):
+    if data["role"] not in SELF_REGISTER_ROLES:
+        # ``owner`` already returned 403 above; anything else is not a role.
         return jsonify({"error": "Invalid role"}), 400
     preferred_language = (data.get("preferred_language") or "").strip().lower() or None
     if preferred_language and preferred_language not in SUPPORTED_LANGUAGES:
@@ -441,6 +473,18 @@ def login():
     if not user or not verify_password(password, user["salt"], user["password_hash"]):
         conn.close()
         return jsonify({"error": "Invalid credentials"}), 401
+    if user["role"] == FARMER_ROLE:
+        # Password authentication is closed for farmers: even a correct legacy
+        # password must not mint a farmer session (checked *after* the password
+        # so the response never distinguishes a farmer from an unknown account
+        # for anyone who does not already know the password).
+        conn.close()
+        return jsonify({
+            "error": ("Farmers sign in with their mobile number and an OTP. "
+                      "Use the Farmer login screen to request an OTP."),
+            "code": "FARMER_OTP_REQUIRED",
+            "login_method": "mobile_otp",
+        }), 403
 
     token = make_token(user)
     audit_log(conn, "LOGIN", "user", user["id"], actor_id=user["id"],
@@ -469,23 +513,30 @@ def _client_ip():
         return None
 
 
-def _farmer_password_fallback_allowed() -> bool:
-    """Whether the legacy farmer password form stays reachable as a fallback."""
-    raw = os.environ.get("FARMER_PASSWORD_FALLBACK")
-    if raw is None:
-        return True
-    return str(raw).strip().lower() in ("1", "true", "yes", "on")
-
-
 def _otp_route_readiness_error():
     """503 payload when OTP login cannot work, with the exact (safe) reason."""
     status = otp_login_status()
     code = status["blockers"][0] if status["blockers"] else "SMS_GATEWAY_NOT_CONFIGURED"
     return jsonify({
-        "error": "OTP login is not available right now. Please use password login.",
+        # No password fallback exists for farmers: the farmer is told to retry
+        # and to call the helpline rather than being sent to a dead end.
+        "error": "OTP login is not available right now. Please try again shortly.",
         "code": code,
-        "password_fallback_enabled": _farmer_password_fallback_allowed(),
+        "helpline": get_ivr_settings().display_number,
     }), 503
+
+
+def _otp_request_intent(data) -> tuple[str, bool]:
+    """Return ``(intent, allow_unregistered)`` for an OTP request body.
+
+    ``intent=signup`` (farmer profile creation) may issue an OTP for a number
+    without an account; the default ``login`` intent never does. Anything
+    unrecognised falls back to the safe ``login`` behaviour.
+    """
+    raw = str(data.get("intent") or data.get("purpose") or "").strip().lower()
+    if raw in ("signup", "register", "registration"):
+        return "signup", True
+    return "login", False
 
 
 def _otp_neutral_message(result, *, resend: bool = False) -> str:
@@ -530,17 +581,28 @@ def _audit_otp_event(action, *, user_id=None, mobile=None, details=None):
 
 @app.get("/api/auth/farmer/config")
 def farmer_auth_config():
-    """Public, non-secret OTP login settings used by the farmer login screen."""
+    """Public, non-secret OTP settings for the farmer login/signup screen."""
     settings = otp_public_settings()
-    settings["password_fallback_enabled"] = _farmer_password_fallback_allowed()
+    # Farmer authentication is OTP-only: there is no password login to fall back
+    # to (Vet / Govt / Lab keep their original password login on /api/auth/login).
+    settings["password_login_enabled"] = False
+    settings["signup_enabled"] = True
+    settings["helpline"] = get_ivr_settings().display_number
     return jsonify(settings)
 
 
 @app.post("/api/auth/farmer/request-otp")
 def farmer_request_otp_route():
-    """Send a login OTP to a registered farmer's mobile number."""
+    """Send an OTP to a farmer's mobile number.
+
+    ``intent=login`` (default) only ever reaches a registered farmer account;
+    ``intent=signup`` is the farmer profile-creation flow and may also reach a
+    number that has no account yet. Both intents share every rate limit,
+    cooldown and anti-enumeration rule.
+    """
     data = request.get_json(silent=True) or {}
     mobile = data.get("mobile") or data.get("phone") or data.get("identifier")
+    intent, allow_unregistered = _otp_request_intent(data)
 
     if not mobile:
         return jsonify({"error": "Mobile number is required.", "code": "INVALID_MOBILE"}), 400
@@ -551,7 +613,8 @@ def farmer_request_otp_route():
         return _otp_route_readiness_error()
 
     try:
-        result = request_farmer_otp(mobile, ip=_client_ip())
+        result = request_farmer_otp(mobile, ip=_client_ip(),
+                                    allow_unregistered=allow_unregistered)
     except OtpError as exc:
         logging.getLogger(__name__).warning(
             "farmer_otp_request_failed recipient=%s error_code=%s reason=%s http_status=%s",
@@ -565,7 +628,7 @@ def farmer_request_otp_route():
     _log_otp_dispatch("farmer_otp_request_accepted", mobile, result)
     if result.get("sent"):
         _audit_otp_event("OTP_REQUESTED", mobile=mobile,
-                         details={"purpose": "farmer_login",
+                         details={"purpose": "farmer_login", "intent": intent,
                                   "expires_in": result.get("expires_in"),
                                   "message_id": result.get("gateway_message_id"),
                                   "message_state": result.get("gateway_state"),
@@ -589,6 +652,7 @@ def farmer_resend_otp_route():
     """Resend a login OTP. Enforces the 60-second resend cooldown."""
     data = request.get_json(silent=True) or {}
     mobile = data.get("mobile") or data.get("phone") or data.get("identifier")
+    intent, allow_unregistered = _otp_request_intent(data)
 
     if not mobile:
         return jsonify({"error": "Mobile number is required.", "code": "INVALID_MOBILE"}), 400
@@ -597,7 +661,8 @@ def farmer_resend_otp_route():
         return _otp_route_readiness_error()
 
     try:
-        result = resend_farmer_otp(mobile, ip=_client_ip())
+        result = resend_farmer_otp(mobile, ip=_client_ip(),
+                                   allow_unregistered=allow_unregistered)
     except OtpError as exc:
         logging.getLogger(__name__).warning(
             "farmer_otp_resend_failed recipient=%s error_code=%s reason=%s http_status=%s",
@@ -611,7 +676,7 @@ def farmer_resend_otp_route():
     _log_otp_dispatch("farmer_otp_resend_accepted", mobile, result)
     if result.get("sent"):
         _audit_otp_event("OTP_RESENT", mobile=mobile,
-                         details={"purpose": "farmer_login",
+                         details={"purpose": "farmer_login", "intent": intent,
                                   "message_id": result.get("gateway_message_id"),
                                   "message_state": result.get("gateway_state"),
                                   "simulated": bool(result.get("simulated"))})
@@ -651,9 +716,24 @@ def farmer_verify_otp_route():
                          details={"code": exc.code, "reason": exc.reason})
         return jsonify(exc.to_payload()), exc.status
 
+    if result.get("registration_required"):
+        # Phone verified, no farmer account yet: the client continues to the
+        # farmer profile step. No JWT is issued — only the signed, short-lived
+        # registration token that is bound to this exact number.
+        _audit_otp_event("OTP_VERIFIED_SIGNUP", mobile=result.get("mobile_e164"),
+                         details={"purpose": "farmer_signup"})
+        return jsonify({
+            "registration_required": True,
+            "registration_token": result["registration_token"],
+            "mobile": str(result.get("mobile_e164") or "")[-10:],
+            "role": FARMER_ROLE,
+            "expires_in": registration_token_ttl_seconds(),
+            "delivery_confirmed": False,
+        })
+
     user = result["user"]
     # Defence in depth: a farmer OTP must never authenticate another role.
-    if user.get("role") != "owner":
+    if user.get("role") != FARMER_ROLE:
         _audit_otp_event("OTP_ROLE_REJECTED", user_id=user.get("id"), mobile=mobile)
         return jsonify({"error": "Forbidden for this role", "code": "FORBIDDEN_ROLE"}), 403
 
@@ -661,6 +741,139 @@ def farmer_verify_otp_route():
     _audit_otp_event("LOGIN", user_id=user["id"], mobile=mobile,
                      details={"method": "otp", "purpose": "farmer_login"})
     return jsonify({"token": token, "user": public_user(user), "login_method": "otp"})
+
+
+@app.post("/api/auth/farmer/register")
+def farmer_register_route():
+    """Create the farmer profile for a phone number verified by OTP.
+
+    Requires the ``registration_token`` returned by
+    ``POST /api/auth/farmer/verify-otp`` — the number comes from that signed
+    token, never from the request body, so a verification cannot be reused for
+    a different mobile. The token is single use (spent here, even when the
+    account turns out to exist already). The account is always created with
+    ``role='owner'``; there is no password and no client-supplied role.
+    """
+    data = request.get_json(force=True) or {}
+    registration_token = data.get("registration_token")
+
+    full_name = str(data.get("full_name") or "").strip()
+    district = str(data.get("district") or "").strip()
+    missing = [label for label, value in (("full_name", full_name), ("district", district))
+               if not value]
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}",
+                        "code": "MISSING_PROFILE_FIELDS",
+                        "required_fields": ["full_name", "district"]}), 400
+    if len(full_name) < 2:
+        return jsonify({"error": "Please enter your full name.",
+                        "code": "INVALID_PROFILE"}), 400
+
+    preferred_language = (data.get("preferred_language") or "").strip().lower() or None
+    if preferred_language and preferred_language not in SUPPORTED_LANGUAGES:
+        return jsonify({"error": "Preferred language must be en, te, hi, or mr",
+                        "code": "INVALID_PROFILE"}), 400
+
+    supplied_email = str(data.get("email") or "").strip()
+
+    conn = get_db()
+    try:
+        # BEGIN IMMEDIATE makes the token claim, the uniqueness check and the
+        # INSERT one atomic step, so two concurrent signups for one number (or
+        # with one token) cannot both succeed.
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            e164 = consume_registration_token(conn, registration_token)
+            if not e164:
+                conn.execute("ROLLBACK")
+                return jsonify({
+                    "error": "This verification has expired. Please request a new OTP.",
+                    "code": "REGISTRATION_TOKEN_INVALID",
+                }), 401
+            # ``users.email`` is UNIQUE NOT NULL but is not an authentication
+            # identifier for farmers, so a phone-verified farmer without an
+            # email gets a deterministic, non-routable placeholder instead of a
+            # schema change.
+            contact_email = supplied_email or f"{e164.lstrip('+')}@mobile.pashumitra.local"
+            mobile_local = e164[-10:]
+
+            if supplied_email:
+                # ``users.email`` is UNIQUE; check it behind the verified phone
+                # so the endpoint cannot be used to probe for existing emails.
+                taken = conn.execute("SELECT id FROM users WHERE email=?",
+                                     (contact_email,)).fetchone()
+                if taken:
+                    # Nothing is spent: this is a retryable input error.
+                    conn.execute("ROLLBACK")
+                    return jsonify({"error": "An account with this email already exists.",
+                                    "code": "ACCOUNT_EXISTS"}), 409
+
+            existing = find_user_by_mobile(conn, e164)
+            if existing:
+                # The token is spent even on this path: it has been used.
+                conn.execute("COMMIT")
+                if existing["role"] != FARMER_ROLE:
+                    # Never hand out a session for a staff account here.
+                    return jsonify({
+                        "error": "This mobile number belongs to a staff account. "
+                                 "Please use the correct portal.",
+                        "code": "ACCOUNT_EXISTS_WRONG_PORTAL",
+                    }), 409
+                # The number gained a farmer account after the OTP was issued:
+                # log that account in instead of creating a duplicate.
+                token = make_token(existing)
+                _audit_otp_event("REGISTER_EXISTING_LOGIN", user_id=existing["id"],
+                                 mobile=e164, details={"purpose": "farmer_signup"})
+                return jsonify({"token": token, "user": public_user(existing),
+                                "login_method": "otp", "registered": False})
+
+            pw_hash, salt = otp_only_credentials()
+            cur = conn.execute(
+                "INSERT INTO users (full_name, mobile, email, password_hash, salt, role, "
+                "preferred_language, village, block, district, state) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (full_name, mobile_local, contact_email, pw_hash, salt, FARMER_ROLE,
+                 preferred_language, (data.get("village") or None),
+                 (data.get("block") or None), district,
+                 (data.get("state") or "Maharashtra")),
+            )
+            user_id = cur.lastrowid
+            audit_log(conn, "REGISTER_USER", "user", user_id, actor_id=user_id,
+                      actor_name=full_name, actor_role=FARMER_ROLE,
+                      details={"mobile": sms_gateway.mask_phone(e164),
+                               "role": FARMER_ROLE, "method": "mobile_otp"})
+            conn.execute("COMMIT")
+        except sqlite3.IntegrityError:
+            try:
+                conn.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            existing = find_user_by_mobile(conn, e164)
+            if existing and existing["role"] == FARMER_ROLE:
+                token = make_token(existing)
+                return jsonify({"token": token, "user": public_user(existing),
+                                "login_method": "otp", "registered": False})
+            return jsonify({"error": "An account with this mobile number already exists.",
+                            "code": "ACCOUNT_EXISTS"}), 409
+        except Exception:
+            try:
+                conn.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            raise
+
+        user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        token = make_token(user)
+        _audit_otp_event("REGISTER_FARMER_OTP", user_id=user_id, mobile=e164,
+                         details={"purpose": "farmer_signup", "method": "mobile_otp"})
+        logging.getLogger(__name__).info(
+            "farmer_profile_created user_id=%s recipient=%s source=mobile_otp_verified",
+            user_id, sms_gateway.mask_phone(e164),
+        )
+        return jsonify({"token": token, "user": public_user(user),
+                        "login_method": "otp", "registered": True}), 201
+    finally:
+        conn.close()
 
 
 @app.get("/api/users/me")
