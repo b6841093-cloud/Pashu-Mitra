@@ -16,3 +16,4 @@ htmlcov/
 # Local OTP/auth test databases (the suites use throwaway SQLite files)
 backend/test_otp_login.db*
 backend/test_role_auth.db*
+backend/test_demo_account.db*

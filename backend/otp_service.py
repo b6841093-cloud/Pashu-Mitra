@@ -17,6 +17,18 @@ SECURITY MODEL
 * Verification state lives only in the database — never in localStorage or a
   JWT — and the OTP plaintext is never logged.
 
+PROTOTYPE DEMO ACCOUNT
+======================
+When ``DEMO_MODE`` is explicitly enabled (see ``demo_auth.py``), the single
+configured demo number is issued an OTP row whose code is the fixed demo value
+and whose SMS is *not* dispatched. The row is a normal row — salted, peppered
+hashed, expiring, single-use, attempt-limited — so verification goes through
+exactly the same code as every other farmer, and the JWT is minted from the
+database row exactly the same way. Nothing about the verification, the token or
+the role claims changes; only the *source* of the code changes. With demo mode
+off, no such row is ever created and the fixed code is rejected by the ordinary
+rules.
+
 TABLES (created additively by ``database.init_db``)
 ==================================================
 ``otp_codes``        one row per issued OTP (hash, salt, attempts, status)
@@ -34,6 +46,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 import sms_gateway
+import demo_auth
 from database import DB_PATH, get_db
 from ivr_config import normalize_indian_number
 
@@ -368,6 +381,12 @@ def request_otp(mobile_raw, *, ip: str | None = None,
     session. Every rate limit, cooldown and anti-enumeration rule applies to
     both intents identically.
 
+    The prototype demo account is a strictly narrower path: only when demo mode
+    is on *and* the number is the configured demo number, the issued code is
+    the fixed demo value and no SMS is dispatched. The row it writes is an
+    ordinary OTP row, so verification, the JWT and the role claims are
+    unchanged. Demo mode off ⇒ identical behaviour to every other number.
+
     Returns a dict with ``status`` and timing metadata. It never raises for an
     unknown or non-farmer number — the caller must return an identical, generic
     response to avoid account enumeration.
@@ -379,11 +398,16 @@ def request_otp(mobile_raw, *, ip: str | None = None,
     if not e164:
         raise OtpError("INVALID_MOBILE", "Enter a valid 10-digit Indian mobile number.", status=400)
 
+    # Demo mode is decided here and nowhere else: the flag plus the configured
+    # number. Using the demo number while demo mode is off changes nothing.
+    demo_login = demo_auth.is_demo_farmer(e164)
+    demo_code = demo_auth.demo_farmer_otp() if demo_login else None
+
     readiness = otp_login_status()
-    if not readiness["ready"]:
+    if not readiness["ready"] and not demo_login:
         raise OtpError(
             readiness["blockers"][0],
-            "OTP login is not available right now. Please use password login.",
+            "OTP login is not available right now. Please try again shortly.",
             status=503,
             reason=readiness["blockers"][0],
         )
@@ -397,12 +421,16 @@ def request_otp(mobile_raw, *, ip: str | None = None,
         ip_max = _int_env("OTP_IP_MAX_REQUESTS", DEFAULT_IP_MAX_REQUESTS, minimum=1)
 
         # --- rate limits (per mobile, then per client IP) --------------------
+        # The demo number is exempt while demo mode is on: no SMS leaves the
+        # server for it, the code is already public by design, and a
+        # presenter must be able to log out and back in during a demo without
+        # waiting out a 60-second cooldown. No other number is affected.
         recent_mobile = conn.execute(
             "SELECT COUNT(*) AS c FROM otp_request_log WHERE mobile_e164=? AND created_at >= ? "
-            "AND outcome IN ('SENT','SEND_FAILED','UNKNOWN_ACCOUNT')",
+            "AND outcome IN ('SENT','SENT_DEMO','SEND_FAILED','UNKNOWN_ACCOUNT')",
             (e164, _iso(now - timedelta(seconds=mobile_window))),
         ).fetchone()["c"]
-        if recent_mobile >= mobile_max:
+        if recent_mobile >= mobile_max and not demo_login:
             _log_attempt(conn, mobile=e164, ip=ip, outcome="RATE_LIMITED", purpose=purpose)
             raise OtpError(
                 "RATE_LIMITED",
@@ -410,7 +438,7 @@ def request_otp(mobile_raw, *, ip: str | None = None,
                 status=429, retry_after=mobile_window,
             )
 
-        if ip:
+        if ip and not demo_login:
             recent_ip = _count_since(conn, "otp_request_log", "ip_address", ip,
                                      now - timedelta(seconds=ip_window))
             if recent_ip >= ip_max:
@@ -422,7 +450,7 @@ def request_otp(mobile_raw, *, ip: str | None = None,
                 )
 
         # --- resend cooldown -------------------------------------------------
-        cooldown = resend_cooldown_seconds()
+        cooldown = 0 if demo_login else resend_cooldown_seconds()
         last_sent = _last_sent_at(conn, e164, purpose)
         if last_sent and cooldown > 0:
             elapsed = (now - last_sent).total_seconds()
@@ -437,10 +465,27 @@ def request_otp(mobile_raw, *, ip: str | None = None,
 
         # --- account lookup (farmers only, never another role) ---------------
         e164_form, local_form = mobile_variants(e164)
-        user = conn.execute(
-            "SELECT * FROM users WHERE role=? AND (mobile=? OR mobile=?) LIMIT 1",
-            (FARMER_ROLE, e164_form, local_form),
-        ).fetchone()
+        if demo_login:
+            # Create-or-reuse the single demo farmer row (never a duplicate).
+            user = demo_auth.ensure_demo_farmer(conn)
+            if user is None:
+                _log_attempt(conn, mobile=e164, ip=ip, outcome="DEMO_ACCOUNT_UNAVAILABLE",
+                             purpose=purpose)
+                logger.error(
+                    "demo_login_unavailable recipient=%s reason=demo_account_conflict",
+                    sms_gateway.mask_phone(e164),
+                )
+                raise OtpError(
+                    "DEMO_ACCOUNT_UNAVAILABLE",
+                    "The demo account is not available right now. Please try again shortly.",
+                    status=503, reason="demo_account_conflict",
+                )
+            conn.commit()
+        else:
+            user = conn.execute(
+                "SELECT * FROM users WHERE role=? AND (mobile=? OR mobile=?) LIMIT 1",
+                (FARMER_ROLE, e164_form, local_form),
+            ).fetchone()
 
         signup_otp = False
         if not user:
@@ -463,7 +508,11 @@ def request_otp(mobile_raw, *, ip: str | None = None,
             signup_otp = True
 
         # --- issue the OTP ---------------------------------------------------
-        code = generate_otp()
+        # Demo mode: the fixed code is stored exactly like a random one (salted,
+        # peppered hash only). The plaintext is never written to the log, the
+        # audit trail or the response — it is read from the login screen, which
+        # only shows it while demo mode is on.
+        code = demo_code if demo_login else generate_otp()
         salt = secrets.token_hex(16)
         otp_hash = hash_otp(code, salt)
         fingerprint = pepper_fingerprint()
@@ -503,8 +552,17 @@ def request_otp(mobile_raw, *, ip: str | None = None,
 
         # --- deliver ---------------------------------------------------------
         try:
-            delivery = _send_otp_sms(e164, code,
-                                     user["preferred_language"] if user else None, purpose)
+            if demo_login:
+                # No SMS is dispatched for the demo number: 9999999999 may well
+                # be a real handset. The code is displayed on the login screen.
+                delivery = {
+                    "delivered": False, "simulated": True, "mode": "DEMO",
+                    "accepted": True, "message_id": None, "state": "DemoSuppressed",
+                    "device_id_configured": False, "http_status": None,
+                }
+            else:
+                delivery = _send_otp_sms(e164, code,
+                                         user["preferred_language"] if user else None, purpose)
         except sms_gateway.SmsGatewayError as exc:
             # Never claim delivery; the issued OTP is unusable and is retired.
             diag = exc.diagnostics()
@@ -544,7 +602,9 @@ def request_otp(mobile_raw, *, ip: str | None = None,
              1 if delivery.get("device_id_configured") else 0, otp_id),
         )
         _log_attempt(conn, mobile=e164, ip=ip,
-                     outcome="SENT_SIGNUP" if signup_otp else "SENT", purpose=purpose,
+                     outcome=("SENT_DEMO" if demo_login
+                              else "SENT_SIGNUP" if signup_otp else "SENT"),
+                     purpose=purpose,
                      detail=f"mode={mode} accepted={accepted} state={message_state}",
                      gateway_http_status=delivery.get("http_status"),
                      gateway_state=message_state)
@@ -554,7 +614,7 @@ def request_otp(mobile_raw, *, ip: str | None = None,
             "otp_sms_submitted user_id=%s purpose=%s intent=%s mode=%s simulated=%s accepted=%s "
             "message_id=%s message_state=%s device_pinned=%s note=queued_not_delivered",
             user["id"] if user else "signup", purpose,
-            "signup" if signup_otp else "login",
+            "demo" if demo_login else "signup" if signup_otp else "login",
             mode, bool(delivery.get("simulated")), accepted,
             delivery.get("message_id"), message_state,
             bool(delivery.get("device_id_configured")),
@@ -566,6 +626,9 @@ def request_otp(mobile_raw, *, ip: str | None = None,
             # True when the OTP was issued for a number without an account yet
             # (farmer profile creation) instead of an existing login.
             "signup": signup_otp,
+            # True only for the demo number while demo mode is on: no SMS was
+            # dispatched, the fixed code is shown on the login screen instead.
+            "demo": demo_login,
             "simulated": bool(delivery.get("simulated")),
             "accepted": accepted,
             "delivery_confirmed": False,
@@ -719,6 +782,12 @@ def verify_otp(mobile_raw, code, *, ip: str | None = None,
     conn = _open_conn()
     try:
         now = _utcnow()
+        # The demo number is exempt from the rolling failed-verification cap
+        # while demo mode is on: its code is shared on the login screen by
+        # design, so the cap protects nothing there, and a live prototype must
+        # not be locked out by a mistyped digit. Every other number keeps the
+        # full anti-brute-force limit.
+        demo_login = demo_auth.is_demo_farmer(e164)
         failure_window = _int_env("OTP_FAILURE_WINDOW_SECONDS", DEFAULT_MOBILE_WINDOW, minimum=60)
         failures = _count_since(
             conn, "otp_request_log", "mobile_e164", e164,
@@ -726,7 +795,7 @@ def verify_otp(mobile_raw, code, *, ip: str | None = None,
             "AND outcome='VERIFY_FAILED'",
         )
         max_failures = _int_env("OTP_MAX_VERIFY_FAILURES", DEFAULT_MOBILE_MAX_FAILURES, minimum=1)
-        if failures >= max_failures:
+        if failures >= max_failures and not demo_login:
             _log_attempt(conn, mobile=e164, ip=ip, outcome="VERIFY_RATE_LIMITED", purpose=purpose,
                          detail=f"reason=failure_limit failures={failures}")
             _log_verify_failure(e164, "failure_limit", "RATE_LIMITED", row=None,
@@ -915,15 +984,19 @@ def otp_login_blockers() -> list[str]:
     """Configuration problems that would make OTP login fail (secret-free).
 
     ``SMS_GATEWAY_NOT_CONFIGURED``  gateway disabled / unusable / MOCK in prod.
+                                    Ignored while demo mode is on, because the
+                                    demo farmer never receives an SMS.
     ``OTP_PEPPER_UNSTABLE``         no stable pepper ⇒ valid codes fail with 401
                                     whenever more than one worker is running.
+                                    Still applies in demo mode: the demo code is
+                                    stored as a normal peppered hash.
     """
     blockers: list[str] = []
     try:
         gateway_usable = sms_gateway.get_gateway_config().is_usable
     except Exception:  # pragma: no cover - defensive
         gateway_usable = False
-    if not gateway_usable:
+    if not gateway_usable and not demo_auth.demo_mode_enabled():
         blockers.append("SMS_GATEWAY_NOT_CONFIGURED")
     try:
         production = sms_gateway.is_production()
@@ -964,6 +1037,9 @@ def public_settings() -> dict:
         "resend_cooldown_seconds": resend_cooldown_seconds(),
         "max_attempts": otp_max_attempts(),
         "pepper_stable": pepper_is_stable(),
+        # Prototype demo account. Carries a number and a code only while demo
+        # mode is explicitly enabled; otherwise it is just {"enabled": false}.
+        "demo": demo_auth.public_demo_settings(),
     }
 
 

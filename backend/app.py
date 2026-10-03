@@ -37,6 +37,7 @@ from ivr_service import (
 import weather
 import animal_ai
 import sms_gateway
+import demo_auth
 from otp_service import (
     OtpError, otp_login_available, otp_login_status,
     diagnostics as otp_diagnostics,
@@ -66,6 +67,9 @@ get_ivr_settings()
 # Safe under multiple Gunicorn workers: database.init_db uses an inter-process
 # lock and additive/idempotent migrations.
 init_db()
+# Loud, secret-free warning when the prototype demo farmer login is switched
+# on. Off by default; see DEMO_ACCOUNT.md before enabling it anywhere public.
+demo_auth.log_demo_mode_banner()
 
 CASE_STATUSES = [
     "NEW", "ASSIGNED", "UNDER INVESTIGATION", "SAMPLE COLLECTED", "LAB PENDING",
@@ -370,6 +374,9 @@ def health():
                 and (not os.environ.get("RENDER") or DB_PATH.startswith("/var/data"))
             ),
         },
+        # Prototype demo account state — flags only, never the number and never
+        # the code. A visible "enabled": true here is the signal to turn it off.
+        "demo_mode": demo_auth.demo_mode_status(),
     }), 200 if database_ok else 503
 
 
@@ -539,6 +546,16 @@ def _otp_request_intent(data) -> tuple[str, bool]:
     return "login", False
 
 
+def _is_demo_login_request(mobile) -> bool:
+    """True only for the configured demo number while demo mode is enabled.
+
+    The prototype demo farmer never receives an SMS, so the route-level SMS
+    gateway readiness gate does not apply to it. Every other number — including
+    the demo number when demo mode is off — is gated exactly as before.
+    """
+    return demo_auth.is_demo_farmer(mobile)
+
+
 def _otp_neutral_message(result, *, resend: bool = False) -> str:
     """Delivery-agnostic wording, identical for registered and unknown numbers.
 
@@ -548,6 +565,17 @@ def _otp_neutral_message(result, *, resend: bool = False) -> str:
     prefix = ("If this mobile number is registered, a new OTP has been sent"
               if resend else "If this mobile number is registered, an OTP has been sent")
     return f"{prefix}. It is valid for {minutes} minutes."
+
+
+def _demo_otp_message() -> str:
+    """Wording for the prototype demo farmer — explicitly no SMS was sent.
+
+    The fixed demo code is deliberately *not* echoed here: the login screen
+    already shows it (that is the point of the demo account) and this response
+    must not become a second place where a code travels.
+    """
+    return ("Demo account: no SMS is sent for this number. Enter the demo OTP "
+            "shown in the Demo Account box on this screen.")
 
 
 def _log_otp_dispatch(action: str, mobile, result: dict) -> None:
@@ -581,7 +609,12 @@ def _audit_otp_event(action, *, user_id=None, mobile=None, details=None):
 
 @app.get("/api/auth/farmer/config")
 def farmer_auth_config():
-    """Public, non-secret OTP settings for the farmer login/signup screen."""
+    """Public, non-secret OTP settings for the farmer login/signup screen.
+
+    ``settings["demo"]`` describes the prototype demo account. While demo mode
+    is off it is exactly ``{"enabled": false}`` — no number, no code, so the
+    screen has nothing to show. See demo_auth.py and DEMO_ACCOUNT.md.
+    """
     settings = otp_public_settings()
     # Farmer authentication is OTP-only: there is no password login to fall back
     # to (Vet / Govt / Lab keep their original password login on /api/auth/login).
@@ -607,7 +640,7 @@ def farmer_request_otp_route():
     if not mobile:
         return jsonify({"error": "Mobile number is required.", "code": "INVALID_MOBILE"}), 400
 
-    if not otp_login_available():
+    if not otp_login_available() and not _is_demo_login_request(mobile):
         # Fail loudly instead of pretending an SMS was sent. The code tells the
         # operator exactly what to fix (gateway config vs. unstable OTP pepper).
         return _otp_route_readiness_error()
@@ -635,11 +668,30 @@ def farmer_request_otp_route():
                                   "http_status": result.get("gateway_http_status"),
                                   "simulated": bool(result.get("simulated"))})
 
+    if result.get("demo"):
+        # The prototype demo farmer: no SMS was sent and the fixed code is
+        # already on the login screen. Anti-enumeration does not apply to this
+        # one publicly documented number, so the wording is explicit instead of
+        # neutral — the UI must never claim an SMS was sent.
+        _audit_otp_event("DEMO_OTP_REQUESTED", mobile=mobile,
+                         details={"purpose": "farmer_login", "intent": intent,
+                                  "expires_in": result.get("expires_in")})
+        return jsonify({
+            "ok": True,
+            "demo": True,
+            "message": _demo_otp_message(),
+            "delivery_confirmed": False,
+            "sms_sent": False,
+            "expires_in": result.get("expires_in"),
+            "resend_after": result.get("resend_after"),
+        })
+
     # Identical response whether or not the number is registered (no enumeration).
     # delivery_confirmed is always False: a 200 means the request was accepted,
     # never that an SMS was delivered.
     return jsonify({
         "ok": True,
+        "demo": False,
         "message": _otp_neutral_message(result),
         "delivery_confirmed": False,
         "expires_in": result.get("expires_in"),
@@ -657,7 +709,7 @@ def farmer_resend_otp_route():
     if not mobile:
         return jsonify({"error": "Mobile number is required.", "code": "INVALID_MOBILE"}), 400
 
-    if not otp_login_available():
+    if not otp_login_available() and not _is_demo_login_request(mobile):
         return _otp_route_readiness_error()
 
     try:
@@ -681,8 +733,20 @@ def farmer_resend_otp_route():
                                   "message_state": result.get("gateway_state"),
                                   "simulated": bool(result.get("simulated"))})
 
+    if result.get("demo"):
+        return jsonify({
+            "ok": True,
+            "demo": True,
+            "message": _demo_otp_message(),
+            "delivery_confirmed": False,
+            "sms_sent": False,
+            "expires_in": result.get("expires_in"),
+            "resend_after": result.get("resend_after"),
+        })
+
     return jsonify({
         "ok": True,
+        "demo": False,
         "message": _otp_neutral_message(result, resend=True),
         "delivery_confirmed": False,
         "expires_in": result.get("expires_in"),
@@ -738,9 +802,15 @@ def farmer_verify_otp_route():
         return jsonify({"error": "Forbidden for this role", "code": "FORBIDDEN_ROLE"}), 403
 
     token = make_token(user)
+    # The token, the claims and the role are produced by the unchanged
+    # make_token()/public_user() path — a demo login is an ordinary farmer
+    # session, which is why it can open the normal farmer dashboard.
+    is_demo = demo_auth.is_demo_farmer(mobile)
     _audit_otp_event("LOGIN", user_id=user["id"], mobile=mobile,
-                     details={"method": "otp", "purpose": "farmer_login"})
-    return jsonify({"token": token, "user": public_user(user), "login_method": "otp"})
+                     details={"method": "otp", "purpose": "farmer_login",
+                              "demo": is_demo})
+    return jsonify({"token": token, "user": public_user(user), "login_method": "otp",
+                    "demo": is_demo})
 
 
 @app.post("/api/auth/farmer/register")
