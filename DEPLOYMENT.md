@@ -27,11 +27,12 @@ See `.env.example` for optional routing, weather, CORS, and model-path values. D
 
 ## Farmer OTP login (mobile + SMS)
 
-Farmers sign in with a registered mobile number and a six-digit SMS OTP delivered
-through the Android SMS Gateway™ (capcom6) Cloud Server API. Vet, Government and
-Lab password login is unchanged, and the farmer password endpoint still exists
-(disable the fallback UI with `FARMER_PASSWORD_FALLBACK=false` once OTP delivery
-is verified in production).
+Farmers sign in — and create their profile — with a mobile number and a
+six-digit SMS OTP delivered through the Android SMS Gateway™ (capcom6) Cloud
+Server API. There is no farmer password login and no password fallback.
+
+Vet, Government and Lab keep their original email-or-mobile + password login and
+signup on `POST /api/auth/login` / `POST /api/auth/register`.
 
 Full details — API contract, security controls, migration, rollback, and the
 real-delivery verification checklist — are in [`FARMER_OTP_LOGIN.md`](FARMER_OTP_LOGIN.md).

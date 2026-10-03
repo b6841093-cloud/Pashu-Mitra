@@ -278,7 +278,9 @@ wrong code 401 (`reason=code_mismatch` in the log, nothing leaked) → correct c
    ```
    Then a real farmer login on the Vercel app: send → receive → verify.
 7. Only after a real SMS is confirmed, optionally set
-   `FARMER_PASSWORD_FALLBACK=false`.
+   `FARMER_PASSWORD_FALLBACK=false`. *(Historical: this variable was removed
+   when role-specific authentication was restored — farmer auth is OTP-only and
+   needs no flag. See `AUTH_ROLES_RESTORED.md`.)*
 
 No Vercel change is required: `frontend/vercel.json` already proxies `/api/*` to
 the Render service; only a redeploy of the static frontend is needed for the new

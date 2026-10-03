@@ -4,12 +4,15 @@
  *   node --test frontend/tests/
  *
  * loads frontend/app.js inside a sandboxed VM context with a minimal DOM stub,
- * then asserts the OTP UI contract:
- *   - the new localisation keys exist in English, Marathi, Hindi and Telugu
- *   - the farmer login screen renders the OTP controls (and no password field)
- *   - the OTP flow calls the OTP API endpoints
+ * then asserts the role-specific authentication UI contract:
+ *   - the farmer login *and* farmer signup screens render OTP controls only
+ *     (never a password field, never a farmer password route)
+ *   - the OTP flow calls the farmer OTP API endpoints (request/resend/verify)
+ *     and the OTP-verified profile endpoint
+ *   - vet / govt / lab keep their original password login and signup screens
+ *     and never render farmer OTP fields
  *   - OTP requests are never queued for offline sync
- *   - the OTP comment/state is never written to localStorage
+ *   - the OTP code/state is never written to localStorage
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -87,8 +90,13 @@ test("localisation: every OTP key exists in en, mr, hi and te", () => {
     "farmer.otp_invalid_code", "farmer.otp_invalid", "farmer.otp_expired",
     "farmer.otp_locked", "farmer.otp_used", "farmer.otp_cooldown",
     "farmer.otp_rate_limited", "farmer.otp_unavailable", "farmer.otp_send_failed",
-    "farmer.password_login_link", "farmer.otp_login_link", "farmer.demo_mobile",
-    "farmer.otp_missing_hint",
+    "farmer.demo_mobile", "farmer.otp_missing_hint",
+    // Farmer profile creation (OTP-verified signup)
+    "farmer.signup_title", "farmer.signup_mobile_hint", "farmer.verify_mobile",
+    "farmer.profile_title", "farmer.profile_note", "farmer.create_account",
+    "farmer.creating_account", "farmer.profile_missing",
+    "farmer.registration_expired", "farmer.signup_success", "farmer.signup_link",
+    "farmer.login_link", "farmer.otp_unavailable_hint",
   ];
   for (const lang of ["en", "mr", "hi", "te"]) {
     assert.ok(I18N[lang], `missing language block: ${lang}`);
@@ -100,7 +108,7 @@ test("localisation: every OTP key exists in en, mr, hi and te", () => {
 });
 
 test("farmer OTP form renders the required controls", () => {
-  const html = app.run("farmerOtpLoginForm()");
+  const html = app.run('farmerOtpLoginForm("login")');
   assert.match(html, /id="farmerOtpForm"/);
   assert.match(html, /id="otpMobile"/);
   assert.match(html, /id="otpSendBtn"/);
@@ -117,23 +125,60 @@ test("farmer OTP form renders the required controls", () => {
   assert.doesNotMatch(html, /type="password"/);
 });
 
-test("farmer password fallback form is still available", () => {
-  const html = app.run('loginForm("owner", { farmerPasswordFallback: true })');
-  assert.match(html, /name="password"/);
-  assert.match(html, /id="farmerOtpLink"/);
+test("farmer signup screen verifies the mobile, then collects the profile", () => {
+  const html = app.run('farmerOtpLoginForm("signup")');
+  assert.match(html, /id="farmerOtpForm"/);
+  assert.match(html, /id="otpMobile"/);
+  assert.match(html, /id="otpCode"/);
+  // Profile step: the existing farmer registration fields, minus password.
+  for (const id of ["farmerProfileStep", "farmerFullName", "farmerVillage",
+    "farmerBlock", "farmerDistrict", "farmerLanguage", "farmerCreateBtn"]) {
+    assert.match(html, new RegExp(`id="${id}"`), id);
+  }
+  assert.doesNotMatch(html, /type="password"/);
+  assert.doesNotMatch(html, /name="confirm_password"/);
 });
 
-test("vet, govt and lab login forms keep the password flow", () => {
+test("vet, govt and lab login forms keep the original password flow", () => {
   for (const role of ["vet", "govt", "lab"]) {
     const html = app.run(`loginForm("${role}")`);
     assert.match(html, /name="identifier"/, role);
     assert.match(html, /name="password"/, role);
+    // No farmer OTP fields anywhere on a staff login page.
     assert.doesNotMatch(html, /id="otpCode"/, role);
+    assert.doesNotMatch(html, /id="otpMobile"/, role);
+    assert.doesNotMatch(html, /id="farmerOtpForm"/, role);
   }
 });
 
+test("vet, govt and lab signup forms keep the original fields and password", () => {
+  for (const role of ["vet", "govt", "lab"]) {
+    const html = app.run(`registerForm("${role}")`);
+    assert.match(html, /id="registerForm"/, role);
+    assert.match(html, /name="email"/, role);
+    assert.match(html, /name="password"/, role);
+    assert.match(html, /name="confirm_password"/, role);
+    assert.match(html, /name="district"/, role);
+    assert.doesNotMatch(html, /id="otpCode"/, role);
+    assert.doesNotMatch(html, /id="farmerProfileStep"/, role);
+  }
+});
+
+test("no farmer password route or password screen remains", () => {
+  // No route may render a password form for the farmer.
+  const routes = app.run("Object.keys(routes)");
+  assert.ok(routes.includes("#/login/:role"));
+  assert.ok(routes.includes("#/register/:role"));
+  // The legacy bookmark redirects instead of rendering a password form, and no
+  // farmer-facing markup links to it any more.
+  assert.doesNotMatch(appSource, /#\/login\/owner\/password/);
+  assert.doesNotMatch(appSource, /farmerPasswordFallback|password_fallback_enabled/);
+  assert.doesNotMatch(appSource, /farmer\.password_login_link|farmer\.otp_login_link/);
+});
+
 test("OTP endpoints are wired and never queued offline", () => {
-  for (const endpoint of ["/auth/farmer/request-otp", "/auth/farmer/resend-otp", "/auth/farmer/verify-otp"]) {
+  for (const endpoint of ["/auth/farmer/request-otp", "/auth/farmer/resend-otp",
+    "/auth/farmer/verify-otp", "/auth/farmer/register"]) {
     const marker = `"${endpoint}"`;
     const index = appSource.indexOf(marker);
     assert.ok(index > -1, `app.js must call ${endpoint}`);
@@ -173,15 +218,23 @@ test("renderAuth mounts the farmer OTP screen without throwing", () => {
   // The farmer's primary login screen must not offer a password field.
   assert.doesNotMatch(html, /name="password"/);
 
-  // Fallback screens and the other roles keep working.
-  assert.doesNotThrow(() => app.run('renderAuth("password", "owner")'));
-  assert.match(app.run('document.getElementById("app").innerHTML'), /name="password"/);
+  // Farmer signup is the same OTP flow plus the profile step.
+  assert.doesNotThrow(() => app.run('renderAuth("register", "owner")'));
+  const signupHtml = app.run('document.getElementById("app").innerHTML');
+  assert.match(signupHtml, /id="farmerOtpForm"/);
+  assert.match(signupHtml, /id="farmerProfileStep"/);
+  assert.doesNotMatch(signupHtml, /name="password"/);
+  assert.equal(app.run("farmerAuthMode"), "signup");
+
+  // Vet / Government / Laboratory keep their original password screens.
   for (const role of ["vet", "govt", "lab"]) {
     assert.doesNotThrow(() => app.run(`renderAuth("login", "${role}")`));
-    assert.match(app.run('document.getElementById("app").innerHTML'), /name="password"/, role);
+    const loginHtml = app.run('document.getElementById("app").innerHTML');
+    assert.match(loginHtml, /name="password"/, role);
+    assert.doesNotMatch(loginHtml, /id="farmerOtpForm"/, role);
+    assert.doesNotThrow(() => app.run(`renderAuth("register", "${role}")`));
+    assert.match(app.run('document.getElementById("app").innerHTML'), /id="registerForm"/, role);
   }
-  assert.doesNotThrow(() => app.run('renderAuth("register", "owner")'));
-  assert.match(app.run('document.getElementById("app").innerHTML'), /id="registerForm"/);
 });
 
 test("the OTP screen never claims an SMS was delivered", () => {
@@ -201,7 +254,7 @@ test("the OTP screen never claims an SMS was delivered", () => {
     appSource.indexOf("async function farmerVerifyOtp")).replace(/\/\/[^\n]*/g, "");
   assert.doesNotMatch(handler, /OTP sent to/i);
   assert.match(handler, /ft\("otp_sent", \{ mobile \}\)/);
-  // The backend readiness codes keep the password fallback reachable.
+  // Readiness problems surface as "OTP unavailable", never as a password link.
   const mapping = app.run("OTP_ERROR_KEYS");
   assert.equal(mapping.OTP_PEPPER_UNSTABLE, "otp_unavailable");
   assert.equal(mapping.SMS_GATEWAY_REJECTED, "otp_send_failed");

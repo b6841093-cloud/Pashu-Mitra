@@ -57,8 +57,10 @@ def _database_init_lock():
 SCHEMA_OTP = """
 CREATE TABLE IF NOT EXISTS otp_codes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    role TEXT NOT NULL,
+    -- NULL for farmer *signup* OTPs: the account does not exist until the code
+    -- has been verified, so no user id can be bound at issue time.
+    user_id INTEGER REFERENCES users(id),
+    role TEXT,
     mobile_e164 TEXT NOT NULL,
     otp_hash TEXT NOT NULL,
     otp_salt TEXT NOT NULL,
@@ -993,10 +995,121 @@ def ensure_otp_tables(conn):
     ``SCHEMA`` already uses ``CREATE TABLE IF NOT EXISTS``; this function makes
     the OTP migration explicit for databases created by older revisions and
     guarantees the supporting indexes and diagnostics columns exist.
+
+    It also relaxes ``otp_codes.user_id`` / ``otp_codes.role`` to nullable on
+    databases created before farmer self-registration: a *signup* OTP is issued
+    before the account exists, so no user id can be bound at issue time. Every
+    existing row (and every column, including the gateway diagnostics) is copied
+    verbatim — this is a constraint change, never a data change.
     """
     conn.executescript(SCHEMA_OTP)
     _ensure_otp_diagnostic_columns(conn)
+    _relax_otp_codes_nullable(conn)
     conn.commit()
+
+
+def _relax_otp_codes_nullable(conn):
+    """Allow ``otp_codes.user_id``/``role`` to be NULL (idempotent).
+
+    Signup OTPs are issued for a mobile number that has no account yet, so the
+    row carries ``user_id = NULL``. Older databases declared both columns
+    ``NOT NULL``; SQLite cannot drop a constraint in place, so the table is
+    rebuilt once, copying every existing column value (diagnostics included).
+    """
+    try:
+        info = conn.execute("PRAGMA table_info(otp_codes)").fetchall()
+    except sqlite3.Error:  # pragma: no cover - defensive
+        return
+    if not info:
+        return
+    not_null = {row["name"] for row in info if row["notnull"]}
+    if "user_id" not in not_null and "role" not in not_null:
+        return  # already migrated (or created by the current schema)
+
+    canonical = {
+        "id": "id INTEGER PRIMARY KEY AUTOINCREMENT",
+        "user_id": "user_id INTEGER REFERENCES users(id)",
+        "role": "role TEXT",
+        "mobile_e164": "mobile_e164 TEXT NOT NULL",
+        "otp_hash": "otp_hash TEXT NOT NULL",
+        "otp_salt": "otp_salt TEXT NOT NULL",
+        "purpose": "purpose TEXT NOT NULL DEFAULT 'farmer_login'",
+        "attempts": "attempts INTEGER NOT NULL DEFAULT 0",
+        "max_attempts": "max_attempts INTEGER NOT NULL DEFAULT 5",
+        "status": ("status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN "
+                   "('ACTIVE','USED','INVALIDATED','EXPIRED','LOCKED','SEND_FAILED'))"),
+        "created_at": "created_at TEXT NOT NULL",
+        "expires_at": "expires_at TEXT NOT NULL",
+        "consumed_at": "consumed_at TEXT",
+        "request_ip": "request_ip TEXT",
+    }
+    existing_columns = [row["name"] for row in info]
+    definitions = [canonical[name] for name in existing_columns if name in canonical]
+    for row in info:
+        name = row["name"]
+        if name in canonical or row["pk"]:
+            continue
+        # Diagnostics columns added by earlier migrations: keep them verbatim.
+        definition = f'"{name}" {row["type"] or "TEXT"}'
+        if row["dflt_value"] is not None:
+            definition += f" DEFAULT {row['dflt_value']}"
+        definitions.append(definition)
+
+    column_list = ", ".join(f'"{name}"' for name in existing_columns)
+    conn.execute("CREATE TABLE otp_codes_nullable ({} )".format(", ".join(definitions)))
+    conn.execute(
+        f"INSERT INTO otp_codes_nullable ({column_list}) SELECT {column_list} FROM otp_codes"
+    )
+    conn.execute("DROP TABLE otp_codes")
+    conn.execute("ALTER TABLE otp_codes_nullable RENAME TO otp_codes")
+    # Indexes were dropped with the old table: recreate them from SCHEMA_OTP.
+    conn.executescript(SCHEMA_OTP)
+    conn.commit()
+
+
+def otp_only_credentials():
+    """Return a ``(password_hash, salt)`` pair that can never authenticate.
+
+    Farmer accounts are created through the OTP/phone flow and must not have a
+    usable password. The legacy ``users.password_hash`` / ``salt`` columns are
+    NOT NULL, so an account created without a password stores a hash of a
+    discarded random secret instead of weakening the schema or deleting columns.
+    """
+    return hash_password(secrets.token_urlsafe(32))
+
+
+def find_user_by_mobile(conn, mobile_raw, roles=None):
+    """Look up one account by mobile number, tolerating legacy storage formats.
+
+    Matches the 10-digit local form and the ``+91`` E.164 form (plus the raw
+    value as typed) so accounts seeded before phone normalisation still resolve.
+    ``roles`` optionally restricts the lookup to a subset of roles. Returns a
+    ``sqlite3.Row`` or ``None``.
+    """
+    e164 = None
+    try:
+        from ivr_config import normalize_indian_number
+        e164 = normalize_indian_number(mobile_raw)
+    except Exception:  # pragma: no cover - defensive (config import failure)
+        e164 = None
+    local = e164[-10:] if e164 else None
+    raw = str(mobile_raw or "").strip()
+    if not e164 and not raw:
+        return None
+
+    conditions = ["mobile=?", "mobile=?"]
+    params: list = [e164, local]
+    if raw and raw not in (e164, local):
+        conditions.append("mobile=?")
+        params.append(raw)
+    clause = " OR ".join(conditions)
+    if roles:
+        placeholders = ",".join("?" for _ in roles)
+        clause = f"({clause}) AND role IN ({placeholders})"
+        params.extend(roles)
+    return conn.execute(
+        f"SELECT * FROM users WHERE {clause} LIMIT 1", params
+    ).fetchone()
 
 
 # Gateway diagnostics columns: they record *how* an OTP was handed to the SMS
@@ -1021,10 +1134,20 @@ OTP_LOG_DIAGNOSTIC_COLUMNS = {
     "error_category": "TEXT",
 }
 
+# Signup continuation state. A verified signup OTP issues a short-lived
+# registration token; its hash is stored on the OTP row and the row is marked
+# used the first time the token is presented, so the token cannot be replayed.
+OTP_CODE_SIGNUP_COLUMNS = {
+    "registration_token_hash": "TEXT",
+    "registration_used_at": "TEXT",
+}
+
 
 def _ensure_otp_diagnostic_columns(conn):
     """Add the diagnostics columns to pre-existing OTP tables (idempotent)."""
-    for table, columns in (("otp_codes", OTP_CODE_DIAGNOSTIC_COLUMNS),
+    code_columns = dict(OTP_CODE_DIAGNOSTIC_COLUMNS)
+    code_columns.update(OTP_CODE_SIGNUP_COLUMNS)
+    for table, columns in (("otp_codes", code_columns),
                            ("otp_request_log", OTP_LOG_DIAGNOSTIC_COLUMNS)):
         try:
             existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}

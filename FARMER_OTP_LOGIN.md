@@ -9,6 +9,18 @@ Veterinarian, Government and Laboratory logins continue to use the existing
 password flow, and every existing farmer account, animal, herd, case,
 prescription, lab report and notification is untouched.
 
+> **Update — role-specific authentication restored.**
+> Farmer authentication is now **OTP-only with no password fallback**: the
+> `FARMER_PASSWORD_FALLBACK` environment variable, the `#/login/owner/password`
+> screen and the farmer password login/registration routes have been removed
+> (farmers get `403 FARMER_OTP_REQUIRED` / `FARMER_OTP_SIGNUP_REQUIRED`).
+> Farmers can also **create their profile** through the same OTP flow
+> (`POST /api/auth/farmer/register` after `verify-otp` returns
+> `registration_required: true`). Vet / Government / Laboratory authentication
+> is unchanged. See [`AUTH_ROLES_RESTORED.md`](AUTH_ROLES_RESTORED.md) for the
+> change report; the sections below that mention a password fallback describe
+> the earlier release and are kept for the delivery/rollback history.
+
 ---
 
 ## 1. What changed
@@ -75,7 +87,7 @@ Errors: `400 INVALID_MOBILE` / `INVALID_OTP_FORMAT`, `401 OTP_INVALID` /
 ### `GET /api/auth/farmer/config`
 Public, non-secret UI settings: `otp_login_enabled`, `otp_length`,
 `otp_ttl_seconds`, `resend_cooldown_seconds`, `max_attempts`,
-`password_fallback_enabled`.
+`password_login_enabled` (always `false`), `signup_enabled`, `helpline`.
 
 ### `POST /api/admin/sms-gateway/test` (role `govt`)
 Sends one **fixed-text** test SMS so a deployment team can verify real delivery
@@ -204,7 +216,8 @@ exists for local development only.
 | `OTP_MOBILE_MAX_REQUESTS` / `OTP_MOBILE_RATE_WINDOW_SECONDS` | no | Defaults `5` / `900` |
 | `OTP_IP_MAX_REQUESTS` / `OTP_IP_RATE_WINDOW_SECONDS` | no | Defaults `20` / `3600` |
 | `OTP_DEV_PRINT_CODE` | no | Dev only; prints MOCK OTPs to the server log. Ignored in production |
-| `FARMER_PASSWORD_FALLBACK` | no | Default `true`; set `false` for OTP-only farmer login |
+| ~~`FARMER_PASSWORD_FALLBACK`~~ | — | **Removed.** Farmer auth is OTP-only; staff keep password login |
+| `OTP_REGISTRATION_TOKEN_TTL_SECONDS` | no | Lifetime of the OTP-verified farmer signup token (default `900`) |
 | `SMS_PROVIDER_MODE` | no | Existing notification queue: `MOCK` (default) / `TWILIO` / `GATEWAY` |
 
 No Vercel change is needed: `/api/*` already rewrites to the Render backend, and
@@ -237,9 +250,11 @@ Rollback:
    DROP TABLE IF EXISTS otp_request_log;
    DROP TABLE IF EXISTS otp_codes;
    ```
-2. **UI rollback** — set `FARMER_PASSWORD_FALLBACK=true` (default) and share
-   `https://pashu-mitra-smoky.vercel.app/#/login/owner/password`; farmers can log
-   in with their existing passwords immediately.
+2. **UI rollback** — there is no farmer password screen any more. The only
+   farmer entry point is `#/login/owner` (mobile OTP); if the gateway is down,
+   fix `SMS_GATEWAY_*` / `OTP_PEPPER` and reload. Existing farmer passwords were
+   deliberately left in the database (never read) so a future decision to
+   re-enable password login would not require a migration.
 3. **Gateway rollback** — set `SMS_GATEWAY_MODE=DISABLED`; OTP endpoints then
    return `503` with the fallback flag instead of pretending to send.
 
@@ -295,7 +310,7 @@ Rollback:
    `https://pashu-mitra-smoky.vercel.app/#/login/owner`, enter a registered farmer
    mobile (seeded demo: `9800000001`), receive the SMS, enter the code, confirm
    the farmer dashboard loads with the existing animals/cases.
-7. Optionally set `FARMER_PASSWORD_FALLBACK=false` once OTP delivery is proven.
+7. (No fallback flag to disable — farmer auth is OTP-only by design.)
 
 ---
 

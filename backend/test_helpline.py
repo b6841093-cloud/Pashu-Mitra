@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 import time
 import unittest
@@ -96,9 +97,36 @@ class TestHelplineRestoration(unittest.TestCase):
         self.assertGreaterEqual(text.count("demoAccountBox(role)"), 3)
 
     def test_05_demo_login(self):
-        response = self.client.post("/api/auth/login", json={"identifier": "rajesh@example.com", "password": "password123"})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()["user"]["role"], "owner")
+        """Farmers sign in with the mobile + OTP flow (no password login)."""
+        refused = self.client.post("/api/auth/login",
+                                   json={"identifier": "rajesh@example.com",
+                                         "password": "password123"})
+        self.assertEqual(refused.status_code, 403)
+        self.assertEqual(refused.get_json()["code"], "FARMER_OTP_REQUIRED")
+
+        # The OTP path logs the same seeded demo farmer in. SMS is mocked: the
+        # stub captures the message, which is how the code is read here.
+        sent = []
+
+        def fake_send(to_e164, text, **kwargs):
+            sent.append(text)
+            return {"delivered": True, "simulated": False, "mode": "CLOUD",
+                    "message_id": "helpline-stub", "state": "Pending"}
+
+        import sms_gateway
+        with patch.object(sms_gateway, "send_text_message", fake_send), \
+                patch.dict(os.environ, {
+                    "SMS_GATEWAY_MODE": "CLOUD",
+                    "SMS_GATEWAY_BASE_URL": "https://api.sms-gate.app/3rdparty/v1",
+                    "SMS_GATEWAY_USERNAME": "test-user",
+                    "SMS_GATEWAY_PASSWORD": "test-pass"}):
+            self.assertEqual(self.client.post("/api/auth/farmer/request-otp",
+                                              json={"mobile": "9800000001"}).status_code, 200)
+            code = re.search(r"\b(\d{6})\b", sent[-1]).group(1)
+            verified = self.client.post("/api/auth/farmer/verify-otp",
+                                        json={"mobile": "9800000001", "otp": code})
+        self.assertEqual(verified.status_code, 200)
+        self.assertEqual(verified.get_json()["user"]["role"], "owner")
 
     def test_06_existing_role_login(self):
         response = self.client.post("/api/auth/login", json={"identifier": "vet1@example.com", "password": "password123"})
@@ -106,15 +134,28 @@ class TestHelplineRestoration(unittest.TestCase):
         self.assertEqual(response.get_json()["user"]["role"], "vet")
 
     def test_07_registration_with_language(self):
+        """Staff keep password signup; farmers create the profile via OTP."""
         suffix = uuid.uuid4().hex[:8]
         response = self.client.post("/api/auth/register", json={
             "full_name": "Helpline Registration Test", "mobile": f"91{suffix[:8]}",
             "email": f"helpline-{suffix}@example.com", "password": "secret12",
-            "confirm_password": "secret12", "role": "owner", "district": "Pune",
+            # A non-vet staff role: registering a vet here would add an
+            # AVAILABLE veterinarian and change the IVR routing assertions
+            # that later tests in this suite depend on.
+            "confirm_password": "secret12", "role": "lab", "district": "Pune",
             "preferred_language": "te",
         })
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         self.assertEqual(response.get_json()["user"]["preferred_language"], "te")
+
+        # The farmer password signup route is closed...
+        refused = self.client.post("/api/auth/register", json={
+            "full_name": "Farmer Registration Test", "mobile": f"92{suffix[:8]}",
+            "email": f"helpline-farmer-{suffix}@example.com", "password": "secret12",
+            "confirm_password": "secret12", "role": "owner", "district": "Pune",
+        })
+        self.assertEqual(refused.status_code, 403)
+        self.assertEqual(refused.get_json()["code"], "FARMER_OTP_SIGNUP_REQUIRED")
 
     def test_08_farmer_identification(self):
         data = self.inbound()
