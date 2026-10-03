@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appSource = fs.readFileSync(path.join(here, "..", "app.js"), "utf8");
 
-const DEMO_MOBILE = "9999999999";
+const DEMO_MOBILE = "8341564042";
 const DEMO_OTP = "123456";
 
 // The payload GET /api/auth/farmer/config returns while DEMO_MODE is on.

@@ -553,8 +553,8 @@ def request_otp(mobile_raw, *, ip: str | None = None,
         # --- deliver ---------------------------------------------------------
         try:
             if demo_login:
-                # No SMS is dispatched for the demo number: 9999999999 may well
-                # be a real handset. The code is displayed on the login screen.
+                # No SMS is dispatched for the demo number: it may well be a
+                # real handset. The code is displayed on the login screen.
                 delivery = {
                     "delivered": False, "simulated": True, "mode": "DEMO",
                     "accepted": True, "message_id": None, "state": "DemoSuppressed",

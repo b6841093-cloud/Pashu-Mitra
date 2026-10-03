@@ -35,7 +35,7 @@ const DEMO_ACCOUNTS = {
 // screen still works if the config request is slow. They are not secrets: the
 // whole point of the demo account is that they are printed on screen, and the
 // backend rejects them outright whenever demo mode is off.
-const DEMO_FARMER = { mobile: "9999999999", otp: "123456" };
+const DEMO_FARMER = { mobile: "8341564042", otp: "123456" };
 let ivrInfoPromise = null;
 
 const state = {
