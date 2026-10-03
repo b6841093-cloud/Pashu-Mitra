@@ -42,6 +42,16 @@ def _rate_limit_ok(key: str) -> bool:
         return True
 
 
+def shared_rate_limit_ok(key: str) -> bool:
+    """Public wrapper for the bounded, in-process limiter.
+
+    Used by admin endpoints that trigger outbound work (for example the OTP
+    diagnostics ``live`` gateway checks) so a leaked token cannot be turned into
+    a request amplifier.
+    """
+    return _rate_limit_ok(key)
+
+
 def ivr_webhook_required(fn):
     """Require timestamped HMAC signatures on all call-state mutations."""
     @wraps(fn)

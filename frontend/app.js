@@ -196,8 +196,11 @@ const I18N = {
     "farmer.resend_otp": "Resend OTP", "farmer.resending_otp": "Resending…",
     "farmer.resend_in": "Resend in {seconds}s", "farmer.resend_ready": "Didn't get the OTP?",
     "farmer.change_mobile": "Change mobile number",
-    "farmer.otp_sent": "OTP sent to +91 {mobile}. It is valid for 5 minutes.",
-    "farmer.otp_resent": "A new OTP has been sent to +91 {mobile}.",
+    // Honest delivery wording: a 200 only means the request was accepted. The
+    // same sentence is shown for registered and unknown numbers (no enumeration).
+    "farmer.otp_sent": "If +91 {mobile} is registered with PashuMitra, an OTP has been sent. It is valid for 5 minutes.",
+    "farmer.otp_resent": "If +91 {mobile} is registered, a new OTP has been sent. It is valid for 5 minutes.",
+    "farmer.otp_missing_hint": "Didn't get the SMS? Check that this number is registered with PashuMitra, keep the phone switched on and the SIM active, then tap Resend OTP.",
     "farmer.otp_invalid_mobile": "Enter a valid 10-digit mobile number.",
     "farmer.otp_invalid_code": "Enter the 6-digit OTP.",
     "farmer.otp_invalid": "The OTP is incorrect. Please check and try again.",
@@ -372,8 +375,9 @@ const I18N = {
     "farmer.resend_otp": "OTP पुन्हा पाठवा", "farmer.resending_otp": "पुन्हा पाठवत आहे…",
     "farmer.resend_in": "{seconds} सेकंदांनी पुन्हा पाठवा", "farmer.resend_ready": "OTP मिळाला नाही?",
     "farmer.change_mobile": "मोबाईल क्रमांक बदला",
-    "farmer.otp_sent": "+91 {mobile} वर OTP पाठवला आहे. तो ५ मिनिटांसाठी वैध आहे.",
-    "farmer.otp_resent": "+91 {mobile} वर नवीन OTP पाठवला आहे.",
+    "farmer.otp_sent": "+91 {mobile} पशुमित्रात नोंदणीकृत असल्यास OTP पाठवला आहे. तो ५ मिनिटांसाठी वैध आहे.",
+    "farmer.otp_resent": "+91 {mobile} नोंदणीकृत असल्यास नवीन OTP पाठवला आहे. तो ५ मिनिटांसाठी वैध आहे.",
+    "farmer.otp_missing_hint": "SMS मिळाला नाही? हा क्रमांक पशुमित्रात नोंदणीकृत आहे का तपासा, फोन सुरू आणि SIM सक्रिय ठेवा, नंतर 'OTP पुन्हा पाठवा' दाबा.",
     "farmer.otp_invalid_mobile": "वैध १० अंकी मोबाईल क्रमांक लिहा.",
     "farmer.otp_invalid_code": "६ अंकी OTP लिहा.",
     "farmer.otp_invalid": "OTP चुकीचा आहे. तपासून पुन्हा प्रयत्न करा.",
@@ -548,8 +552,9 @@ const I18N = {
     "farmer.resend_otp": "OTP दोबारा भेजें", "farmer.resending_otp": "दोबारा भेजा जा रहा है…",
     "farmer.resend_in": "{seconds} सेकंड में दोबारा भेजें", "farmer.resend_ready": "OTP नहीं मिला?",
     "farmer.change_mobile": "मोबाइल नंबर बदलें",
-    "farmer.otp_sent": "+91 {mobile} पर OTP भेजा गया है। यह 5 मिनट तक मान्य है।",
-    "farmer.otp_resent": "+91 {mobile} पर नया OTP भेजा गया है।",
+    "farmer.otp_sent": "यदि +91 {mobile} पशुमित्र में पंजीकृत है, तो OTP भेजा गया है। यह 5 मिनट तक मान्य है।",
+    "farmer.otp_resent": "यदि +91 {mobile} पंजीकृत है, तो नया OTP भेजा गया है। यह 5 मिनट तक मान्य है।",
+    "farmer.otp_missing_hint": "SMS नहीं मिला? जाँचें कि यह नंबर पशुमित्र में पंजीकृत है, फ़ोन चालू और SIM सक्रिय रखें, फिर 'OTP दोबारा भेजें' दबाएँ।",
     "farmer.otp_invalid_mobile": "सही 10 अंकों का मोबाइल नंबर लिखें।",
     "farmer.otp_invalid_code": "6 अंकों का OTP लिखें।",
     "farmer.otp_invalid": "OTP सही नहीं है। कृपया जांचकर फिर कोशिश करें।",
@@ -724,8 +729,9 @@ const I18N = {
     "farmer.resend_otp": "OTP మళ్లీ పంపండి", "farmer.resending_otp": "మళ్లీ పంపుతోంది…",
     "farmer.resend_in": "{seconds} సెకన్లలో మళ్లీ పంపండి", "farmer.resend_ready": "OTP రాలేదా?",
     "farmer.change_mobile": "మొబైల్ నంబరు మార్చండి",
-    "farmer.otp_sent": "+91 {mobile} కు OTP పంపబడింది. ఇది 5 నిమిషాల పాటు చెల్లుతుంది.",
-    "farmer.otp_resent": "+91 {mobile} కు కొత్త OTP పంపబడింది.",
+    "farmer.otp_sent": "+91 {mobile} పశుమిత్రలో నమోదై ఉంటే, OTP పంపబడింది. ఇది 5 నిమిషాల పాటు చెల్లుతుంది.",
+    "farmer.otp_resent": "+91 {mobile} నమోదై ఉంటే, కొత్త OTP పంపబడింది. ఇది 5 నిమిషాల పాటు చెల్లుతుంది.",
+    "farmer.otp_missing_hint": "SMS రాలేదా? ఈ నంబరు పశుమిత్రలో నమోదై ఉందో తనిఖీ చేయండి, ఫోన్ ఆన్‌లో మరియు SIM సక్రియంగా ఉంచండి, తర్వాత 'OTP మళ్లీ పంపండి' నొక్కండి.",
     "farmer.otp_invalid_mobile": "సరైన 10 అంకెల మొబైల్ నంబరును నమోదు చేయండి.",
     "farmer.otp_invalid_code": "6 అంకెల OTP నమోదు చేయండి.",
     "farmer.otp_invalid": "OTP సరైనది కాదు. పరిశీలించి మళ్లీ ప్రయత్నించండి.",
@@ -1311,6 +1317,9 @@ const OTP_ERROR_KEYS = {
   SMS_GATEWAY_UNAVAILABLE: "otp_send_failed",
   SMS_GATEWAY_REJECTED: "otp_send_failed",
   SMS_GATEWAY_ERROR: "otp_send_failed",
+  // Server-side readiness problem (unstable OTP pepper / unusable gateway):
+  // the same neutral "OTP login is not available" copy is shown.
+  OTP_PEPPER_UNSTABLE: "otp_unavailable",
 };
 
 function otpDigits(value) { return String(value == null ? "" : value).replace(/\D/g, ""); }
@@ -1360,6 +1369,7 @@ function farmerOtpLoginForm() {
                autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}"
                placeholder="${ft("otp_placeholder")}" />
       </div>
+      <div class="otp-hint" id="otpMissingHint">${ft("otp_missing_hint")}</div>
       <button id="otpVerifyBtn" class="btn btn-primary" type="submit">${ft("verify_and_login")}</button>
       <div class="otp-resend-row">
         <span class="otp-resend-hint" id="otpResendHint"></span>
@@ -1475,18 +1485,24 @@ async function farmerRequestOtp(options = {}) {
       queueOffline: false, // never claim an SMS that was not dispatched
     });
     farmerOtpState.mobile = mobile;
-    showFarmerOtpCodeStep(mobile, isResend ? ft("otp_resent", { mobile }) : ft("otp_sent", { mobile }));
+    // The backend answers 200 for registered and unknown numbers alike and
+    // never proves delivery, so the UI shows the conditional wording only —
+    // never "OTP sent to <number>". `data.message` is the same sentence.
+    const note = isResend ? ft("otp_resent", { mobile }) : ft("otp_sent", { mobile });
+    showFarmerOtpCodeStep(mobile, note);
     startFarmerOtpCooldown(Number(data.resend_after) || 60);
-    toast(isResend ? ft("otp_resent", { mobile }) : ft("otp_sent", { mobile }));
+    toast(note);
     const codeInput = document.getElementById("otpCode");
     if (codeInput) codeInput.focus();
   } catch (err) {
     if (err && err.status === 429 && err.data && err.data.retry_after) {
+      // Rate limited / cooling down: an earlier OTP may be valid, so keep the
+      // code step open — again with conditional wording, never a delivery claim.
       farmerOtpState.mobile = mobile;
-      showFarmerOtpCodeStep(mobile);
+      showFarmerOtpCodeStep(mobile, ft("otp_sent", { mobile }));
       startFarmerOtpCooldown(Number(err.data.retry_after) || 60);
     }
-    if (err && err.data && err.data.code === "SMS_GATEWAY_NOT_CONFIGURED") {
+    if (err && err.data && ["SMS_GATEWAY_NOT_CONFIGURED", "OTP_PEPPER_UNSTABLE"].includes(err.data.code)) {
       renderFarmerOtpFallback(true);
     }
     toast(otpErrorMessage(err), true);
@@ -1529,7 +1545,7 @@ async function farmerVerifyOtp() {
     location.hash = homeFor("owner");
   } catch (err) {
     if (codeInput) { codeInput.value = ""; codeInput.focus(); }
-    if (err && err.data && err.data.code === "SMS_GATEWAY_NOT_CONFIGURED") {
+    if (err && err.data && ["SMS_GATEWAY_NOT_CONFIGURED", "OTP_PEPPER_UNSTABLE"].includes(err.data.code)) {
       renderFarmerOtpFallback(true);
     }
     toast(otpErrorMessage(err), true);
