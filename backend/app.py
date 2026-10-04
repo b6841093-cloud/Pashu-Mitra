@@ -1,4 +1,5 @@
 import os
+import env_file  # noqa: F401  (loads .env before anything reads the environment)
 import json
 import hmac
 import math
@@ -38,6 +39,7 @@ import weather
 import animal_ai
 import sms_gateway
 import demo_auth
+import clerk_auth
 from otp_service import (
     OtpError, otp_login_available, otp_login_status,
     diagnostics as otp_diagnostics,
@@ -45,6 +47,7 @@ from otp_service import (
     request_otp as request_farmer_otp, resend_otp as resend_farmer_otp,
     registration_token_ttl_seconds,
     consume_registration_token,
+    issue_external_registration_token,
     verify_otp as verify_farmer_otp,
 )
 from sms_service import send_sms, send_sms_urgent, get_sent_log, get_dead_letters, get_worker_stats, get_sms_provider_info
@@ -70,6 +73,7 @@ get_ivr_settings()
 # Safe under multiple Gunicorn workers: database.init_db uses an inter-process
 # lock and additive/idempotent migrations.
 init_db()
+clerk_auth.warm_up()
 # Loud, secret-free warning when the prototype demo farmer login is switched
 # on. Off by default; see DEMO_ACCOUNT.md before enabling it anywhere public.
 demo_auth.log_demo_mode_banner()
@@ -643,7 +647,86 @@ def farmer_auth_config():
     settings["password_login_enabled"] = False
     settings["signup_enabled"] = True
     settings["helpline"] = get_ivr_settings().display_number
+    # Phone OTP via Clerk (publishable key only — it is public by design).
+    settings["phone_auth"] = clerk_auth.public_settings()
     return jsonify(settings)
+
+
+@app.post("/api/auth/farmer/phone-start")
+def farmer_phone_start_route():
+    """Pre-register a mobile number with Clerk so the browser only signs in.
+
+    Avoids Clerk's browser sign-up (CAPTCHA + dashboard sign-up requirements).
+    No SMS is sent here and nothing about local accounts is revealed.
+    """
+    if not clerk_auth.is_enabled():
+        return jsonify({"error": "OTP login is not available right now.",
+                        "code": "CLERK_NOT_CONFIGURED"}), 503
+    if not shared_rate_limit_ok(f"phone-start:{_client_ip() or 'unknown'}"):
+        return jsonify({"error": "Too many requests. Please wait and try again.",
+                        "code": "RATE_LIMITED"}), 429
+    data = request.get_json(silent=True) or {}
+    from ivr_config import normalize_indian_number
+    e164 = normalize_indian_number(data.get("mobile"))
+    if not e164:
+        return jsonify({"error": "Please enter a valid 10-digit mobile number.",
+                        "code": "INVALID_MOBILE"}), 400
+    try:
+        clerk_auth.ensure_phone_user(e164)
+    except clerk_auth.ClerkAuthError as exc:
+        return jsonify({"error": exc.message, "code": exc.code}), exc.status
+    return jsonify({"ok": True})
+
+
+@app.post("/api/auth/farmer/clerk")
+def farmer_clerk_login_route():
+    """Exchange a Clerk session token (phone verified by SMS OTP) for the app JWT.
+
+    Existing farmer -> normal login. Unknown number -> the same
+    ``registration_required`` + single-use ``registration_token`` response as
+    ``verify-otp``, so the farmer continues to ``/api/auth/farmer/register``.
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        phone = clerk_auth.verified_phone_from_token(data.get("token"))
+    except clerk_auth.ClerkAuthError as exc:
+        return jsonify({"error": exc.message, "code": exc.code}), exc.status
+
+    from ivr_config import normalize_indian_number
+    e164 = normalize_indian_number(phone)
+    if not e164:
+        return jsonify({"error": "Please use an Indian mobile number.",
+                        "code": "INVALID_MOBILE"}), 400
+
+    conn = get_db()
+    try:
+        user = find_user_by_mobile(conn, e164)
+    finally:
+        conn.close()
+
+    if user is None:
+        token = issue_external_registration_token(e164, source="clerk", ip=_client_ip())
+        _audit_otp_event("OTP_VERIFIED_SIGNUP", mobile=e164,
+                         details={"purpose": "farmer_signup", "provider": "clerk"})
+        return jsonify({
+            "registration_required": True,
+            "registration_token": token,
+            "mobile": e164[-10:],
+            "role": FARMER_ROLE,
+            "expires_in": registration_token_ttl_seconds(),
+        })
+
+    if user["role"] != FARMER_ROLE:
+        _audit_otp_event("OTP_ROLE_REJECTED", user_id=user["id"], mobile=e164,
+                         details={"provider": "clerk"})
+        return jsonify({"error": "This mobile number belongs to a staff account. "
+                                 "Please use the correct portal.",
+                        "code": "FORBIDDEN_ROLE"}), 403
+
+    _audit_otp_event("LOGIN", user_id=user["id"], mobile=e164,
+                     details={"method": "otp", "purpose": "farmer_login", "provider": "clerk"})
+    return jsonify({"token": make_token(user), "user": public_user(user),
+                    "login_method": "otp", "demo": False})
 
 
 @app.post("/api/auth/farmer/request-otp")

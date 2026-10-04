@@ -17,4 +17,5 @@ htmlcov/
 backend/test_otp_login.db*
 backend/test_role_auth.db*
 backend/test_demo_account.db*
+backend/test_clerk_login.db*
 node_modules/

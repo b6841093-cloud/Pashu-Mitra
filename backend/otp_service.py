@@ -724,6 +724,31 @@ def consume_registration_token(conn, token) -> str | None:
     return e164 if cursor.rowcount == 1 else None
 
 
+def issue_external_registration_token(e164: str, *, source: str, ip: str | None = None) -> str:
+    """Registration token for a number verified by an external provider (Clerk).
+
+    Records a spent ``otp_codes`` row (no code is stored) so the token goes
+    through exactly the same single-use ``consume_registration_token`` path as
+    an SMS-gateway verification.
+    """
+    token = issue_registration_token(e164)
+    now = _utcnow()
+    conn = _open_conn()
+    try:
+        conn.execute(
+            "INSERT INTO otp_codes (user_id, role, mobile_e164, otp_hash, otp_salt, purpose, "
+            "attempts, max_attempts, status, created_at, expires_at, consumed_at, request_ip, "
+            "registration_token_hash) VALUES (NULL,?,?,?,?,?,0,0,'USED',?,?,?,?,?)",
+            (FARMER_ROLE, e164, f"external:{source}", "-", PURPOSE_FARMER_LOGIN,
+             _iso(now), _iso(now + timedelta(seconds=registration_token_ttl_seconds())),
+             _iso(now), ip, _token_fingerprint(token)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return token
+
+
 def verify_registration_token(token) -> str | None:
     """Return the verified E.164 number, or None when invalid/expired/tampered."""
     raw = str(token or "").strip()

@@ -70,6 +70,12 @@ services:
         value: "300"
       - key: SMS_GATEWAY_PRIORITY
         value: "100"
+      # Farmer phone OTP via Clerk (see CLERK_PHONE_LOGIN.md). Paste the keys
+      # from dashboard.clerk.com -> Configure -> API keys.
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
       # Stable pepper for real Farmer OTP hashing and signup tokens. A per-process
       # pepper can make a genuine SMS OTP fail across Gunicorn workers.
       - key: OTP_PEPPER

@@ -1487,7 +1487,7 @@ let farmerAuthConfig = null;
 let farmerAuthMode = "login";
 const farmerOtpState = {
   mobile: "", sent: false, cooldownUntil: 0, timer: null,
-  registrationToken: "", profileStep: false,
+  registrationToken: "", profileStep: false, viaPhoneAuth: false,
 };
 
 const OTP_ERROR_KEYS = {
@@ -1510,11 +1510,153 @@ const OTP_ERROR_KEYS = {
   // The demo number could not be provisioned (e.g. it is held by a staff
   // account, which is never converted). Retry later.
   DEMO_ACCOUNT_UNAVAILABLE: "otp_unavailable",
+  // Hosted phone-OTP provider (server codes from /auth/farmer/clerk).
+  PHONE_AUTH_UNAVAILABLE: "otp_unavailable",
+  CLERK_NOT_CONFIGURED: "otp_unavailable",
+  CLERK_UNAVAILABLE: "otp_unavailable",
+  CLERK_TOKEN_MISSING: "otp_invalid",
+  CLERK_TOKEN_INVALID: "otp_invalid",
+  CLERK_NO_PHONE: "otp_invalid_mobile",
 };
+
+// ------------------------------------------- hosted phone OTP (Clerk) ----
+// When the server publishes `phone_auth` in /auth/farmer/config, the SMS OTP
+// is sent and checked by Clerk in the browser; the backend then swaps the
+// Clerk session token for the app's own JWT. The provider is never named in
+// the UI: every error is mapped to the existing farmer OTP wording.
+const phoneAuth = { promise: null, flow: "", phoneNumberId: "" };
+
+function phoneAuthConfig() {
+  const cfg = farmerAuthConfig && farmerAuthConfig.phone_auth;
+  return cfg && cfg.enabled ? cfg : null;
+}
+
+function usePhoneAuthFor(mobile) {
+  if (!phoneAuthConfig()) return false;
+  const demo = farmerDemoCredentials(); // the demo farmer keeps its fixed OTP
+  return !(demo && demo.mobile === mobile);
+}
+
+function phoneAuthUnavailable() {
+  const err = new Error("unavailable");
+  err.data = { code: "PHONE_AUTH_UNAVAILABLE" };
+  return err;
+}
+
+function loadPhoneAuth() {
+  const cfg = phoneAuthConfig();
+  if (!cfg) return Promise.reject(phoneAuthUnavailable());
+  if (phoneAuth.promise) return phoneAuth.promise;
+  phoneAuth.promise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = cfg.script_url;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.setAttribute("data-clerk-publishable-key", cfg.publishable_key);
+    script.onload = resolve;
+    script.onerror = () => reject(phoneAuthUnavailable());
+    document.head.appendChild(script);
+  }).then(async () => {
+    if (!window.Clerk) throw phoneAuthUnavailable();
+    await window.Clerk.load();
+    return window.Clerk;
+  }).catch((err) => {
+    phoneAuth.promise = null; // allow a retry on the next tap
+    throw err && err.data ? err : phoneAuthUnavailable();
+  });
+  return phoneAuth.promise;
+}
+
+// Speed: open the connection and load the SDK while the farmer is still
+// typing the number, so "Send OTP" goes straight to the SMS request.
+function prewarmPhoneAuth() {
+  const cfg = phoneAuthConfig();
+  if (!cfg) return;
+  if (cfg.frontend_api && !document.querySelector(`link[rel="preconnect"][href="${cfg.frontend_api}"]`)) {
+    const link = document.createElement("link");
+    link.rel = "preconnect";
+    link.href = cfg.frontend_api;
+    link.crossOrigin = "anonymous";
+    document.head.appendChild(link);
+  }
+  loadPhoneAuth().catch(() => {});
+}
+
+function phoneAuthErrorKey(err) {
+  // Provider errors carry `errors[]` (API) or a string `code` (runtime) and
+  // never `data` (that is our own API's shape).
+  if (!err || err.data) return null;
+  const code = providerErrorCode(err);
+  if (!code && !Array.isArray(err.errors)) return null;
+  console.warn("Phone OTP provider error:", code || "(no code)");
+  if (err.status === 429 || /too_many_requests|rate_limit/.test(code)) return "otp_rate_limited";
+  if (/code_incorrect|incorrect_code/.test(code)) return "otp_invalid";
+  if (/expired/.test(code)) return "otp_expired";
+  if (/too_many_attempts|locked|verification_failed/.test(code)) return "otp_locked";
+  if (/phone_number|identifier|format_invalid|param_format/.test(code)) return "otp_invalid_mobile";
+  if (/quota|limit|sms|captcha/.test(code)) return "otp_send_failed";
+  return "generic_error";
+}
+
+function providerErrorCode(err) {
+  if (err && Array.isArray(err.errors) && err.errors[0]) return String(err.errors[0].code || "");
+  return err && typeof err.code === "string" ? err.code : "";
+}
+
+async function phoneAuthSignIn(clerk, phone) {
+  const signIn = await clerk.client.signIn.create({ identifier: phone });
+  const factor = (signIn.supportedFirstFactors || []).find((f) => f.strategy === "phone_code");
+  if (!factor) throw phoneAuthUnavailable();
+  await signIn.prepareFirstFactor({ strategy: "phone_code", phoneNumberId: factor.phoneNumberId });
+  phoneAuth.flow = "signIn";
+  phoneAuth.phoneNumberId = factor.phoneNumberId;
+}
+
+async function phoneAuthSend(mobile, isResend) {
+  const clerk = await loadPhoneAuth();
+  if (isResend && phoneAuth.flow === "signIn" && phoneAuth.phoneNumberId) {
+    await clerk.client.signIn.prepareFirstFactor({ strategy: "phone_code", phoneNumberId: phoneAuth.phoneNumberId });
+    return;
+  }
+  // Single-session instance: a leftover provider session would block sign-in.
+  if (clerk.session) await clerk.signOut().catch(() => {});
+  const phone = "+91" + mobile;
+  try {
+    await phoneAuthSignIn(clerk, phone);
+  } catch (err) {
+    if (providerErrorCode(err) !== "form_identifier_not_found") throw err;
+    // First time this number logs in: the server registers it with the
+    // provider (no browser sign-up, so no CAPTCHA / password step), then the
+    // normal SMS-code sign-in proves the farmer owns the number.
+    await api("/auth/farmer/phone-start", { method: "POST", body: { mobile }, queueOffline: false });
+    await phoneAuthSignIn(clerk, phone);
+  }
+}
+
+async function phoneAuthVerify(code) {
+  const clerk = await loadPhoneAuth();
+  const result = await clerk.client.signIn.attemptFirstFactor({ strategy: "phone_code", code });
+  if (result.status !== "complete" || !result.createdSessionId) {
+    // e.g. "needs_second_factor" when the dashboard enforces MFA. Admin-only
+    // detail goes to the console, not the screen.
+    console.warn("Phone OTP flow incomplete:", result.status);
+    throw phoneAuthUnavailable();
+  }
+  await clerk.setActive({ session: result.createdSessionId });
+  const token = await clerk.session.getToken();
+  const data = await api("/auth/farmer/clerk", { method: "POST", body: { token }, queueOffline: false });
+  // The app keeps its own JWT; the provider session is not needed any more.
+  clerk.signOut().catch(() => {});
+  phoneAuth.flow = "";
+  return data;
+}
 
 function otpDigits(value) { return String(value == null ? "" : value).replace(/\D/g, ""); }
 
 function otpErrorMessage(err) {
+  // Provider errors are never shown verbatim (they would name the provider).
+  const providerKey = phoneAuthErrorKey(err);
+  if (providerKey) return ft(providerKey);
   const code = err && err.data && err.data.code;
   if (code && OTP_ERROR_KEYS[code]) return ft(OTP_ERROR_KEYS[code]);
   const message = (err && err.message) || "";
@@ -1594,6 +1736,7 @@ function farmerOtpLoginForm(mode) {
         </select></div>
       <button id="farmerCreateBtn" class="btn btn-primary" type="button">${ft("create_account")}</button>
     </div>
+    <div id="clerk-captcha"></div>
     <div id="otpFallback" class="otp-fallback"></div>
     <div class="auth-switch">
       <a id="farmerModeSwitch" role="button" tabindex="0"></a>
@@ -1622,6 +1765,7 @@ function hideFarmerOtpCodeStep() {
   if (codeInput) codeInput.value = "";
   farmerOtpState.registrationToken = "";
   farmerOtpState.profileStep = false;
+  farmerOtpState.viaPhoneAuth = false;
   stopFarmerOtpCooldown();
 }
 
@@ -1679,7 +1823,9 @@ async function loadFarmerAuthConfig() {
   } catch (err) {
     farmerAuthConfig = null; // the screen still works; only the hint is missing
   }
-  renderFarmerOtpFallback(farmerAuthConfig && farmerAuthConfig.otp_login_enabled === false);
+  renderFarmerOtpFallback(farmerAuthConfig && farmerAuthConfig.otp_login_enabled === false
+    && !phoneAuthConfig());
+  prewarmPhoneAuth();
   // The Demo Account section is shown only when the server says demo mode is
   // on. If the request failed we know nothing, so nothing is advertised.
   renderFarmerDemoAccount();
@@ -1708,13 +1854,21 @@ async function farmerRequestOtp(options = {}) {
   setButtonBusy(btn, true, isResend ? ft("resending_otp") : ft("sending_otp"));
 
   try {
-    const data = await api(isResend ? "/auth/farmer/resend-otp" : "/auth/farmer/request-otp", {
-      method: "POST",
-      // The signup intent lets the backend reach a number that has no farmer
-      // account yet; the login intent never does.
-      body: { mobile, intent: farmerAuthMode },
-      queueOffline: false, // never claim an SMS that was not dispatched
-    });
+    let data;
+    if (usePhoneAuthFor(mobile)) {
+      await phoneAuthSend(mobile, isResend && farmerOtpState.viaPhoneAuth && farmerOtpState.mobile === mobile);
+      farmerOtpState.viaPhoneAuth = true;
+      data = { demo: false, resend_after: 30 };
+    } else {
+      data = await api(isResend ? "/auth/farmer/resend-otp" : "/auth/farmer/request-otp", {
+        method: "POST",
+        // The signup intent lets the backend reach a number that has no farmer
+        // account yet; the login intent never does.
+        body: { mobile, intent: farmerAuthMode },
+        queueOffline: false, // never claim an SMS that was not dispatched
+      });
+      farmerOtpState.viaPhoneAuth = false;
+    }
     farmerOtpState.mobile = mobile;
     // The backend answers 200 for registered and unknown numbers alike and
     // never proves delivery, so the UI shows the conditional wording only —
@@ -1764,11 +1918,13 @@ async function farmerVerifyOtp() {
   setButtonBusy(btn, true, ft("verifying_otp"));
 
   try {
-    const data = await api("/auth/farmer/verify-otp", {
-      method: "POST",
-      body: { mobile, otp: code },
-      queueOffline: false,
-    });
+    const data = farmerOtpState.viaPhoneAuth
+      ? await phoneAuthVerify(code)
+      : await api("/auth/farmer/verify-otp", {
+        method: "POST",
+        body: { mobile, otp: code },
+        queueOffline: false,
+      });
     if (data.registration_required) {
       // Phone verified but no farmer account exists for this number: continue
       // to the profile step. The backend issues no session here — only a
