@@ -480,3 +480,47 @@ body.farmer-portal .owner-bottom-nav .nav-item .ic{font-size:19px;}
 .btn.is-busy{opacity:0.75;cursor:progress;}
 body.farmer-portal .otp-resend-row .btn-sm{min-height:40px;}
 @media (max-width:380px){.otp-code-input{letter-spacing:7px;font-size:20px;}}
+
+/* ==========================================================================
+   Real-time web calling (farmer <-> veterinarian)
+   Overlay + in-call panel + vet availability card. Uses the existing design
+   tokens (--primary, --primary-dark, badges) so it matches the current UI.
+   ========================================================================== */
+.pm-call-overlay{
+  position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:rgba(18,22,45,0.55);padding:16px;backdrop-filter:blur(2px);
+}
+.pm-call-card{
+  width:100%;max-width:420px;background:#fff;border-radius:20px;padding:20px;
+  box-shadow:0 24px 60px rgba(12,16,40,0.35);animation:pmCallPop .18s ease-out;
+}
+@keyframes pmCallPop{from{transform:scale(.96);opacity:.6}to{transform:scale(1);opacity:1}}
+.pm-call-header{display:flex;align-items:center;gap:12px;}
+.pm-call-icon{font-size:30px;line-height:1;animation:pmCallRing 1.4s ease-in-out infinite;}
+@keyframes pmCallRing{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
+.pm-call-title{font-size:17px;font-weight:800;color:var(--primary-dark);}
+.pm-call-sub{font-size:13px;color:var(--muted);margin-top:2px;}
+.pm-call-timer{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;color:var(--primary-dark);}
+.pm-call-status{font-size:14px;font-weight:700;margin:14px 0 8px;color:#2b3050;}
+.pm-call-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.pm-call-note{background:#f4f6fd;border-radius:10px;padding:8px 10px;font-size:13px;color:#3c4160;margin-bottom:8px;white-space:pre-wrap;}
+.pm-call-hint{font-size:12.5px;color:#8a5306;min-height:16px;}
+.pm-call-warn{font-size:12.5px;color:#b3261e;min-height:16px;margin-bottom:4px;}
+.pm-call-actions{display:flex;gap:10px;margin-top:12px;}
+.pm-call-btn{
+  flex:1;min-height:48px;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;
+  background:#eef1fb;color:var(--primary-dark);display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.pm-call-btn:active{transform:scale(.98);}
+.pm-call-btn.is-muted{background:#fff3e0;color:#8a5306;}
+.pm-call-accept{background:var(--green,#1fa971);color:#fff;}
+.pm-call-decline{background:#e53935;color:#fff;}
+.pm-call-foot{font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.4;}
+#pmCallRemoteAudio{display:none;}
+.pm-vet-card-live{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+@media (max-width:420px){
+  .pm-call-card{padding:16px;border-radius:16px;}
+  .pm-call-title{font-size:16px;}
+  .pm-call-actions{flex-direction:column;}
+  .pm-call-btn{min-height:52px;}
+}

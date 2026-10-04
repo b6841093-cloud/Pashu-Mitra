@@ -1,13 +1,20 @@
 /* =================================================================
-   PashuMitra Service Worker — Offline Support
+   PashuMitra Service Worker — Offline Support + Incoming Call Push
+   =================================================================
+   Cache versioning: bump CACHE_NAME whenever a pre-cached asset changes.
+   v7 adds the web-calling client (call.js, vendor/socket.io.min.js) and the
+   push/notificationclick handlers for incoming web calls. The fetch strategy
+   below is unchanged from v6; call API endpoints are never cached.
    ================================================================= */
 
-const CACHE_NAME = "pashu-mitra-v6";  // bumped: use backend-only demo Farmer credentials
+const CACHE_NAME = "pashu-mitra-v7";  // bumped: vendored Socket.IO client + call.js
 const STATIC_ASSETS = [
   "/",
   "/index.html",
   "/style.css",
   "/app.js",
+  "/call.js",
+  "/vendor/socket.io.min.js",
   "/maharashtra_locations.json",
   "/maharashtra_state.geojson",
 ];
@@ -47,6 +54,10 @@ self.addEventListener("fetch", (event) => {
   // Skip non-same-origin requests (CDN, external resources)
   if (url.origin !== self.location.origin) return;
 
+  // Live call state must never be served from the cache, even if someone adds
+  // it to API_CACHE by mistake.
+  if (url.pathname.startsWith("/api/webcall/")) return;
+
   // API GET: stale-while-revalidate for safe endpoints
   if (url.pathname.startsWith("/api/")) {
     const isCacheable = API_CACHE.some((p) => url.pathname.startsWith(p));
@@ -83,4 +94,67 @@ self.addEventListener("fetch", (event) => {
       });
     })
   );
+});
+
+/* =================================================================
+   Web Push — incoming call notification
+   -----------------------------------------------------------------
+   The payload carries *identification only* (call id, caller display name,
+   language, reason). No phone number and no call state are trusted from the
+   push: clicking it focuses/opens the veterinary portal, which re-reads the
+   authoritative call state from the backend with the user's own JWT.
+
+   Platform honesty: this runs only when the browser/OS delivers the push.
+   A fully closed browser, a device that is offline, or disabled notifications
+   means no notification is shown — there is no way for a web page to
+   guarantee a "WhatsApp-style" ring in those conditions.
+   ================================================================= */
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (err) {
+    payload = { type: "generic", body: event.data ? event.data.text() : "" };
+  }
+  if (!payload || payload.type !== "incoming_call" || !payload.call_id) {
+    // Non-call pushes keep the previous behaviour: show a plain notification.
+    if (payload && (payload.title || payload.body)) {
+      event.waitUntil(self.registration.showNotification(payload.title || "PashuMitra", {
+        body: payload.body || "",
+        icon: "/manifest.json",
+      }));
+    }
+    return;
+  }
+
+  const target = payload.url || ("/#/vet/calls?incoming=" + encodeURIComponent(payload.call_id));
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "Incoming web call", {
+      body: payload.body || "A farmer is calling you in the PashuMitra veterinary portal.",
+      tag: "pm-call-" + payload.call_id,
+      renotify: true,
+      requireInteraction: true,
+      data: { call_id: payload.call_id, url: target },
+    })
+  );
+});
+
+/* Notification click — open/focus the veterinary portal and recover the call */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const targetUrl = new URL(data.url || "/#/vet/calls", self.location.origin).href;
+
+  event.waitUntil((async () => {
+    const clientList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of clientList) {
+      if (new URL(client.url).origin === self.location.origin) {
+        await client.focus();
+        client.postMessage({ type: "pm-focus-call", call_id: data.call_id || null });
+        return;
+      }
+    }
+    const opened = await self.clients.openWindow(targetUrl);
+    if (opened) opened.postMessage({ type: "pm-focus-call", call_id: data.call_id || null });
+  })());
 });

@@ -76,6 +76,14 @@ const I18N = {
     "farmer.report_problem": "Report a Problem", "farmer.cases": "Cases",
     "farmer.health_treatment": "Health", "farmer.notifications": "Notifications", "farmer.profile": "My Profile",
     "farmer.language": "Language", "farmer.what_to_do": "Choose an action",
+    // In-app web call (WebRTC) — separate from the phone helpline.
+    "farmer.call_vet": "Call a Veterinarian",
+    "farmer.call_vet_help": "Talk to a veterinarian now, from this browser. Your microphone is used only during the call.",
+    "farmer.call_language": "Call language", "farmer.call_reason": "Reason for calling",
+    "farmer.call_notes": "Notes (optional)", "farmer.call_notes_placeholder": "Symptoms, since when, animal tag…",
+    "farmer.start_call": "Start call", "farmer.call_history": "Call history",
+    "farmer.helpline": "Helpline (phone call)",
+    "farmer.helpline_help": "If nobody is online for a web call, you can dial the helpline from a phone. This is a separate telephone service.",
     "farmer.animal": "Animal", "farmer.animal_id": "Animal ID", "farmer.animal_name": "Animal Name",
     "farmer.animal_type": "Animal Type", "farmer.breed": "Breed", "farmer.age": "Age",
     "farmer.years": "years", "farmer.health_status": "Health", "farmer.status": "Status",
@@ -275,6 +283,14 @@ const I18N = {
     "farmer.report_problem": "समस्या कळवा", "farmer.cases": "प्रकरणे",
     "farmer.health_treatment": "आरोग्य", "farmer.notifications": "सूचना", "farmer.profile": "माझे प्रोफाइल",
     "farmer.language": "भाषा", "farmer.what_to_do": "कृती निवडा",
+    // ॲपमधील व्हेब कॉल (WebRTC) — फोन हेल्पलाइनपेक्षा वेगळा.
+    "farmer.call_vet": "पशुवैद्यांना कॉल करा",
+    "farmer.call_vet_help": "या ब्राउझरमधून आता पशुवैद्यांशी बोला. तुमचा माइक फक्त कॉल दरम्यान वापरला जातो.",
+    "farmer.call_language": "कॉलची भाषा", "farmer.call_reason": "कॉल करण्याचे कारण",
+    "farmer.call_notes": "टिप्पणी (ऐच्छिक)", "farmer.call_notes_placeholder": "लक्षणे, कधीपासून, प्राण्याचा टॅग…",
+    "farmer.start_call": "कॉल सुरू करा", "farmer.call_history": "कॉल इतिहास",
+    "farmer.helpline": "हेल्पलाइन (फोन कॉल)",
+    "farmer.helpline_help": "व्हेब कॉलसाठी कोणी ऑनलाइन नसेल, तर तुम्ही फोनवरून हेल्पलाइनवर कॉल करू शकता. ही वेगळी टेलिफोन सेवा आहे.",
     "farmer.animal": "प्राणी", "farmer.animal_id": "प्राणी क्रमांक", "farmer.animal_name": "प्राण्याचे नाव",
     "farmer.animal_type": "प्राण्याचा प्रकार", "farmer.breed": "जात", "farmer.age": "वय",
     "farmer.years": "वर्षे", "farmer.health_status": "आरोग्य", "farmer.status": "स्थिती",
@@ -470,6 +486,14 @@ const I18N = {
     "farmer.report_problem": "समस्या बताएं", "farmer.cases": "रिपोर्ट",
     "farmer.health_treatment": "स्वास्थ्य", "farmer.notifications": "सूचनाएं", "farmer.profile": "मेरी प्रोफ़ाइल",
     "farmer.language": "भाषा", "farmer.what_to_do": "एक काम चुनें",
+    // ऐप में वेब कॉल (WebRTC) — फ़ोन हेल्पलाइन से अलग.
+    "farmer.call_vet": "पशु चिकित्सक को कॉल करें",
+    "farmer.call_vet_help": "इस ब्राउज़र से अभी पशु चिकित्सक से बात करें. माइक्रोफ़ोन केवल कॉल के दौरान उपयोग होता है.",
+    "farmer.call_language": "कॉल की भाषा", "farmer.call_reason": "कॉल करने का कारण",
+    "farmer.call_notes": "टिप्पणी (वैकल्पिक)", "farmer.call_notes_placeholder": "लक्षण, कब से, पशु टैग…",
+    "farmer.start_call": "कॉल शुरू करें", "farmer.call_history": "कॉल इतिहास",
+    "farmer.helpline": "हेल्पलाइन (फ़ोन कॉल)",
+    "farmer.helpline_help": "वेब कॉल के लिए कोई ऑनलाइन न हो तो आप फ़ोन से हेल्पलाइन पर कॉल कर सकते हैं. यह अलग टेलीफ़ोन सेवा है.",
     "farmer.animal": "पशु", "farmer.animal_id": "पशु आईडी", "farmer.animal_name": "पशु का नाम",
     "farmer.animal_type": "पशु का प्रकार", "farmer.breed": "नस्ल", "farmer.age": "उम्र",
     "farmer.years": "साल", "farmer.health_status": "सेहत", "farmer.status": "स्थिति",
@@ -665,6 +689,14 @@ const I18N = {
     "farmer.report_problem": "సమస్యను తెలియజేయండి", "farmer.cases": "నివేదికలు",
     "farmer.health_treatment": "ఆరోగ్యం", "farmer.notifications": "సూచనలు", "farmer.profile": "నా వివరాలు",
     "farmer.language": "భాష", "farmer.what_to_do": "ఒక చర్యను ఎంచుకోండి",
+    // యాప్‌లో వెబ్ కాల్ (WebRTC) — ఫోన్ హెల్ప్‌లైన్ కంటే వేరు.
+    "farmer.call_vet": "పశువైద్యుడిని కాల్ చేయండి",
+    "farmer.call_vet_help": "ఈ బ్రౌజర్ నుంచే ఇప్పుడే పశువైద్యుడితో మాట్లాడండి. మైక్రోఫోన్ కాల్ సమయంలో మాత్రమే వాడబడుతుంది.",
+    "farmer.call_language": "కాల్ భాష", "farmer.call_reason": "కాల్ చేయడానికి కారణం",
+    "farmer.call_notes": "గమనికలు (ఐచ్ఛికం)", "farmer.call_notes_placeholder": "లక్షణాలు, ఎప్పటి నుంచి, పశువు ట్యాగ్…",
+    "farmer.start_call": "కాల్ ప్రారంభించండి", "farmer.call_history": "కాల్ చరిత్ర",
+    "farmer.helpline": "హెల్ప్‌లైన్ (ఫోన్ కాల్)",
+    "farmer.helpline_help": "వెబ్ కాల్‌కు ఎవరూ ఆన్‌లైన్‌లో లేకపోతే, ఫోన్ నుంచి హెల్ప్‌లైన్‌కు కాల్ చేయవచ్చు. ఇది వేరే టెలిఫోన్ సేవ.",
     "farmer.animal": "జంతువు", "farmer.animal_id": "జంతువు సంఖ్య", "farmer.animal_name": "జంతువు పేరు",
     "farmer.animal_type": "జంతువు రకం", "farmer.breed": "జాతి", "farmer.age": "వయస్సు",
     "farmer.years": "సంవత్సరాలు", "farmer.health_status": "ఆరోగ్యం", "farmer.status": "స్థితి",
@@ -1174,10 +1206,14 @@ function setAuth(token, user) {
   state.token = token; state.user = user;
   localStorage.setItem("token", token);
   localStorage.setItem("user", JSON.stringify(user));
+  // Web-call signaling authenticates with this same token.
+  if (window.PMCall && window.PMCall.onAuthChanged) window.PMCall.onAuthChanged();
 }
 
 function logout(silent) {
   const wasOwner = getUserRole() === "owner";
+  // Tear down any live web call and signaling socket before dropping the token.
+  if (window.PMCall && window.PMCall.onAuthChanged) window.PMCall.onAuthChanged();
   state.token = null; state.user = null;
   localStorage.removeItem("token"); localStorage.removeItem("user");
   location.hash = "#/";
@@ -2019,6 +2055,16 @@ route("#/register/:role", ({ role }) => renderAuth("register", role));
 
 // ============================================================ DASHBOARDS ==
 route("#/owner/dashboard", () => ownerDashboard(), ["owner"]);
+route("#/owner/webcall", async (params) => {
+  if (window.PMCall && window.PMCall.renderOwnerCallView) await window.PMCall.renderOwnerCallView(params || {});
+}, ["owner"]);
+route("#/owner/calls", async () => {
+  if (window.PMCall && window.PMCall.renderCallHistory) await window.PMCall.renderCallHistory("owner");
+}, ["owner"]);
+route("#/vet/calls", async (params) => {
+  if (window.PMCall && window.PMCall.renderCallHistory) await window.PMCall.renderCallHistory("vet");
+  if (window.PMCall && window.PMCall.reconcile) window.PMCall.reconcile();
+}, ["vet"]);
 route("#/vet/dashboard", () => vetDashboard(), ["vet"]);
 route("#/govt/dashboard", () => govtDashboard(), ["govt"]);
 route("#/lab/dashboard", () => labDashboard(), ["lab"]);
@@ -2043,6 +2089,9 @@ async function ownerDashboard() {
         </button>
         <button class="owner-action-card" onclick="location.hash='#/owner/prescriptions'">
           <span class="action-icon">💊</span><span>${ft("health_treatment")}</span>
+        </button>
+        <button class="owner-action-card" onclick="location.hash='#/owner/webcall'">
+          <span class="action-icon">📞</span><span>${ft("call_vet")}</span>
         </button>
         <button class="owner-action-card" onclick="location.hash='#/owner/notifications'">
           <span class="action-icon">🔔</span><span>${ft("notifications")}</span>
@@ -2135,6 +2184,7 @@ async function vetDashboard() {
       </div>
       ${!ivrStatus.pstn_connected ? `<div class="small-muted" style="margin-top:4px">${ivrStatus.setup_instructions || ''}</div>` : ""}
     </div>
+    <div id="pmVetCallHost"></div>
     <div class="section-card">
       <div class="section-title">Today's Tasks</div>
       <div class="icon-grid">
@@ -2156,6 +2206,7 @@ async function vetDashboard() {
     </div>
     ${bottomNav("#/vet/dashboard")}
   `);
+  if (window.PMCall && window.PMCall.mountVetCard) window.PMCall.mountVetCard();
 }
 
 window.saveVetAvailability = async function() {

@@ -44,7 +44,7 @@
       ]
     },
     {
-      "source": "/(index.html|app.js|style.css|whisper-worker.js)",
+      "source": "/(index.html|app.js|call.js|style.css|sw.js|whisper-worker.js)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -54,6 +54,15 @@
     },
     {
       "source": "/(models|wasm)/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(vendor)/(.*)",
       "headers": [
         {
           "key": "Cache-Control",

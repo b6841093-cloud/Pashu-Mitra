@@ -651,6 +651,97 @@ CREATE INDEX IF NOT EXISTS idx_farmer_feedback_case ON farmer_feedback(case_id);
 CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id);
 """ + SCHEMA_OTP
 
+# ============================================================================
+# Real-time web calling (farmer <-> veterinarian browser audio calls)
+# ----------------------------------------------------------------------------
+# These tables are additive: the existing IVR/PSTN tables (helpline_calls,
+# ivr_call_events, vet_availability) are untouched, and no existing row is
+# modified or discarded. Two partial unique indexes enforce the two safety
+# invariants of the state machine at the database level:
+#   * one veterinarian can be "ringing/accepted/connecting/connected" only once
+#   * one caller can have only one live call
+# so two concurrent answer attempts can never both succeed.
+SCHEMA_WEBCALL = """
+CREATE TABLE IF NOT EXISTS web_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id TEXT UNIQUE NOT NULL,
+    caller_id INTEGER NOT NULL REFERENCES users(id),
+    caller_role TEXT NOT NULL DEFAULT 'owner',
+    vet_id INTEGER REFERENCES users(id),
+    language TEXT NOT NULL DEFAULT 'en',
+    reason TEXT,
+    reason_note TEXT,
+    case_id INTEGER REFERENCES cases(id),
+    animal_id INTEGER REFERENCES animals(id),
+    state TEXT DEFAULT 'Maharashtra',
+    district TEXT,
+    block TEXT,
+    village TEXT,
+    status TEXT NOT NULL DEFAULT 'created',
+    routing_policy TEXT,
+    routing_score REAL,
+    routing_reasons TEXT,
+    ring_timeout_seconds INTEGER NOT NULL DEFAULT 45,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    ringing_at TEXT,
+    accepted_at TEXT,
+    connected_at TEXT,
+    ended_at TEXT,
+    ended_by INTEGER REFERENCES users(id),
+    end_reason TEXT,
+    duration_seconds INTEGER,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS web_call_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    actor_id INTEGER,
+    actor_role TEXT,
+    detail TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Durable WebRTC signaling records. The socket relay is the low-latency path;
+-- this table is the authoritative, worker-independent path so a signal is never
+-- lost when the two peers are served by different processes/instances or the
+-- receiving tab was refreshing. Rows are deleted when the call reaches a
+-- terminal state.
+CREATE TABLE IF NOT EXISTS web_call_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id TEXT NOT NULL,
+    sender_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Presence leases. Availability *choice* lives in vet_availability.status
+-- (persistent, set explicitly by the veterinarian); this table only records
+-- liveness of a connected portal session and expires on its own.
+CREATE TABLE IF NOT EXISTS vet_presence (
+    vet_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    lease_expires_at TEXT,
+    last_heartbeat_at TEXT,
+    socket_sids TEXT NOT NULL DEFAULT '[]',
+    client TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_web_calls_status ON web_calls(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_web_calls_caller ON web_calls(caller_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_web_calls_vet ON web_calls(vet_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_web_call_events_call ON web_call_events(call_id, id);
+CREATE INDEX IF NOT EXISTS idx_web_call_signals_call ON web_call_signals(call_id, id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_web_calls_active_vet
+    ON web_calls(vet_id) WHERE vet_id IS NOT NULL AND status IN
+    ('ringing','accepted','connecting','connected');
+CREATE UNIQUE INDEX IF NOT EXISTS uq_web_calls_active_caller
+    ON web_calls(caller_id) WHERE status IN
+    ('created','ringing','accepted','connecting','connected');
+"""
+
 
 def get_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -736,6 +827,7 @@ def init_db(reset=False):
             migrate_users_role(conn)
             ensure_new_columns(conn)
             ensure_otp_tables(conn)
+            ensure_webcall_tables(conn)
             conn.commit()
             if first_time:
                 seed(conn)
@@ -989,9 +1081,18 @@ def ensure_new_columns(conn):
     conn.commit()
 
 
+def ensure_webcall_tables(conn):
+    """Additive migration for the real-time web calling tables (idempotent).
+
+    Mirrors :func:`ensure_otp_tables`: databases created by older revisions get
+    the new tables and indexes, and existing call/IVR data is never touched.
+    """
+    conn.executescript(SCHEMA_WEBCALL)
+    conn.commit()
+
+
 def ensure_otp_tables(conn):
     """Additive migration for farmer OTP login tables (safe to re-run).
-
     ``SCHEMA`` already uses ``CREATE TABLE IF NOT EXISTS``; this function makes
     the OTP migration explicit for databases created by older revisions and
     guarantees the supporting indexes and diagnostics columns exist.

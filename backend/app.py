@@ -50,6 +50,9 @@ from otp_service import (
 from sms_service import send_sms, send_sms_urgent, get_sent_log, get_dead_letters, get_worker_stats, get_sms_provider_info
 from push_service import is_push_configured, get_public_key, push_notification
 from disease_knowledge import DiseaseKnowledge
+import turn_config
+import webcalling
+from realtime import emit_call_event, emit_to_user, init_realtime, socket_public_url, socketio
 
 SECRET_KEY = os.environ.get("SIH_SECRET_KEY") or secrets.token_urlsafe(48)
 if not os.environ.get("SIH_SECRET_KEY"):
@@ -130,6 +133,15 @@ def auth_required(roles=None):
 
 def row_to_dict(row):
     return dict(row) if row else None
+
+
+# ------------------------------------- real-time web calling (signaling) ---
+# Flask-SocketIO is wired into this same WSGI application, so the REST API and
+# the signaling channel share one authentication scheme (the JWT above), one
+# SQLite database and one deployment. ``realtime`` never imports ``app``, so
+# there is no circular import: it receives the token decoder and DB factory.
+init_realtime(app, decode_token=decode_token, get_db=get_db)
+
 
 # ------------------------------------------------------------------
 # Multilingual notification templates (Req 4)
@@ -377,6 +389,16 @@ def health():
         # Prototype demo account state — flags only, never the number and never
         # the code. A visible "enabled": true here is the signal to turn it off.
         "demo_mode": demo_auth.demo_mode_status(),
+        # Real-time web calling (in-app WebRTC audio). Secret-free: no TURN
+        # credential and no signaling payload is ever reported here.
+        "web_calling": {
+            "channel": "webrtc_web_call",
+            "signaling": "flask-socketio",
+            "ring_timeout_seconds": webcalling.ring_timeout_seconds(),
+            "push_configured": is_push_configured(),
+            "redis_message_queue": bool((os.environ.get("SIH_REDIS_URL") or "").strip()),
+            "ice": turn_config.describe(),
+        },
     }), 200 if database_ok else 503
 
 
@@ -4418,6 +4440,390 @@ def zoonotic_risk():
             "active_zoonotic_cases": len(zoonotic_cases),
             "cases_by_district": district_counts,
             "cases": zoonotic_cases[:20],
+        })
+    finally:
+        conn.close()
+
+
+# ==========================================================================
+# REAL-TIME WEB CALLING (farmer <-> veterinarian browser audio)
+# --------------------------------------------------------------------------
+# Authenticated, server-authorized call lifecycle + signaling endpoints.
+# The media never touches this server: audio flows peer-to-peer over WebRTC.
+# These routes only create/authorize state, route the call to one eligible
+# veterinarian, and record accurate lifecycle timestamps.
+#
+# This is a different channel from the PSTN/IVR helpline above: the helpline
+# (phone number 7382210251) requires a real telephony provider and is not
+# served by these endpoints.
+# ==========================================================================
+def _webcall_error_response(exc):
+    payload = {"error": exc.message, "code": exc.code}
+    if exc.call:
+        payload["call"] = exc.call
+    return jsonify(payload), exc.status_code
+
+
+def _webcall_client(conn, user_id):
+    return conn.execute("SELECT id, full_name, role FROM users WHERE id=?", (user_id,)).fetchone()
+
+
+@app.get("/api/webcall/config")
+@auth_required()
+def webcall_config():
+    """Everything the browser needs before it opens a call.
+
+    Includes per-session ICE servers (STUN + short-lived TURN credentials when
+    configured), the absolute signaling URL for split frontend/backend
+    deployments, and the server-side rules (ring timeout, reasons, languages).
+    """
+    conn = get_db()
+    try:
+        me = conn.execute(
+            "SELECT id, role, full_name, preferred_language, district, block, village FROM users WHERE id=?",
+            (g.user["uid"],),
+        ).fetchone()
+        settings = get_ivr_settings()
+        presence = webcalling.presence_state(conn, g.user["uid"]) if g.user["role"] == "vet" else None
+        active = webcalling.active_call_for(conn, g.user["uid"], g.user["role"])
+        availability = None
+        if g.user["role"] == "vet":
+            row = conn.execute(
+                "SELECT status, supported_languages FROM vet_availability WHERE vet_id=?", (g.user["uid"],)
+            ).fetchone()
+            availability = {
+                "status": row["status"] if row else "OFFLINE",
+                "supported_languages": json.loads(row["supported_languages"]) if row else ["en"],
+            }
+        return jsonify({
+            "channel": "webrtc_web_call",
+            "audio": "peer_to_peer_webrtc",
+            "user": {
+                "id": me["id"], "role": me["role"], "name": me["full_name"],
+                "language": me["preferred_language"] or "en",
+                "district": me["district"], "block": me["block"], "village": me["village"],
+            },
+            "ice_servers": turn_config.ice_servers(g.user["uid"]),
+            "ice": turn_config.describe(),
+            "ice_transport_policy": turn_config.ice_transport_policy(),
+            "signaling": {
+                # Empty means "same origin as this page" (dev / single-service).
+                "url": socket_public_url(),
+                "path": (os.environ.get("SIH_SOCKETIO_PATH") or "socket.io"),
+                "transports": ["websocket", "polling"],
+            },
+            "ring_timeout_seconds": webcalling.ring_timeout_seconds(),
+            "supported_languages": [
+                {"code": code, "name": LANGUAGE_NAMES[code]} for code in SUPPORTED_LANGUAGES
+            ],
+            "call_reasons": list(webcalling.CALL_REASONS),
+            "push": {"configured": is_push_configured()},
+            "availability": availability,
+            "presence": presence,
+            "active_call_id": active["call_id"] if active else None,
+            "helpline": {
+                "number": settings.phone_number,
+                "pstn_connected": settings.pstn_connected,
+                "note": (
+                    "The web call uses this browser's microphone and needs no phone network."
+                    if not settings.pstn_connected else
+                    "A PSTN helpline is also configured."
+                ),
+            },
+        })
+    finally:
+        conn.close()
+
+
+@app.post("/api/webcall/calls")
+@auth_required(roles=["owner"])
+def webcall_create_call():
+    """Start a call for the authenticated farmer and route it to one vet.
+
+    The farmer's identity, region and role are read from the database — never
+    from the request body — and the router only selects a veterinarian who is
+    explicitly available, has a live portal session, speaks the requested
+    language and is not already on a call.
+    """
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid request body"}), 400
+    if not shared_rate_limit_ok(f"webcall:create:{g.user['uid']}"):
+        return jsonify({"error": "Too many call attempts. Please wait a moment.", "code": "rate_limited"}), 429
+
+    conn = get_db()
+    try:
+        try:
+            result = webcalling.create_call(conn, caller=g.user, payload=data)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        call = result["call"]
+        row = webcalling._row(conn, call["call_id"])
+        if row["status"] == "ringing" and row["vet_id"]:
+            webcalling.notify_vet_of_call(conn, row)
+            emit_to_user(
+                int(row["vet_id"]), "call:incoming",
+                {"call": webcalling.serialize_call(conn, row, viewer={"uid": row["vet_id"], "role": "vet"})},
+            )
+            emit_call_event(row, "ringing")
+            # The caller is told a ring actually started; there is no "connected"
+            # state until the veterinarian answers and media is established.
+            emit_to_user(int(row["caller_id"]), "call:update", {
+                "call_id": row["call_id"], "status": row["status"], "event": "placed",
+                "vet": call["vet"],
+            })
+        else:
+            emit_to_user(int(row["caller_id"]), "call:update", {
+                "call_id": call["call_id"], "status": call["status"], "event": "unavailable",
+                "message": result.get("message"),
+            })
+        return jsonify(result), 201 if row["status"] == "ringing" else 200
+    finally:
+        conn.close()
+
+
+@app.get("/api/webcall/calls/current")
+@auth_required()
+def webcall_current_call():
+    """Reconciliation endpoint: the caller/vet's live call, if any."""
+    conn = get_db()
+    try:
+        webcalling.expire_stale_calls(conn)
+        row = webcalling.active_call_for(conn, g.user["uid"], g.user["role"])
+        return jsonify({
+            "call": webcalling.serialize_call(conn, row, viewer=g.user) if row else None,
+        })
+    finally:
+        conn.close()
+
+
+@app.get("/api/webcall/calls/history")
+@auth_required()
+def webcall_history():
+    """Authorized call history (own calls; government oversight sees all)."""
+    conn = get_db()
+    try:
+        try:
+            limit = int(request.args.get("limit", 50))
+            offset = int(request.args.get("offset", 0))
+        except (TypeError, ValueError):
+            return jsonify({"error": "limit/offset must be integers"}), 400
+        try:
+            calls = webcalling.list_history(conn, g.user, limit=limit, offset=offset)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        return jsonify({"calls": calls, "count": len(calls)})
+    finally:
+        conn.close()
+
+
+@app.get("/api/webcall/calls/<call_id>")
+@auth_required()
+def webcall_call_detail(call_id):
+    conn = get_db()
+    try:
+        webcalling.expire_stale_calls(conn)
+        try:
+            call = webcalling.get_call(conn, call_id, g.user)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        return jsonify({"call": call})
+    finally:
+        conn.close()
+
+
+@app.post("/api/webcall/calls/<call_id>/accept")
+@auth_required(roles=["vet"])
+def webcall_accept(call_id):
+    conn = get_db()
+    try:
+        try:
+            call = webcalling.accept_call(conn, call_id, g.user)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        row = webcalling._row(conn, call_id)
+        emit_call_event(row, "accepted")
+        return jsonify({"call": call})
+    finally:
+        conn.close()
+
+
+@app.post("/api/webcall/calls/<call_id>/reject")
+@auth_required(roles=["vet"])
+def webcall_reject(call_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        try:
+            call = webcalling.reject_call(conn, call_id, g.user, reason=(data.get("reason") or "").strip() or None)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        emit_call_event(webcalling._row(conn, call_id), "rejected", extra={"reason": data.get("reason")})
+        return jsonify({"call": call})
+    finally:
+        conn.close()
+
+
+@app.post("/api/webcall/calls/<call_id>/cancel")
+@auth_required(roles=["owner"])
+def webcall_cancel(call_id):
+    conn = get_db()
+    try:
+        try:
+            call = webcalling.cancel_call(conn, call_id, g.user)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        emit_call_event(webcalling._row(conn, call_id), "cancelled")
+        return jsonify({"call": call})
+    finally:
+        conn.close()
+
+
+@app.post("/api/webcall/calls/<call_id>/end")
+@auth_required()
+def webcall_end(call_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        try:
+            call = webcalling.end_call(conn, call_id, g.user, reason=(data.get("reason") or "").strip() or None)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        emit_call_event(webcalling._row(conn, call_id), "ended")
+        return jsonify({"call": call})
+    finally:
+        conn.close()
+
+
+@app.post("/api/webcall/calls/<call_id>/connecting")
+@auth_required()
+def webcall_connecting(call_id):
+    conn = get_db()
+    try:
+        try:
+            call = webcalling.mark_connecting(conn, call_id, g.user)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        emit_call_event(webcalling._row(conn, call_id), "connecting")
+        return jsonify({"call": call})
+    finally:
+        conn.close()
+
+
+@app.post("/api/webcall/calls/<call_id>/connected")
+@auth_required()
+def webcall_connected(call_id):
+    """Report a genuinely established RTCPeerConnection (client-side event)."""
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        try:
+            call = webcalling.mark_connected(conn, call_id, g.user, media_confirmed=bool(data.get("media_confirmed")))
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        emit_call_event(webcalling._row(conn, call_id), "connected", extra={"media_confirmed": bool(data.get("media_confirmed"))})
+        return jsonify({"call": call})
+    finally:
+        conn.close()
+
+
+@app.post("/api/webcall/calls/<call_id>/failed")
+@auth_required()
+def webcall_failed(call_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        try:
+            call = webcalling.mark_failed(conn, call_id, g.user, reason=(data.get("reason") or "").strip() or None)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        emit_call_event(webcalling._row(conn, call_id), "failed", extra={"reason": data.get("reason")})
+        return jsonify({"call": call})
+    finally:
+        conn.close()
+
+
+@app.get("/api/webcall/calls/<call_id>/signals")
+@auth_required()
+def webcall_signals(call_id):
+    """Durable signaling backfill (participants only).
+
+    The socket relay delivers signals immediately; this endpoint closes any gap
+    (worker hand-off, tab refresh, reconnect) and is what makes the signaling
+    path worker-independent.
+    """
+    conn = get_db()
+    try:
+        try:
+            after = int(request.args.get("after", 0))
+        except (TypeError, ValueError):
+            after = 0
+        try:
+            signals = webcalling.list_signals(conn, call_id, g.user, after=after)
+        except webcalling.WebCallError as exc:
+            return _webcall_error_response(exc)
+        row = webcalling._row(conn, call_id)
+        first = conn.execute(
+            "SELECT MIN(id) AS first_id FROM web_call_signals WHERE call_id=?", (call_id,)
+        ).fetchone()["first_id"]
+        return jsonify({
+            "signals": signals,
+            "last_signal_id": signals[-1]["id"] if signals else after,
+            # Lets a client that missed (or had pruned) early signals resynchronize
+            # instead of stalling on a gap.
+            "first_signal_id": first,
+            "status": row["status"] if row else None,
+            "call": webcalling.serialize_call(conn, row, viewer=g.user) if row else None,
+        })
+    finally:
+        conn.close()
+
+
+@app.post("/api/webcall/presence")
+@auth_required(roles=["vet"])
+def webcall_presence_heartbeat():
+    """REST fallback for the presence lease (used when sockets are blocked)."""
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    try:
+        state = webcalling.heartbeat(conn, g.user["uid"], client=(data.get("client") or "")[:120])
+        active = webcalling.active_call_for(conn, g.user["uid"], "vet")
+        state["active_call"] = {"call_id": active["call_id"], "status": active["status"]} if active else None
+        return jsonify(state)
+    finally:
+        conn.close()
+
+
+@app.delete("/api/webcall/presence")
+@auth_required(roles=["vet"])
+def webcall_presence_offline():
+    conn = get_db()
+    try:
+        webcalling.drop_presence(conn, g.user["uid"])
+        return jsonify(webcalling.presence_state(conn, g.user["uid"]))
+    finally:
+        conn.close()
+
+
+@app.get("/api/webcall/availability")
+@auth_required(roles=["vet", "govt"])
+def webcall_availability():
+    """Truthful availability/presence snapshot (no phone numbers)."""
+    conn = get_db()
+    try:
+        return jsonify({"veterinarians": webcalling.available_veterinarians(conn)})
+    finally:
+        conn.close()
+
+
+@app.get("/api/webcall/summary")
+@auth_required(roles=["vet"])
+def webcall_summary():
+    conn = get_db()
+    try:
+        return jsonify({
+            "stats": webcalling.stats_for_vet(conn, g.user["uid"]),
+            "presence": webcalling.presence_state(conn, g.user["uid"]),
         })
     finally:
         conn.close()
