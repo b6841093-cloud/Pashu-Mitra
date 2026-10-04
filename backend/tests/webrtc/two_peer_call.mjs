@@ -147,10 +147,17 @@ function makeTone(frequency) {
   return { track, stop: () => clearInterval(timer) };
 }
 
-function makePeer(socket, callId, label, tone, received, iceServers) {
-  const pc = new RTCPeerConnection({ iceServers: iceServers || [] });
+function makePeer(socket, callId, label, tone, received, iceConfig, candidateLog, counters) {
+  // Honour the policy the API publishes: with "relay" every candidate must come
+  // from the TURN server, which is how a managed deployment is verified.
+  const pc = new RTCPeerConnection({
+    iceServers: (iceConfig && iceConfig.iceServers) || [],
+    iceTransportPolicy: (iceConfig && iceConfig.iceTransportPolicy) || "all",
+  });
   pc.onicecandidate = (event) => {
     if (!event.candidate) return;
+    if (candidateLog) candidateLog.push(`${label}:${event.candidate.type}/${event.candidate.protocol}`);
+    counters.sent += 1;
     socket.emit("call:signal", {
       call_id: callId,
       kind: "ice",
@@ -172,11 +179,20 @@ function makePeer(socket, callId, label, tone, received, iceServers) {
 async function stats(pc) {
   let inbound = 0;
   let outbound = 0;
-  (await pc.getStats()).forEach((report) => {
-    if (report.type === "inbound-rtp" && report.kind === "audio") inbound += report.packetsReceived || 0;
-    if (report.type === "outbound-rtp" && report.kind === "audio") outbound += report.packetsSent || 0;
+  const pairTypes = new Set();
+  const report = await pc.getStats();
+  const byId = new Map();
+  report.forEach((r) => byId.set(r.id, r));
+  report.forEach((r) => {
+    if (r.type === "inbound-rtp" && r.kind === "audio") inbound += r.packetsReceived || 0;
+    if (r.type === "outbound-rtp" && r.kind === "audio") outbound += r.packetsSent || 0;
+    if (r.type === "candidate-pair" && (r.nominated || r.selected || r.state === "succeeded")) {
+      const local = byId.get(r.localCandidateId);
+      const remote = byId.get(r.remoteCandidateId);
+      if (local && remote) pairTypes.add(`${local.candidateType}->${remote.candidateType}`);
+    }
   });
-  return { inbound, outbound };
+  return { inbound, outbound, pairs: [...pairTypes] };
 }
 
 const results = { passed: false, farmerDecoded: 0, vetDecoded: 0 };
@@ -208,6 +224,8 @@ try {
   step("the API hands the client usable ICE configuration (never a hardcoded secret)");
   const config = await api("/api/webcall/config", { token: farmer.token });
   const iceServers = (config.data && config.data.ice_servers) || [];
+  const icePolicy = (config.data && config.data.ice_transport_policy) || "all";
+  const iceConfig = { iceServers, iceTransportPolicy: icePolicy };
   assert(config.ok && Array.isArray(iceServers) && iceServers.length > 0, "config returns ICE servers for the browser");
   const turnConfigured = !!(config.data.ice && config.data.ice.turn_configured);
   console.log(`  · TURN relay configured: ${turnConfigured ? "yes" : "no (reflexive/direct paths only)"}`);
@@ -262,23 +280,31 @@ try {
   cleanup.push(() => { farmerTone.stop(); vetTone.stop(); });
   const vetReceived = { frames: 0 };
   const farmerReceived = { frames: 0 };
-  const vetPc = makePeer(vetSocket, callId, "vet", vetTone, vetReceived, iceServers);
-  const farmerPc = makePeer(farmerSocket, callId, "farmer", farmerTone, farmerReceived, iceServers);
+  const iceCandidateTypes = [];
+  const iceCounters = { sent: 0, relayed: 0, buffered: 0, applied: 0 };
+  const vetPc = makePeer(vetSocket, callId, "vet", vetTone, vetReceived, iceConfig, iceCandidateTypes, iceCounters);
+  const farmerPc = makePeer(farmerSocket, callId, "farmer", farmerTone, farmerReceived, iceConfig, iceCandidateTypes, iceCounters);
   cleanup.push(() => { try { farmerPc.close(); vetPc.close(); } catch (err) { /* already closed */ } });
 
   // ICE candidates can outrun the SDP; buffer them until the remote
   // description is in place (exactly what the browser client does).
+  // A signal arriving on a participant's socket was sent by the OTHER
+  // participant, so it belongs on that socket owner's peer connection:
+  //   candidates sent by the farmer arrive on the vet's socket -> vet's PC.
+  // Host candidates are also embedded in the offer/answer SDP, which can hide a
+  // mismatch here; relay candidates only arrive by trickle, so this must be right.
   const relayIce = (from, pc) => {
     const buffered = [];
     from.on("call:signal", async (payload) => {
       if (payload.kind !== "ice" || !payload.payload || !payload.payload.candidate) return;
-      if (!pc.remoteDescription) { buffered.push(payload.payload); return; }
-      try { await pc.addIceCandidate(new RTCIceCandidate(payload.payload)); } catch (err) { /* late candidate */ }
+      iceCounters.relayed += 1;
+      if (!pc.remoteDescription) { buffered.push(payload.payload); iceCounters.buffered += 1; return; }
+      try { await pc.addIceCandidate(new RTCIceCandidate(payload.payload)); iceCounters.applied += 1; } catch (err) { /* late candidate */ }
     });
-    return { flush: async () => { for (const candidate of buffered.splice(0)) { try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch (err) { /* late */ } } } };
+    return { flush: async () => { for (const candidate of buffered.splice(0)) { try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); iceCounters.applied += 1; } catch (err) { /* late */ } } } };
   };
-  const farmerIce = relayIce(vetSocket, farmerPc);
-  const vetIce = relayIce(farmerSocket, vetPc);
+  const farmerIce = relayIce(vetSocket, vetPc);      // the farmer's candidates
+  const vetIce = relayIce(farmerSocket, farmerPc);   // the vet's candidates
   const flushIce = async () => { await farmerIce.flush(); await vetIce.flush(); };
 
   // The vet applies the offer as soon as it arrives (set up before answering).
@@ -314,7 +340,40 @@ try {
     if (pc.connectionState === "connected") return resolve(true);
     pc.addEventListener("connectionstatechange", () => { if (pc.connectionState === "connected") resolve(true); });
   }), `${label} peer connection`, 45000);
-  await Promise.all([waitConnected(farmerPc, "farmer"), waitConnected(vetPc, "vet")]);
+  const iceDiagnostics = () => JSON.stringify({
+    farmer: { connection: farmerPc.connectionState, ice: farmerPc.iceConnectionState, gathering: farmerPc.iceGatheringState },
+    vet: { connection: vetPc.connectionState, ice: vetPc.iceConnectionState, gathering: vetPc.iceGatheringState },
+    policy: icePolicy,
+    candidate_types: iceCandidateTypes,
+    ice_signals: iceCounters,
+  });
+  try {
+    await Promise.all([waitConnected(farmerPc, "farmer"), waitConnected(vetPc, "vet")]);
+  } catch (err) {
+    // A failed ICE negotiation is the hardest failure to debug remotely; always
+    // print the state of both peers (never credentials or SDP contents).
+    console.error(`ICE diagnostics: ${iceDiagnostics()}`);
+    for (const [label, pc] of [["farmer", farmerPc], ["vet", vetPc]]) {
+      const report = await pc.getStats().catch(() => null);
+      if (!report) continue;
+      const byId = new Map();
+      report.forEach((r) => byId.set(r.id, r));
+      const pairs = [];
+      report.forEach((r) => {
+        if (r.type !== "candidate-pair") return;
+        const local = byId.get(r.localCandidateId);
+        const remote = byId.get(r.remoteCandidateId);
+        pairs.push({
+          state: r.state, nominated: !!r.nominated, checks: r.requestsSent, responses: r.responsesReceived,
+          bytesSent: r.bytesSent, bytesRecv: r.bytesReceived,
+          local: local ? `${local.candidateType}/${local.protocol} ${local.address}:${local.port}` : null,
+          remote: remote ? `${remote.candidateType}/${remote.protocol} ${remote.address}:${remote.port}` : null,
+        });
+      });
+      console.error(`${label} candidate pairs: ${JSON.stringify(pairs)}`);
+    }
+    throw err;
+  }
   assert(farmerPc.connectionState === "connected" && vetPc.connectionState === "connected",
     "both real peer connections reached the connected state (ICE + DTLS-SRTP)");
 
@@ -336,6 +395,13 @@ try {
   assert(after.farmer.inbound > before.farmer.inbound, `farmer received RTP audio (${after.farmer.inbound} packets)`);
   assert(after.vet.inbound > before.vet.inbound, `vet received RTP audio (${after.vet.inbound} packets)`);
   assert(after.farmer.outbound > 0 && after.vet.outbound > 0, "both peers sent RTP audio");
+  console.log(`  · selected candidate pairs: farmer ${JSON.stringify(after.farmer.pairs)} vet ${JSON.stringify(after.vet.pairs)}`);
+  if (icePolicy === "relay") {
+    assert(after.farmer.pairs.every((p) => p.startsWith("relay")) && after.farmer.pairs.length > 0,
+      "with ice_transport_policy=relay every farmer candidate is a TURN relay candidate");
+    assert(after.vet.pairs.every((p) => p.startsWith("relay")) && after.vet.pairs.length > 0,
+      "with ice_transport_policy=relay every vet candidate is a TURN relay candidate");
+  }
   assert(farmerReceived.frames > 0 && vetReceived.frames > 0,
     `both directions decoded real audio frames (farmer ${farmerReceived.frames}, vet ${vetReceived.frames})`);
   results.farmerDecoded = farmerReceived.frames;

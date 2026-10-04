@@ -1116,6 +1116,11 @@ def dispatch_incoming_call_push(conn, call_row) -> int:
             ok = push_notification(
                 {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
                 payload,
+                # A ringing call is worth waking the device for, and a call
+                # notification must expire with the ring window instead of
+                # surfacing minutes or hours later.
+                ttl=max(10, int(call_row["ring_timeout_seconds"] or 45)),
+                urgency="high",
             )
             if not ok:
                 dead.append(sub["id"])

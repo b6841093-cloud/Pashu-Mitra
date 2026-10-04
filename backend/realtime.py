@@ -97,10 +97,13 @@ def _multi_worker_warning() -> None:
     workers = (os.environ.get("SIH_GUNICORN_WORKERS") or "").strip()
     if workers.isdigit() and int(workers) > 1:
         logger.warning(
-            "Web calling runs with %s Gunicorn workers and no SIH_REDIS_URL: live socket "
-            "delivery is not shared between processes. Signaling is still durable (it is "
-            "persisted and reconciled over REST), but run one worker or configure a message "
-            "queue for instant cross-process delivery.",
+            "Web calling runs with %s Gunicorn workers and no SIH_REDIS_URL. Socket.IO rooms "
+            "are per-process, so a call event emitted by one worker will not reach a browser "
+            "whose socket is held by another (measured: 0 of 6 incoming-call events delivered "
+            "with two workers). Run ONE worker with a threaded worker class "
+            "(--worker-class gthread --workers 1 --threads 100), or set SIH_REDIS_URL so "
+            "events are shared. Signaling itself stays durable either way: it is persisted and "
+            "the clients reconcile over REST.",
             workers,
         )
 

@@ -6,7 +6,20 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - --error-logfile -
+    # Web calling runs a long-lived Socket.IO WebSocket inside this service, so
+    # the worker model matters (measured on 2026-10-04 with gunicorn 23):
+    #   * sync worker, 2 workers  -> Engine.IO polling sessions break ("Invalid
+    #     session": each HTTP request may land on a worker that does not hold the
+    #     session) and a REST-triggered `call:incoming` never reaches a socket in
+    #     another process (measured 0/6 delivered).
+    #   * sync worker, 1 worker   -> the socket occupies the only worker; REST
+    #     requests queued for 120 s (health checks would fail).
+    #   * gthread, 1 worker, 100 threads -> 4/4 events delivered in 5-9 ms, REST
+    #     median 3 ms, WebSocket *and* polling transports both work.
+    # One process is required because Socket.IO rooms are per-process; scale out
+    # only together with SIH_REDIS_URL (message queue) or a separate signalling
+    # service. See WEB_CALLING.md.
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 100 --timeout 120 --access-logfile - --error-logfile -
     healthCheckPath: /api/health
     disk:
       name: pashu-shield-sqlite
@@ -89,12 +102,13 @@ services:
         value: "123456"
 
       # ------------------------------------------------ real-time web calling
-      # The signaling socket runs inside this service (Flask-SocketIO). Socket.IO
-      # rooms do not cross Gunicorn workers; the shared SQLite signal log is the
-      # cross-worker authority and clients reconcile through REST, so --workers 2
-      # is correct today. Raise SIH_GUNICORN_WORKERS only together with instance
-      # size, or point SIH_REDIS_URL at Redis to make fan-out immediate.
-      # Ring timeout, sweeper and push are safe defaults.
+      # The signalling socket runs inside this service (Flask-SocketIO) and must
+      # live in the SAME process that emits call events, so the deployment uses
+      # one gthread worker (see startCommand). Set SIH_REDIS_URL to add a message
+      # queue before raising the worker count; SIH_GUNICORN_WORKERS only makes
+      # the code log a warning when cross-worker delivery is not shared.
+      - key: SIH_GUNICORN_WORKERS
+        value: "1"
       - key: SIH_WEBCALL_RING_TIMEOUT_SECONDS
         value: "45"
       - key: SIH_WEBCALL_SWEEPER

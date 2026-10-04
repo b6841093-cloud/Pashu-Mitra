@@ -443,6 +443,20 @@ function pushCallUpdate(client, call) {
 }
 
 // ---------------------------------------------------------------------------
+test("the signaling socket is opened WebSocket-first with a polling fallback", async () => {
+  // Deployment-critical: WebSocket-first keeps signaling on one upgraded
+  // connection (one worker process), and tryAllTransports lets a network that
+  // blocks WebSocket upgrades fall back to long-polling instead of failing.
+  const client = loadCallClient();
+  client.setFetch(callApi());
+  await client.ready();
+  const options = client.socket().options;
+  assert.equal(options.transports[0], "websocket", "WebSocket is the first transport");
+  // join() rather than deepEqual: the options array comes from the VM realm.
+  assert.equal(options.transports.join(","), "websocket,polling", "polling stays available as a fallback");
+  assert.equal(options.tryAllTransports, true, "a blocked WebSocket falls back instead of giving up");
+});
+
 test("the calling client exposes its public API and reports configuration", async () => {
   const client = loadCallClient();
   const pm = client.pm();

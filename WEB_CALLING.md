@@ -11,10 +11,13 @@ Authoritative verification ladder: `backend/tests/webrtc/README.md`.
 | Layer | State |
 |-------|-------|
 | Backend (FSM, routing, signaling, auth, push) | Implemented, **47/47 tests pass** |
-| Portal client (`frontend/call.js`) | Implemented, **40/40 client tests pass** (2 browser tests skipped without a browser) |
+| Portal client (`frontend/call.js`) | Implemented, **41/43 client tests pass**, 0 fail, 2 skipped (the browser rung; no browser here) |
 | Real two-peer WebRTC audio through the real API | **Executed and passed** (`backend/tests/webrtc/two_peer_call.mjs`) |
+| Media over a TURN relay | **Executed and passed** against a real TURN server (`relay`→`relay`, 511/512 decoded frames) |
+| Web Push send path (VAPID, encryption, 410 pruning) | **Executed and passed** (`backend/tests/deploy/push_loopback_check.py`, 20 checks) |
+| Realtime delivery under the deployed worker model | **Executed and passed** (`backend/tests/deploy/deploy_check.mjs`, 22 checks); the same check **fails** on the old `--workers 2` model |
 | Two real browsers (Playwright) | Implemented, **not executed here** (no browser in the build environment) |
-| TURN relay, Web Push delivery, PSTN bridging | **Not provisioned** — see Blockers |
+| Production TURN/VAPID values, PSTN bridging | **Not provisioned** — see Blockers |
 
 ---
 
@@ -47,10 +50,21 @@ Decisions and the reasoning behind them:
 * **Signaling is durable, not just live.** Every signal is written to
   `web_call_signals` before it is emitted, and every client also reconciles
   through `GET /api/webcall/calls/<id>/signals?after=<id>`. This is what makes
-  the feature survive a page refresh, a reconnect, a dropped socket frame, and
-  **Gunicorn's multiple workers** (Socket.IO rooms do not cross worker
-  processes; the shared signal log does). Setting `SIH_REDIS_URL` turns on
-  Socket.IO's message queue for instant cross-worker fan-out.
+  the feature survive a page refresh, a reconnect and a dropped socket frame.
+* **The worker model is part of the design, and it was measured.** Socket.IO
+  rooms live in the process that owns the socket, so a REST-triggered event such
+  as `call:incoming` is only delivered if the same process handles the HTTP
+  request that created the call. Measured on 2026-10-04 with gunicorn 23.0.0:
+  `--workers 2` (sync) → long-polling sessions die with `Invalid session` and
+  **0 of 6** incoming-call events were delivered across workers, and `--workers 1`
+  (sync) → one open socket blocks every other REST request for the full 120 s
+  `--timeout`, which would fail the platform health check. The deployment
+  therefore runs **`--worker-class gthread --workers 1 --threads 100`**, which
+  delivered **4 of 4** events in 5–9 ms with a 3 ms REST median and stayed alive
+  through 65 s idle (4 heartbeats). Setting `SIH_REDIS_URL` enables Socket.IO's
+  message queue and makes multiple workers safe (still with the durable signal
+  log as the safety net). `backend/tests/deploy/deploy_check.mjs` asserts this
+  behaviour against any deployment, and reports the wrong worker model loudly.
 * **The database is the authority for call state.** `POST /accept` is an atomic
   compare-and-set on the call row, so two veterinarians cannot both answer; the
   unique partial indexes (`uq_web_calls_active_vet`, `uq_web_calls_active_caller`)
@@ -136,10 +150,13 @@ because the ringtone is owned by the call state, not by a button.
 | `backend/turn_config.py` | STUN/TURN ICE config; ephemeral coturn credentials (HMAC-SHA1, REST API) with a static-credential fallback; never exposes a secret to the browser |
 | `backend/test_webcalling.py` | 47 backend tests |
 | `backend/tests/webrtc/README.md` | The verification ladder + manual two-browser procedure |
-| `backend/tests/webrtc/two_peer_call.mjs` | **Real two-peer WebRTC audio test** against the running API |
+| `backend/tests/webrtc/two_peer_call.mjs` | **Real two-peer WebRTC audio test** against the running API; honours the server's ICE policy and asserts a `relay`→`relay` pair when TURN is forced |
+| `backend/tests/webrtc/local_turn_ephemeral.mjs` | A real TURN server for local verification, implementing coturn's REST (shared-secret) credential mode so the ephemeral-credential path can be proven without coturn |
+| `backend/tests/deploy/deploy_check.mjs` | **Deployment smoke test**: health/config, auth, both socket transports, real `call:incoming` delivery (catches the multi-worker bug), TURN/push presence, authorization, terminal state |
+| `backend/tests/deploy/push_loopback_check.py` | End-to-end Web Push delivery check against a stand-in push service: VAPID signature, `aes128gcm` encryption, TTL/urgency, 410 pruning |
 | `frontend/call.js` | Portal calling client: signaling, real `RTCPeerConnection`, ringtone, overlays, availability card, call history, push opt-in |
 | `frontend/vendor/socket.io.min.js` (+ LICENSE, README.md) | Vendored Socket.IO client **4.8.4** (CDNs blocked in the build environment; update recipe documented in that folder) |
-| `frontend/tests/webcall_ui.test.mjs` | 14 client tests (VM sandbox, DOM/WebRTC/socket fakes) |
+| `frontend/tests/webcall_ui.test.mjs` | 15 client tests (VM sandbox, DOM/WebRTC/socket fakes) |
 | `frontend/tests/webcall_browser.test.mjs` | 2 Playwright two-browser tests (skip with a reason when unstaged) |
 | `WEB_CALLING.md` | This report |
 
@@ -150,13 +167,16 @@ because the ringtone is owned by the call state, not by a button.
 | `backend/app.py` | `init_realtime(...)` wiring, ~255-line `/api/webcall/*` section, `web_calling` block in `/api/health`, `first_signal_id` in the signals response |
 | `backend/database.py` | `SCHEMA_WEBCALL` + `ensure_webcall_tables()` called from `init_db()` |
 | `backend/requirements.txt` | Flask-SocketIO / python-socketio / python-engineio / simple-websocket, and `pywebpush` |
+| `backend/tools/vapid_keys.py` | **Created**: prints a ready-to-use VAPID key pair (base64url) with a self-check, so operators never generate keys with the wrong encoding |
 | `frontend/app.js` | 10 new `farmer.*` i18n keys in **all four** languages (en/mr/hi/te); `PMCall.onAuthChanged()` on login/logout; a "Call a Veterinarian" action card on the farmer dashboard; `#pmVetCallHost` on the vet dashboard; routes `#/owner/webcall`, `#/owner/calls`, `#/vet/calls` |
 | `frontend/index.html` | Loads `vendor/socket.io.min.js` then `call.js` after `app.js`, registers `/sw.js` |
 | `frontend/style.css` | `.pm-call-*` styles (overlay, card, buttons, status, mobile layout) |
 | `frontend/sw.js` | Cache `pashu-mitra-v6 → v7`, `call.js` + vendor in `STATIC_ASSETS`, `/api/webcall/*` never cached, `push` handler for `incoming_call`, `notificationclick` → focus/open the vet portal |
 | `frontend/vercel.json` | `call.js` in the no-store rule; immutable caching for `/vendor/*`; existing `/api` rewrite and security headers unchanged |
 | `render.yaml` | Web-call env vars (below), TURN/VAPID/Redis left as `sync: false` secrets |
-| `.env.example` | Fully documented web-calling block (placeholders only) |
+| `.env.example` | Fully documented web-calling block (placeholders only), incl. the single-worker requirement |
+| `backend/push_service.py` | `push_notification(..., ttl=, urgency=)` delivery hints; the incoming-call push uses `TTL` = the ring window and `Urgency: high` |
+| `backend/realtime.py` | Startup warning now states the measured multi-worker failure and the exact fix |
 | `.gitignore` | `node_modules/` (the optional browser/WebRTC dev dependencies are never vendored) |
 
 ---
@@ -172,9 +192,11 @@ tables/data are untouched; pushed subscriptions reuse the pre-existing
 audited through the existing `audit_log`.
 
 **Deployment:** `render.yaml` gains the web-call env vars (TURN, VAPID, Redis and
-the public URL remain dashboard-only secrets), the start command stays
-`gunicorn app:app --workers 2 --timeout 120` with a comment explaining the
-worker model; `frontend/vercel.json` adds immutable caching for the vendored
+the public URL remain dashboard-only secrets), and the start command becomes
+`gunicorn app:app --worker-class gthread --workers 1 --threads 100 --timeout 120`
+with a comment recording the measurement above — a gthread worker keeps the
+socket responsive while other threads serve REST traffic, and a single worker is
+what makes Socket.IO rooms reach the browser from a REST-triggered event; `frontend/vercel.json` adds immutable caching for the vendored
 Socket.IO client and keeps the existing same-origin `/api` proxy; the service
 worker version bump makes existing browsers pick up the new shell.
 
@@ -200,7 +222,7 @@ worker version bump makes existing browsers pick up the new shell.
 | `SIH_TURN_USERNAME` / `SIH_TURN_CREDENTIAL` | `<user>` / `<pass>` | Fallback for TURN servers without the REST API |
 | `SIH_ICE_TRANSPORT_POLICY` | `all` (`relay` to force TURN) | Browser ICE policy |
 | `SIH_REDIS_URL` | `redis://…` | Optional Socket.IO message queue (cross-worker) |
-| `SIH_GUNICORN_WORKERS` | `2` | Used only to warn when cross-worker delivery is not shared |
+| `SIH_GUNICORN_WORKERS` | `1` | How many worker processes the deployment runs; used for the startup warning about per-process Socket.IO rooms. Leave at 1 unless `SIH_REDIS_URL` is set |
 | `SIH_PUBLIC_BACKEND_URL` | `https://pashu-shield-backend-hjgr.onrender.com` | Absolute WSS/REST base for a split deployment |
 | `SIH_ALLOWED_ORIGINS` | `https://pashu-mitra-smoky.vercel.app` | Origins allowed to open the signaling socket |
 | `SIH_SOCKETIO_PATH` | `socket.io` | Socket.IO path (must match the deployment) |
@@ -217,8 +239,9 @@ git push origin main
 curl -s https://pashu-shield-backend-hjgr.onrender.com/api/health | python3 -m json.tool | grep -A6 web_calling
 
 # 2. Generate Web Push keys ONCE, then set them in the Render dashboard
-python3 -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); print(v.public_key_urlsafe_base64); print(v.private_key_urlsafe_base64)"
+python3 backend/tools/vapid_keys.py          # prints base64url keys + a reload self-check
 #   VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_CLAIM_EMAIL  (sync: false)
+#   (Do NOT paste a PEM; pywebpush wants the base64url strings this tool prints.)
 
 # 3. TURN (required for mobile carrier / symmetric NAT). Example coturn essentials:
 #    listening-port=3478, tls-listening-port=5349, use-auth-secret,
@@ -233,6 +256,17 @@ python3 -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); print(
 # 5. Deploy the frontend
 cd frontend && vercel --prod      # or push; keep /api rewrite in vercel.json
 # Users must accept the service-worker update (cache v7); a hard reload forces it.
+
+# 6. Verify the DEPLOYED backend (after every deploy, once per environment):
+npm install --no-save socket.io-client
+PM_WEBCALL_URL=https://pashu-shield-backend-hjgr.onrender.com \
+PM_VET_EMAIL=... PM_VET_PASSWORD=... PM_EXPECT_TURN=1 PM_EXPECT_PUSH=1 \
+node backend/tests/deploy/deploy_check.mjs
+#    Expect "PASS — 22 checks" and, above all, that the vet's socket received
+#    call:incoming. If that fails, the Gunicorn worker model is wrong: the start
+#    command must stay
+#    gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 100 --timeout 120
+#    (or set SIH_REDIS_URL so Socket.IO can fan out across workers).
 ```
 
 ---
@@ -244,12 +278,17 @@ All commands were executed in this environment on 2026-10-04.
 | Command | Result |
 |---------|--------|
 | `cd backend && rm -f test_webcalling.db* && python3 -m unittest test_webcalling` | **OK — 47 tests, 0 failures** (`Ran 47 tests in 1.002s`) |
-| `node --test frontend/tests/*.test.mjs` | **40 pass, 0 fail, 2 skipped** (the 2 skips are the Playwright browser tests, which report their skip reason) |
-| `node backend/tests/webrtc/two_peer_call.mjs` (against a local Flask instance) | **PASS — 13 steps**, 248 inbound RTP packets on each side, 502/503 decoded audio frames both directions, DTLS-SRTP connected, mute relayed, terminal state + history verified |
+| `node --test frontend/tests/*.test.mjs` | **43 tests: 41 pass, 0 fail, 2 skipped** (the 2 skips are the Playwright browser tests, which report their skip reason) |
+| `node backend/tests/webrtc/two_peer_call.mjs` (against a local Flask instance) | **PASS — 13 steps**, real bidirectional RTP, DTLS-SRTP connected, mute relayed, terminal state + history verified |
+| `SIH_ICE_TRANSPORT_POLICY=relay node backend/tests/webrtc/two_peer_call.mjs` (through a real TURN server) | **PASS — 511 and 512 decoded audio frames**, both peers' selected candidate pair reported as **`relay` → `relay`**, i.e. media really traversed TURN |
+| `node backend/tests/webrtc/local_turn_ephemeral.mjs` + `/api/webcall/config` | **PASS** — with `SIH_TURN_SECRET` set, the server issued a coturn-REST username `<expiry>:<uid>` whose credential equals an independent `base64(HMAC-SHA1(secret, username))` computation (constant-time compare `True`); no static credential is used |
+| `python3 backend/tests/deploy/push_loopback_check.py` (local backend + a stand-in push service) | **PASS — 20 checks**: the healthy subscription received a VAPID-signed (`Authorization: vapid t=…`), `aes128gcm`-encrypted body (362 bytes) with `TTL: 45` and `Urgency: high`; the 410 subscription was contacted once and then pruned; unsubscribe stops delivery; no push reaches an unsubscribed endpoint |
+| `node backend/tests/deploy/deploy_check.mjs` (against the locally deployed configuration) | **PASS — 22 checks** including "the vet's socket received `call:incoming` within 10 s (22 ms)". Re-run against `--workers 2`: **FAIL** — this is the check that catches the worker misconfiguration |
 | `python3 -m unittest test_regression test_role_auth test_demo_account test_farmer_otp_login test_all_features` | **OK** (unchanged by this work) |
 | `python3 -m unittest test_helpline` | **FAILED (4 failures, 17 errors)** — **identical at the base commit `aa39a36`** (verified in a clean worktree), i.e. pre-existing and out of scope |
 | `node --test frontend/tests/webcall_browser.test.mjs` | **Not executed** — skipped: no Chromium/Playwright in this environment (browser downloads are blocked) |
-| Real deployment / two-browser / TURN / Web Push delivery | **Not executed** — see Blockers. No deployment or push delivery is claimed. |
+| Real deployment (Render/Vercel) | **Not executed** — no deployment is claimed. Everything above ran against a local process started with the deployment's own command line. |
+| Real browser / two-browser call / OS notification | **Not executed** — no browser exists in this environment; see Blockers 3 and 5. |
 
 Coverage of the 19 required cases: backend suite covers auth on create, no
 impersonation, only the assigned vet receives, wrong-role rejection, double-answer
@@ -265,15 +304,22 @@ subscription storage); actual delivery requires the VAPID keys and a browser.
 
 ## 8. Remaining blockers (exact)
 
-1. **TURN is not provisioned.** Without it, calls between peers behind symmetric
-   NAT / mobile CGNAT will fail — honestly, with a "could not connect" state.
-   Everything else works on LANs and permissive NATs. Provision coturn (or a
-   managed TURN) and set `SIH_TURN_URLS` + `SIH_TURN_SECRET`; verify with
-   `SIH_ICE_TRANSPORT_POLICY=relay`.
-2. **Web Push is not configured.** `VAPID_*` are empty, so `push_service` logs a
-   warning and the vet card's "Enable call notifications" cannot subscribe. Set
-   the three VAPID values, re-deploy, and the existing service worker handles
-   `push`/`notificationclick`.
+1. **TURN is implemented and verified, but no TURN server is provisioned for the
+   deployment.** The whole path is proven against a real TURN server in this
+   environment (relay-only media, ephemeral coturn REST credentials, both peers
+   pairing `relay`→`relay`, 511/512 decoded frames) — what is missing is a
+   production coturn (or a managed TURN) endpoint. Until `SIH_TURN_URLS` +
+   `SIH_TURN_SECRET` are set on Render, calls between two networks behind
+   symmetric NAT / mobile CGNAT will honestly fail with "could not connect",
+   while LANs and permissive NATs work. Provision it, then re-run
+   `deploy_check.mjs` (it warns when TURN is absent).
+2. **Web Push is implemented and verified as far as a server can verify it.** The
+   backend was proven to send real VAPID-signed, `aes128gcm`-encrypted, `high`
+   urgency pushes with `TTL` = the ring window, and to prune a 410 subscription
+   (`push_loopback_check.py`, 20 checks). What remains is operational: put real
+   VAPID keys on Render (`backend/tools/vapid_keys.py` prints a ready-to-use
+   pair), re-deploy, and have a vet accept notifications in a real browser. The
+   service worker already handles `push`/`notificationclick`.
 3. **No browser in this build environment**, so the two-browser rung and the
    visual/audio acceptance (real microphone and speakers, two networks) were
    **not** executed here. Run section 10 (and the manual procedure in
@@ -304,10 +350,17 @@ reaching DTLS-SRTP `connected`, the call reaching `connected`/`ended`
 server-side with accurate timestamps, mute relayed to the peer, and the call
 appearing in the farmer's authorized history.
 
+**Also executed:** the same script with `SIH_ICE_TRANSPORT_POLICY=relay` against a
+real TURN server — both peers reported their selected candidate pair as
+`relay`→`relay` and decoded 511/512 audio frames, which proves the media path
+works when direct connectivity is impossible (the TURN credentials were the
+short-lived coturn REST kind: the server's username/credential pair matched an
+independent HMAC-SHA1 computation).
+
 **Not yet tested:** two real browsers with real microphones/speakers (rung 4 and
-the manual procedure), calls across two different networks, and anything over a
-TURN relay — because this environment has no browser and no TURN server. Those
-are the user's acceptance steps below; no result is claimed for them.
+the manual procedure), calls across two different carrier networks, and a
+production TURN server (the relay proof above used a local fixture). Those are
+the user's acceptance steps below; no result is claimed for them.
 
 ---
 
@@ -315,23 +368,27 @@ are the user's acceptance steps below; no result is claimed for them.
 
 1. `cd backend && rm -f test_webcalling.db* && python3 -m unittest test_webcalling`
    → expect 47/47 OK.
-2. `node --test frontend/tests/*.test.mjs` → expect 40 pass / 0 fail / 2 skipped.
+2. `node --test frontend/tests/*.test.mjs` → expect 41 pass / 0 fail / 2 skipped.
 3. `PM_WEBCALL_URL=<backend> PM_VET_EMAIL=… PM_VET_PASSWORD=… node backend/tests/webrtc/two_peer_call.mjs`
    → expect `PASS` with non-zero RTP packets **and** decoded frames in both
    directions (install `@roamhq/wrtc` + `socket.io-client`; skip code 2 otherwise).
-4. Set TURN + VAPID in Render, re-deploy, then `curl …/api/health` and confirm
+4. `PM_WEBCALL_URL=<backend> PM_VET_EMAIL=… PM_VET_PASSWORD=… PM_EXPECT_TURN=1 PM_EXPECT_PUSH=1`
+   `node backend/tests/deploy/deploy_check.mjs` → expect `PASS — 22 checks passed`,
+   and in particular that the vet's socket receives `call:incoming` (the
+   worker-model check). Run it after every deployment change.
+5. Set TURN + VAPID in Render, re-deploy, then `curl …/api/health` and confirm
    `web_calling.ice.turn_configured` is true; repeat step 3 with
    `SIH_ICE_TRANSPORT_POLICY=relay` to prove the relay path.
-5. On two devices on **different networks**: vet sets *Available* + languages and
+6. On two devices on **different networks**: vet sets *Available* + languages and
    enables notifications; farmer places a call; vet sees the popup with caller
    details and hears the repeating ringtone; vet answers; **both sides hear each
    other**; mute/unmute is audible and mirrored in the UI; the timer runs;
    hang up and confirm both sides stop and the microphone indicator disappears.
-6. Repeat for: decline, no-answer (45 s timeout → `missed`), busy vet, cancel
+7. Repeat for: decline, no-answer (45 s timeout → `missed`), busy vet, cancel
    while ringing, refresh mid-call, and notification-click while the tab is in
    the background.
-7. Check the call history in both portals, and that an unrelated farmer account
+8. Check the call history in both portals, and that an unrelated farmer account
    cannot see the call.
-8. Record date, devices, networks, whether TURN was used, and whether audio was
-   audible in **both** directions. The feature is accepted only when step 5
+9. Record date, devices, networks, whether TURN was used, and whether audio was
+   audible in **both** directions. The feature is accepted only when step 6
    passes on two networks with TURN configured.

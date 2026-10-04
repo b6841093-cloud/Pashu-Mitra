@@ -689,11 +689,14 @@ class TestWebCallingPushAndHistory(WebCallingTestBase):
         sent: list[tuple] = []
         with mock.patch.object(push_service, "is_push_configured", lambda: True), \
              mock.patch.object(push_service, "push_notification",
-                               lambda sub, payload: sent.append((sub, payload)) or True):
+                               lambda sub, payload, **kwargs: sent.append((sub, payload, kwargs)) or True):
             resp = self.start_call()
             self.assertEqual(resp.status_code, 201)
         self.assertEqual(len(sent), 1)
-        subscription, payload = sent[0]
+        subscription, payload, push_options = sent[0]
+        # A ringing call must be high-urgency and must expire with the ring window.
+        self.assertEqual(push_options.get("urgency"), "high")
+        self.assertGreaterEqual(int(push_options.get("ttl") or 0), 10)
         self.assertEqual(subscription["endpoint"], "https://push.example/endpoint-vet1")
         self.assertEqual(payload["type"], "incoming_call")
         self.assertEqual(payload["call_id"], resp.get_json()["call"]["call_id"])

@@ -237,7 +237,13 @@
       const socket = window.io(signalingUrl(cfg), {
         path: (cfg.signaling && cfg.signaling.path) || "socket.io",
         auth: { token: authToken() },
+        // WebSocket first (a single upgraded connection, one worker process).
+        // tryAllTransports keeps the long-polling fallback for networks that
+        // block WebSocket upgrades; it requires the server to run a SINGLE
+        // process (deployed: gunicorn --worker-class gthread --workers 1),
+        // because Engine.IO polling session state is per-process.
         transports: ["websocket", "polling"],
+        tryAllTransports: true,
         withCredentials: false,
         reconnection: true,
         reconnectionDelay: 800,

@@ -49,8 +49,22 @@ def get_public_key() -> str:
     return _vapid_public_key
 
 
-def push_notification(subscription_info: dict, payload: dict) -> bool:
-    """Send a Web Push notification.  Returns True on success."""
+def push_notification(subscription_info: dict, payload: dict, *, ttl: int | None = None,
+                      urgency: str | None = None) -> bool:
+    """Send a Web Push notification.  Returns True on success.
+
+    ``ttl`` and ``urgency`` implement the Web Push protocol's delivery hints:
+
+    * ``ttl`` — how long the push service may keep the message while the device
+      is offline. The default (0) means "deliver now or drop it"; a time-critical
+      message such as a ringing call should set it explicitly so a stale
+      notification can never be delivered later.
+    * ``urgency`` — ``"high"`` asks the push service/OS to wake the device
+      immediately instead of batching the notification for a maintenance window.
+      This is what makes a background tab ring promptly rather than minutes later.
+
+    Both are optional so existing callers keep their current behaviour.
+    """
     if not is_push_configured():
         logger.debug("Web Push not configured; skipping notification.")
         return False
@@ -59,12 +73,15 @@ def push_notification(subscription_info: dict, payload: dict) -> bool:
     except ImportError:
         logger.warning("pywebpush not installed; cannot send Web Push.")
         return False
+    headers = {"Urgency": urgency} if urgency else None
     try:
         webpush(
             subscription_info=subscription_info,
             data=json.dumps(payload),
             vapid_private_key=_vapid_private_key,
             vapid_claims={"sub": _vapid_claim_email},
+            ttl=int(ttl) if ttl is not None else 0,
+            headers=headers,
         )
         return True
     except Exception as exc:
