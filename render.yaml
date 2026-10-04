@@ -88,6 +88,50 @@ services:
       - key: DEMO_FARMER_OTP
         value: "123456"
 
+      # ------------------------------------------------ real-time web calling
+      # The signaling socket runs inside this service (Flask-SocketIO). Socket.IO
+      # rooms do not cross Gunicorn workers; the shared SQLite signal log is the
+      # cross-worker authority and clients reconcile through REST, so --workers 2
+      # is correct today. Raise SIH_GUNICORN_WORKERS only together with instance
+      # size, or point SIH_REDIS_URL at Redis to make fan-out immediate.
+      # Ring timeout, sweeper and push are safe defaults.
+      - key: SIH_WEBCALL_RING_TIMEOUT_SECONDS
+        value: "45"
+      - key: SIH_WEBCALL_SWEEPER
+        value: "true"
+      - key: SIH_WEBCALL_PUSH_SYNC
+        value: "1"
+      - key: SIH_STUN_URLS
+        value: stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302
+      # Browser origins allowed to open the signaling socket (the Vercel portal).
+      - key: SIH_ALLOWED_ORIGINS
+        value: https://pashu-mitra-smoky.vercel.app
+      # Secrets: set in the Render dashboard, never in Git.
+      # TURN is required for mobile-carrier/CGNAT peers; the frontend receives
+      # only short-lived credentials minted from SIH_TURN_SECRET (coturn REST API).
+      - key: SIH_TURN_URLS
+        sync: false
+      - key: SIH_TURN_SECRET
+        sync: false
+      - key: SIH_TURN_USERNAME
+        sync: false
+      - key: SIH_TURN_CREDENTIAL
+        sync: false
+      # Public HTTPS/WSS URL of this service when the browser connects directly
+      # (leave blank when the portal proxies /api and the socket path).
+      - key: SIH_PUBLIC_BACKEND_URL
+        sync: false
+      # Web Push (ringing the vet when the portal tab is in the background).
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_CLAIM_EMAIL
+        sync: false
+      # Optional Redis message queue for Socket.IO fan-out across workers.
+      - key: SIH_REDIS_URL
+        sync: false
+
   # Existing trained-model API. If this service is already deployed separately,
   # create only the backend service above and point SIH_ML_BACKEND at its URL.
   - type: web

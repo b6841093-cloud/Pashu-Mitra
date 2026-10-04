@@ -14,6 +14,11 @@
   <div id="toast" class="toast"></div>
   <div id="app"></div>
   <script src="app.js"></script>
+  <!-- Real-time web calling: Socket.IO client (vendored, MIT) + the calling UI
+       and WebRTC client. Loaded after app.js because call.js reuses its globals
+       (state/render/header/bottomNav/t/ft/toast) when they are available. -->
+  <script src="vendor/socket.io.min.js"></script>
+  <script src="call.js"></script>
   <script>
     // Register Service Worker for PWA offline support
     if ("serviceWorker" in navigator) {

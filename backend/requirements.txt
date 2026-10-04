@@ -7,3 +7,15 @@ opencv-python-headless>=4.9.0,<5
 numpy>=1.26.0,<3
 qrcode[pil]>=7.4.2,<9
 scikit-learn>=1.4.0,<2
+# Real-time web calling: authenticated WebSocket signaling for WebRTC audio.
+# simple-websocket is required for WebSocket transport in the threading async
+# mode (Gunicorn gthread worker); the REST API keeps working without it.
+Flask-SocketIO>=5.3,<6
+python-socketio>=5.11,<6
+python-engineio>=4.9,<5
+simple-websocket>=1.0,<2
+# Web Push (browser notifications when the vet portal is not in the foreground).
+# Optional at runtime — push_service.py imports it lazily and logs a warning when
+# it is absent — but Render installs it so a ringing vet who is on another tab
+# still gets the notification. Requires VAPID_* to be configured to actually send.
+pywebpush>=2.0,<3
