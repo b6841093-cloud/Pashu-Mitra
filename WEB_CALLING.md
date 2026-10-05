@@ -13,18 +13,20 @@ Authoritative verification ladder: `backend/tests/webrtc/README.md`.
 > to Render; the Vercel `/api` rewrite remains REST-only. TURN supports either
 > coturn REST-secret credentials (`SIH_TURN_SECRET`) or static managed
 > credentials such as Metered (`SIH_TURN_USERNAME` / `SIH_TURN_CREDENTIAL`).
+> **This deployment uses Metered static credentials — see §5.1 for the exact
+> values, and note that `SIH_TURN_SECRET` must stay empty.**
 > Never expose TURN, VAPID or JWT secrets in frontend code, logs or `/api/health`.
 > Keep Gunicorn at `--worker-class gthread --workers 1 --threads 100` unless
 > `SIH_REDIS_URL` is configured for cross-worker Socket.IO fan-out.
 
 | Layer | State |
 |-------|-------|
-| Backend (FSM, routing, signaling, auth, push) | Implemented, **47/47 tests pass** |
-| Portal client (`frontend/call.js`) | Implemented, **41/43 client tests pass**, 0 fail, 2 skipped (the browser rung; no browser here) |
+| Backend (FSM, routing, signaling, auth, push) | Implemented, **60/60 tests pass** |
+| Portal client (`frontend/call.js`) | Implemented, **43/45 client tests pass**, 0 fail, 2 skipped (the browser rung; no browser here) |
 | Real two-peer WebRTC audio through the real API | **Executed and passed** (`backend/tests/webrtc/two_peer_call.mjs`) |
 | Media over a TURN relay | **Executed and passed** against a real TURN server (`relay`→`relay`, 511/512 decoded frames) |
 | Web Push send path (VAPID, encryption, 410 pruning) | **Executed and passed** (`backend/tests/deploy/push_loopback_check.py`, 20 checks) |
-| Realtime delivery under the deployed worker model | **Executed and passed** (`backend/tests/deploy/deploy_check.mjs`, 22 checks); the same check **fails** on the old `--workers 2` model |
+| Realtime delivery under the deployed worker model | **Executed and passed** (`backend/tests/deploy/deploy_check.mjs`, 23 checks); the same check **fails** on the old `--workers 2` model |
 | Two real browsers (Playwright) | Implemented, **not executed here** (no browser in the build environment) |
 | Production TURN/VAPID values, PSTN bridging | **Not provisioned** — see Blockers |
 
@@ -225,10 +227,10 @@ worker version bump makes existing browsers pick up the new shell.
 | `SIH_WEBCALL_ABANDON_MINUTES` | `45` | Age at which the sweeper force-closes a stale call |
 | `SIH_WEBCALL_PUSH_SYNC` | `1` | Dispatch Web Push inside the request (0 = let a worker do it) |
 | `SIH_STUN_URLS` | `stun:stun.l.google.com:19302` | Comma-separated STUN URLs |
-| `SIH_TURN_URLS` | `turn:turn.example.org:3478` | TURN URL(s). Accepts a JSON array or a comma/whitespace-separated string (one layer of surrounding quotes is tolerated); only `turn:`/`turns:` entries count. Empty/absent = STUN only, **whatever the credential variables say** |
-| `SIH_TURN_SECRET` | `<coturn static-auth-secret>` | Preferred: ephemeral credentials |
-| `SIH_TURN_TTL_SECONDS` | `3600` | Lifetime of an ephemeral credential |
-| `SIH_TURN_USERNAME` / `SIH_TURN_CREDENTIAL` | `<user>` / `<pass>` | Fallback for TURN servers without the REST API |
+| `SIH_TURN_URLS` | see §5.1 for the Metered list | TURN URL(s). Accepts a JSON array or a comma/whitespace-separated string (one layer of surrounding quotes and an almost-JSON paste are tolerated); only `turn:`/`turns:` entries count. Empty/absent = STUN only, **whatever the credential variables say** |
+| `SIH_TURN_USERNAME` / `SIH_TURN_CREDENTIAL` | `<user>` / `<pass>` | **Static/managed mode — this deployment (Metered).** With URLs and no secret ⇒ `turn_mode: "static"` |
+| `SIH_TURN_SECRET` | `<coturn static-auth-secret>` | Self-hosted coturn REST mode (ephemeral per-user credentials). **Must be empty/absent for the Metered static setup** — a non-empty value wins the mode selection |
+| `SIH_TURN_TTL_SECONDS` | `3600` | Lifetime of an ephemeral credential (coturn mode only) |
 | `SIH_ICE_TRANSPORT_POLICY` | `all` (`relay` to force TURN) | Browser ICE policy |
 | `SIH_REDIS_URL` | `redis://…` | Optional Socket.IO message queue (cross-worker) |
 | `SIH_GUNICORN_WORKERS` | `1` | How many worker processes the deployment runs; used for the startup warning about per-process Socket.IO rooms. Leave at 1 unless `SIH_REDIS_URL` is set |
@@ -236,6 +238,64 @@ worker version bump makes existing browsers pick up the new shell.
 | `SIH_ALLOWED_ORIGINS` | `https://pashu-mitra-smoky.vercel.app` | Origins allowed to open the signaling socket |
 | `SIH_SOCKETIO_PATH` | `socket.io` | Socket.IO path (must match the deployment) |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_CLAIM_EMAIL` | `<generated>` / `<generated>` / `mailto:ops@example.org` | Web Push keys (empty = push disabled) |
+
+### 5.1 Metered static TURN — the configuration this deployment uses
+
+This is the exact production setup. `SIH_TURN_URLS` is public (it is the URL list
+every browser receives); only the username and credential are secret and they are
+entered in the Render dashboard only.
+
+| Render key (`pashu-shield-backend`) | Value |
+|---|---|
+| `SIH_TURN_URLS` | `["turn:global.relay.metered.ca:80","turn:global.relay.metered.ca:80?transport=tcp","turn:global.relay.metered.ca:443","turns:global.relay.metered.ca:443?transport=tcp"]` |
+| `SIH_TURN_USERNAME` | your Metered username (**secret**, dashboard only) |
+| `SIH_TURN_CREDENTIAL` | your Metered credential (**secret**, dashboard only) |
+| `SIH_TURN_SECRET` | **must be deleted or left empty** |
+
+The four URLs may also be given comma- or newline-separated; the parser accepts a
+JSON array, a delimited list, one layer of surrounding quotes, and an
+almost-JSON paste (trailing comma / single quotes). Only `turn:`/`turns:` entries
+count.
+
+**Why `SIH_TURN_SECRET` must be empty:** mode selection is URLs first, then a
+non-empty `SIH_TURN_SECRET` ⇒ `ephemeral`, then username+credential ⇒ `static`.
+A leftover secret therefore silently switches the backend to coturn REST
+credentials that Metered rejects — and `turn_configured` still reads `true`, so
+the call fails with no obvious cause. `deploy_check.mjs` warns on exactly this.
+
+Expected `GET /api/health` → `web_calling` after the values are saved **and the
+service is redeployed** (verified locally on 2026-10-05 against a backend started
+with the deployment's own command line):
+
+```json
+"web_calling": {
+  "turn_configured": true,
+  "turn_mode": "static",
+  "turn_url_count": 4,
+  "turn_config_issue": null,
+  "ice": {
+    "stun_configured": true,
+    "turn_configured": true,
+    "turn_mode": "static",
+    "turn_url_count": 4,
+    "turn_urls_ignored": 0,
+    "turn_config_issue": null,
+    "turn_env": {
+      "SIH_TURN_URLS": "set",
+      "SIH_TURN_USERNAME": "set",
+      "SIH_TURN_CREDENTIAL": "set",
+      "SIH_TURN_SECRET": "missing"
+    },
+    "ice_transport_policy": "all",
+    "ephemeral_credentials": false,
+    "credential_ttl_seconds": null
+  }
+}
+```
+
+No credential value appears anywhere in that payload: `turn_env` reports
+`missing` / `empty` / `set` per variable **name**. The credentials themselves are
+returned only by `/api/webcall/config`, which is behind `@auth_required()`.
 
 ---
 
@@ -252,11 +312,22 @@ python3 backend/tools/vapid_keys.py          # prints base64url keys + a reload 
 #   VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_CLAIM_EMAIL  (sync: false)
 #   (Do NOT paste a PEM; pywebpush wants the base64url strings this tool prints.)
 
-# 3. TURN (required for mobile carrier / symmetric NAT). Example coturn essentials:
-#    listening-port=3478, tls-listening-port=5349, use-auth-secret,
-#    static-auth-secret=<random>, realm=<your.realm>,
-#    fingerprint, no-multicast-peers, min-port=49152, max-port=65535
-#    Then set: SIH_TURN_URLS, SIH_TURN_SECRET (dashboard only)
+# 3. TURN (required for mobile carrier / symmetric NAT).
+#    THIS DEPLOYMENT: Metered static credentials — see §5.1. In the Render
+#    dashboard for pashu-shield-backend set exactly:
+#      SIH_TURN_URLS       ["turn:global.relay.metered.ca:80",
+#                           "turn:global.relay.metered.ca:80?transport=tcp",
+#                           "turn:global.relay.metered.ca:443",
+#                           "turns:global.relay.metered.ca:443?transport=tcp"]
+#      SIH_TURN_USERNAME   <regenerated Metered username>   (secret)
+#      SIH_TURN_CREDENTIAL <regenerated Metered credential> (secret)
+#      SIH_TURN_SECRET     delete it / leave it empty
+#    then SAVE and let the service redeploy — a running process only ever sees
+#    the variables it was started with.
+#    (Alternative, not used here: self-hosted coturn with use-auth-secret,
+#     static-auth-secret=<random>, listening-port=3478, tls-listening-port=5349,
+#     realm=<your.realm>, fingerprint, min-port=49152, max-port=65535, then
+#     SIH_TURN_URLS + SIH_TURN_SECRET only.)
 
 # 4. Point the browser at the backend for WebSockets
 #    SIH_PUBLIC_BACKEND_URL=https://pashu-shield-backend-hjgr.onrender.com
@@ -271,7 +342,7 @@ npm install --no-save socket.io-client
 PM_WEBCALL_URL=https://pashu-shield-backend-hjgr.onrender.com \
 PM_VET_EMAIL=... PM_VET_PASSWORD=... PM_EXPECT_TURN=1 PM_EXPECT_PUSH=1 \
 node backend/tests/deploy/deploy_check.mjs
-#    Expect "PASS — 22 checks" and, above all, that the vet's socket received
+#    Expect "PASS — 23 checks" and, above all, that the vet's socket received
 #    call:incoming. If that fails, the Gunicorn worker model is wrong: the start
 #    command must stay
 #    gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 100 --timeout 120
@@ -306,25 +377,33 @@ Checklist, in order:
    `missing` in `turn_env`.
 4. Restart/redeploy the service: a process only ever sees the variables it was
    started with.
-5. Confirm with `GET /api/health` — **only** `turn_configured: true` **and**
-   `turn_url_count > 0` count as proof. `/api/webcall/config` returns the same
-   `ice` object plus the actual `ice_servers` the browser receives.
+5. For the Metered static setup, confirm `SIH_TURN_SECRET` is **absent or
+   empty** on this service. If it is `set`, the mode becomes `ephemeral` and the
+   browser receives coturn credentials that Metered rejects — `turn_configured`
+   would still read `true`, so only `turn_mode` reveals the mistake.
+6. Confirm with `GET /api/health` — **only** `turn_configured: true`,
+   `turn_mode: "static"` and `turn_url_count: 4` together count as proof (see
+   §5.1). `/api/webcall/config` returns the same `ice` object plus the actual
+   `ice_servers` the browser receives.
 
 ---
 
 ## 7. Tests actually run (and results)
 
-All commands were executed in this environment on 2026-10-04.
+All commands were executed in this environment on 2026-10-04; the TURN-related
+rows were re-run on 2026-10-05 after the Metered static-mode tests were added.
 
 | Command | Result |
 |---------|--------|
-| `cd backend && rm -f test_webcalling.db* && python3 -m unittest test_webcalling` | **OK — 47 tests, 0 failures** (`Ran 47 tests in 1.002s`) |
-| `node --test frontend/tests/*.test.mjs` | **43 tests: 41 pass, 0 fail, 2 skipped** (the 2 skips are the Playwright browser tests, which report their skip reason) |
+| `cd backend && rm -f test_webcalling.db* && python3 -m unittest test_webcalling` | **OK — 60 tests, 0 failures** (re-run 2026-10-05: `Ran 60 tests in 1.186s`) |
+| `test_webcalling.TestStaticTurnConfiguration` (tests 79–86, part of the run above) | **PASS — 8 tests**: missing URLs ⇒ `turn_configured: false`; the four Metered URLs as JSON / comma / newline ⇒ `turn_url_count: 4` with `turn_mode: "static"`; invalid entries ignored and counted; `static` mode with `SIH_TURN_SECRET` **absent**, **empty** and whitespace-only; no credential value in `/api/health`; ICE credentials only on the authenticated `/api/webcall/config` (401 otherwise) |
+| A local backend started with the deployment command line and the §5.1 variables | **`turn_configured: true`, `turn_mode: "static"`, `turn_url_count: 4`, `turn_config_issue: null`**, `turn_env` = URLs/USERNAME/CREDENTIAL `set`, SECRET `missing`; `deploy_check.mjs` → **PASS — 23 checks** |
+| `node --test frontend/tests/*.test.mjs` | **45 tests: 43 pass, 0 fail, 2 skipped** (re-run 2026-10-05; the 2 skips are the Playwright browser tests, which report their skip reason) |
 | `node backend/tests/webrtc/two_peer_call.mjs` (against a local Flask instance) | **PASS — 13 steps**, real bidirectional RTP, DTLS-SRTP connected, mute relayed, terminal state + history verified |
 | `SIH_ICE_TRANSPORT_POLICY=relay node backend/tests/webrtc/two_peer_call.mjs` (through a real TURN server) | **PASS — 511 and 512 decoded audio frames**, both peers' selected candidate pair reported as **`relay` → `relay`**, i.e. media really traversed TURN |
 | `node backend/tests/webrtc/local_turn_ephemeral.mjs` + `/api/webcall/config` | **PASS** — with `SIH_TURN_SECRET` set, the server issued a coturn-REST username `<expiry>:<uid>` whose credential equals an independent `base64(HMAC-SHA1(secret, username))` computation (constant-time compare `True`); no static credential is used |
 | `python3 backend/tests/deploy/push_loopback_check.py` (local backend + a stand-in push service) | **PASS — 20 checks**: the healthy subscription received a VAPID-signed (`Authorization: vapid t=…`), `aes128gcm`-encrypted body (362 bytes) with `TTL: 45` and `Urgency: high`; the 410 subscription was contacted once and then pruned; unsubscribe stops delivery; no push reaches an unsubscribed endpoint |
-| `node backend/tests/deploy/deploy_check.mjs` (against the locally deployed configuration) | **PASS — 22 checks** including "the vet's socket received `call:incoming` within 10 s (22 ms)". Re-run against `--workers 2`: **FAIL** — this is the check that catches the worker misconfiguration |
+| `node backend/tests/deploy/deploy_check.mjs` (against the locally deployed configuration) | **PASS — 23 checks** (re-run 2026-10-05 with Metered static TURN: `turn_mode=static`, `turn_url_count=4`, `turn_config_issue=none`) including "the vet's socket received `call:incoming` within 10 s (22 ms)". Re-run against `--workers 2`: **FAIL** — this is the check that catches the worker misconfiguration |
 | `python3 -m unittest test_regression test_role_auth test_demo_account test_farmer_otp_login test_all_features` | **OK** (unchanged by this work) |
 | `python3 -m unittest test_helpline` | **FAILED (4 failures, 17 errors)** — **identical at the base commit `aa39a36`** (verified in a clean worktree), i.e. pre-existing and out of scope |
 | `node --test frontend/tests/webcall_browser.test.mjs` | **Not executed** — skipped: no Chromium/Playwright in this environment (browser downloads are blocked) |
@@ -345,23 +424,31 @@ subscription storage); actual delivery requires the VAPID keys and a browser.
 
 ## 8. Remaining blockers (exact)
 
-1. **TURN is implemented and verified, but no TURN server is provisioned for the
-   deployment.** The whole path is proven against a real TURN server in this
-   environment (relay-only media, ephemeral coturn REST credentials, both peers
-   pairing `relay`→`relay`, 511/512 decoded frames) — what is missing is a
-   production coturn (or a managed TURN) endpoint. Until `SIH_TURN_URLS` +
-   `SIH_TURN_SECRET` (or `SIH_TURN_URLS` + `SIH_TURN_USERNAME` +
-   `SIH_TURN_CREDENTIAL` for a static provider) are set **on the backend
-   service** and that service is restarted, calls between two networks behind
-   symmetric NAT / mobile CGNAT will honestly fail with "could not connect",
-   while LANs and permissive NATs work. Provision it, then re-run
-   `deploy_check.mjs` (it warns when TURN is absent).
-   Status check (2026-10-05): the deployed backend reported
-   `turn_url_count: 0` with all four variables absent, i.e. the variables had
-   never reached the running process — see §6.1 for the exact checklist. Since
-   `describe()` now reports `turn_env` (missing/empty/set per variable name)
-   and `turn_config_issue`, the next redeploy states which variable is at fault
-   instead of leaving `turn_mode: none` unexplained.
+1. **TURN is implemented and verified; the deployed service is missing exactly
+   one environment variable.** The whole path is proven against a real TURN
+   server in this environment (relay-only media, both peers pairing
+   `relay`→`relay`, 511/512 decoded frames), and static-provider mode is proven
+   end to end here (§5.1 output reproduced against a backend started with the
+   deployment's own command line).
+
+   **Verified live state, 2026-10-05**, from
+   `GET https://pashu-shield-backend-hjgr.onrender.com/api/health` →
+   `web_calling.ice`:
+
+   ```json
+   "turn_configured": false, "turn_mode": "none", "turn_url_count": 0,
+   "turn_urls_ignored": 0, "turn_config_issue": "turn_urls_missing",
+   "turn_env": {"SIH_TURN_URLS": "missing", "SIH_TURN_USERNAME": "set",
+                "SIH_TURN_CREDENTIAL": "set", "SIH_TURN_SECRET": "missing"}
+   ```
+
+   So the username and credential are already on the service and
+   `SIH_TURN_SECRET` is correctly absent — **only `SIH_TURN_URLS` has never been
+   set**. Add it (§5.1) and redeploy; no code change is required. Until then,
+   calls between two networks behind symmetric NAT / mobile CGNAT will honestly
+   fail with "could not connect", while LANs and permissive NATs work.
+   `deploy_check.mjs` with `PM_EXPECT_TURN=1` fails on exactly this state and
+   names the missing variable.
 2. **Web Push is implemented and verified as far as a server can verify it.** The
    backend was proven to send real VAPID-signed, `aes128gcm`-encrypted, `high`
    urgency pushes with `TTL` = the ring window, and to prune a 410 subscription
@@ -416,18 +503,22 @@ the user's acceptance steps below; no result is claimed for them.
 ## 10. End-to-end verification checklist
 
 1. `cd backend && rm -f test_webcalling.db* && python3 -m unittest test_webcalling`
-   → expect 47/47 OK.
-2. `node --test frontend/tests/*.test.mjs` → expect 41 pass / 0 fail / 2 skipped.
+   → expect 60/60 OK.
+2. `node --test frontend/tests/*.test.mjs` → expect 43 pass / 0 fail / 2 skipped.
 3. `PM_WEBCALL_URL=<backend> PM_VET_EMAIL=… PM_VET_PASSWORD=… node backend/tests/webrtc/two_peer_call.mjs`
    → expect `PASS` with non-zero RTP packets **and** decoded frames in both
    directions (install `@roamhq/wrtc` + `socket.io-client`; skip code 2 otherwise).
 4. `PM_WEBCALL_URL=<backend> PM_VET_EMAIL=… PM_VET_PASSWORD=… PM_EXPECT_TURN=1 PM_EXPECT_PUSH=1`
-   `node backend/tests/deploy/deploy_check.mjs` → expect `PASS — 22 checks passed`,
+   `node backend/tests/deploy/deploy_check.mjs` → expect `PASS — 23 checks passed`,
    and in particular that the vet's socket receives `call:incoming` (the
    worker-model check). Run it after every deployment change.
 5. Set TURN + VAPID in Render, re-deploy, then `curl …/api/health` and confirm
-   `web_calling.ice.turn_configured` is true; repeat step 3 with
-   `SIH_ICE_TRANSPORT_POLICY=relay` to prove the relay path.
+   **all four** of `web_calling.ice.turn_configured: true`,
+   `turn_mode: "static"`, `turn_url_count: 4` and `turn_config_issue: null`
+   (see §5.1 for the whole expected payload). A `turn_url_count` of 0 means
+   `SIH_TURN_URLS` is absent or empty inside the running process;
+   `turn_config_issue` and `turn_env` name the variable at fault. Repeat step 3
+   with `SIH_ICE_TRANSPORT_POLICY=relay` to prove the relay path.
 6. On two devices on **different networks**: vet sets *Available* + languages and
    enables notifications; farmer places a call; vet sees the popup with caller
    details and hears the repeating ringtone; vet answers; **both sides hear each

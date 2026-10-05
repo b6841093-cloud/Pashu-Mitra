@@ -42,6 +42,7 @@ os.environ.setdefault("SIH_WEBCALL_SWEEPER", "false")
 from app import app, make_token, socketio  # noqa: E402
 import database  # noqa: E402
 import push_service  # noqa: E402
+import turn_config  # noqa: E402
 import webcalling  # noqa: E402
 
 
@@ -974,6 +975,238 @@ class TestWebCallingConfigAndHealth(WebCallingTestBase):
         finally:
             without_turn_env()
             os.environ.update(saved)
+
+
+class TestStaticTurnConfiguration(WebCallingTestBase):
+    """Static (managed-provider) TURN — the Metered deployment configuration.
+
+    The production backend runs Metered static credentials, i.e.
+    ``SIH_TURN_URLS`` + ``SIH_TURN_USERNAME`` + ``SIH_TURN_CREDENTIAL`` with
+    ``SIH_TURN_SECRET`` **absent**. These tests pin that contract so a later
+    change cannot quietly require a coturn secret, drop a URL, or leak a
+    credential through a public endpoint.
+    """
+
+    # The four endpoints Metered publishes for a project. Hostnames are public
+    # (they are in every browser's ICE list); only the username/credential are
+    # secret, and the values below are obviously fake placeholders.
+    METERED_URLS = [
+        "turn:global.relay.metered.ca:80",
+        "turn:global.relay.metered.ca:80?transport=tcp",
+        "turn:global.relay.metered.ca:443",
+        "turns:global.relay.metered.ca:443?transport=tcp",
+    ]
+    METERED_JSON = json.dumps(METERED_URLS)
+    TURN_KEYS = ("SIH_TURN_URLS", "SIH_TURN_USERNAME", "SIH_TURN_CREDENTIAL", "SIH_TURN_SECRET")
+
+    def setUp(self):
+        super().setUp()
+        self._saved = {key: os.environ[key] for key in self.TURN_KEYS if key in os.environ}
+
+    def tearDown(self):
+        for key in self.TURN_KEYS:
+            os.environ.pop(key, None)
+        os.environ.update(self._saved)
+        super().tearDown()
+
+    def set_static_env(self, urls=None, username="provider-user", credential="provider-credential",
+                       secret="__absent__"):
+        """Configure static mode; ``secret="__absent__"`` leaves the var unset."""
+        for key in self.TURN_KEYS:
+            os.environ.pop(key, None)
+        os.environ["SIH_TURN_URLS"] = self.METERED_JSON if urls is None else urls
+        if username is not None:
+            os.environ["SIH_TURN_USERNAME"] = username
+        if credential is not None:
+            os.environ["SIH_TURN_CREDENTIAL"] = credential
+        if secret is not None and secret != "__absent__":
+            os.environ["SIH_TURN_SECRET"] = secret
+
+    # 1 ---------------------------------------------------------------------
+    def test_79_missing_turn_urls_means_turn_is_not_configured(self):
+        for key in self.TURN_KEYS:
+            os.environ.pop(key, None)
+        self.assertFalse(turn_config.turn_urls())
+        self.assertEqual(turn_config.turn_mode(), "none")
+        self.assertEqual(turn_config.turn_config_issue(), "turn_urls_missing")
+
+        ice = self.client.get("/api/health").get_json()["web_calling"]
+        self.assertFalse(ice["turn_configured"])
+        self.assertEqual(ice["turn_mode"], "none")
+        self.assertEqual(ice["turn_url_count"], 0)
+        self.assertEqual(ice["turn_config_issue"], "turn_urls_missing")
+        # ...even when the credentials are perfectly configured.
+        self.set_static_env(urls="")
+        self.assertFalse(turn_config.describe()["turn_configured"])
+        self.assertEqual(turn_config.turn_config_issue(), "turn_urls_missing")
+
+    # 2, 3, 4 ---------------------------------------------------------------
+    def test_80_metered_static_configuration_reports_static_with_four_urls(self):
+        self.set_static_env()
+        summary = turn_config.describe()
+        self.assertTrue(summary["turn_configured"])
+        self.assertEqual(summary["turn_mode"], "static")
+        self.assertEqual(summary["turn_url_count"], 4)
+        self.assertEqual(summary["turn_urls_ignored"], 0)
+        self.assertIsNone(summary["turn_config_issue"])
+        self.assertFalse(summary["ephemeral_credentials"])
+        self.assertIsNone(summary["credential_ttl_seconds"])
+        self.assertTrue(summary["stun_configured"])
+        self.assertEqual(summary["ice_transport_policy"], "all")
+
+        web_calling = self.client.get("/api/health").get_json()["web_calling"]
+        self.assertTrue(web_calling["turn_configured"])
+        self.assertEqual(web_calling["turn_mode"], "static")
+        self.assertEqual(web_calling["turn_url_count"], 4)
+        self.assertIsNone(web_calling["turn_config_issue"])
+        self.assertEqual(web_calling["ice"], summary)
+
+        # The exact URLs reach the browser, in order, with the query strings intact.
+        config = self.client.get("/api/webcall/config", headers=_auth(self.owner_token)).get_json()
+        turn_entry = [e for e in config["ice_servers"] if e["urls"][0].startswith("turn")][0]
+        self.assertEqual(turn_entry["urls"], self.METERED_URLS)
+        self.assertEqual(turn_entry["username"], "provider-user")
+        self.assertEqual(turn_entry["credential"], "provider-credential")
+
+    # 5 ---------------------------------------------------------------------
+    def test_81_comma_and_newline_separated_turn_urls_are_accepted(self):
+        joined = ",".join(self.METERED_URLS)
+        self.set_static_env(urls=joined)
+        self.assertEqual(turn_config.turn_urls(), tuple(self.METERED_URLS))
+        self.assertEqual(turn_config.describe()["turn_url_count"], 4)
+
+        self.set_static_env(urls="\n".join(self.METERED_URLS))
+        self.assertEqual(turn_config.describe()["turn_url_count"], 4)
+
+        # Spaces around the delimiters, and one layer of surrounding quotes.
+        self.set_static_env(urls=" " + " , ".join(self.METERED_URLS) + " ")
+        self.assertEqual(turn_config.describe()["turn_url_count"], 4)
+        self.set_static_env(urls='"' + self.METERED_URLS[0] + '"')
+        self.assertEqual(turn_config.turn_urls(), (self.METERED_URLS[0],))
+
+    # 6 ---------------------------------------------------------------------
+    def test_82_invalid_entries_are_ignored_and_counted(self):
+        self.set_static_env(urls="\n".join([
+            self.METERED_URLS[0],
+            "stun:stun.l.google.com:19302",     # STUN, not TURN
+            "https://global.relay.metered.ca",  # no TURN scheme
+            "<paste-your-turn-url-here>",       # placeholder left in place
+            "",                                 # blank line: dropped, not counted
+        ]))
+        summary = turn_config.describe()
+        self.assertEqual(summary["turn_url_count"], 1)
+        # 3 wrong-scheme entries; the blank line never becomes a candidate.
+        self.assertEqual(summary["turn_urls_ignored"], 3)
+        self.assertEqual(turn_config.turn_urls(), (self.METERED_URLS[0],))
+        self.assertTrue(summary["turn_configured"])
+
+        # Every entry invalid => honest "not configured", never a false positive.
+        self.set_static_env(urls="stun:stun.l.google.com:19302,https://relay.example.org")
+        summary = turn_config.describe()
+        self.assertFalse(summary["turn_configured"])
+        self.assertEqual(summary["turn_mode"], "none")
+        self.assertEqual(summary["turn_url_count"], 0)
+        self.assertEqual(summary["turn_urls_ignored"], 2)
+        self.assertEqual(summary["turn_config_issue"], "turn_urls_unusable")
+
+    # 7 ---------------------------------------------------------------------
+    def test_83_static_mode_never_requires_a_coturn_secret(self):
+        # (a) SIH_TURN_SECRET absent — the Metered production setup.
+        self.set_static_env(secret="__absent__")
+        self.assertNotIn("SIH_TURN_SECRET", os.environ)
+        self.assertEqual(turn_config.turn_mode(), "static")
+        self.assertTrue(turn_config.describe()["turn_configured"])
+
+        # (b) SIH_TURN_SECRET present but EMPTY — what a `sync: false`
+        #     render.yaml key looks like before anyone pastes a value. It must
+        #     not be mistaken for coturn mode and must not block static mode.
+        self.set_static_env(secret="")
+        self.assertEqual(turn_config.env_state("SIH_TURN_SECRET"), "empty")
+        self.assertEqual(turn_config.turn_mode(), "static")
+        self.assertEqual(turn_config.describe()["turn_url_count"], 4)
+
+        # (c) ...and a whitespace-only secret is still "not set".
+        self.set_static_env(secret="   ")
+        self.assertEqual(turn_config.turn_mode(), "static")
+
+        # (d) A real secret switches to ephemeral mode (documented precedence),
+        #     so an operator who leaves both set gets coturn credentials, not a
+        #     silent mixture. Asserted so the behaviour is explicit.
+        self.set_static_env(secret="coturn-static-auth-secret")
+        self.assertEqual(turn_config.turn_mode(), "ephemeral")
+        self.assertTrue(turn_config.describe()["ephemeral_credentials"])
+        config = self.client.get("/api/webcall/config", headers=_auth(self.owner_token)).get_json()
+        turn_entry = [e for e in config["ice_servers"] if e["urls"][0].startswith("turn")][0]
+        self.assertNotEqual(turn_entry["credential"], "provider-credential")
+        self.assertRegex(turn_entry["username"], r"^\d+:\d+$")
+
+    # 8 ---------------------------------------------------------------------
+    def test_84_public_endpoints_never_expose_turn_credentials(self):
+        self.set_static_env(username="super-secret-username", credential="super-secret-credential")
+        health = self.client.get("/api/health")
+        self.assertEqual(health.status_code, 200)
+        payload = health.get_data(as_text=True)
+        self.assertNotIn("super-secret-username", payload)
+        self.assertNotIn("super-secret-credential", payload)
+        self.assertNotIn("coturn-static-auth-secret", payload)
+        # Diagnostics are names + states only.
+        ice = health.get_json()["web_calling"]["ice"]
+        self.assertEqual(ice["turn_env"], {
+            "SIH_TURN_URLS": "set", "SIH_TURN_USERNAME": "set",
+            "SIH_TURN_CREDENTIAL": "set", "SIH_TURN_SECRET": "missing",
+        })
+        self.assertNotIn("username", ice)
+        self.assertNotIn("credential", ice)
+        self.assertNotIn("ice_servers", health.get_json()["web_calling"])
+
+        # The ICE endpoint itself is not public.
+        anon = self.client.get("/api/webcall/config")
+        self.assertEqual(anon.status_code, 401)
+        self.assertNotIn("super-secret-credential", anon.get_data(as_text=True))
+
+    # 9 ---------------------------------------------------------------------
+    def test_85_ice_credentials_reach_authenticated_browsers_only(self):
+        self.set_static_env()
+
+        for label, headers in (
+            ("no header", {}),
+            ("garbage token", {"Authorization": "Bearer not-a-jwt"}),
+            ("malformed header", {"Authorization": "Basic abc"}),
+        ):
+            resp = self.client.get("/api/webcall/config", headers=headers)
+            self.assertEqual(resp.status_code, 401, label)
+            self.assertNotIn("provider-credential", resp.get_data(as_text=True))
+
+        # A farmer and a vet — the two peers of a real call — both receive it.
+        for token in (self.owner_token, self.vet_token):
+            resp = self.client.get("/api/webcall/config", headers=_auth(token))
+            self.assertEqual(resp.status_code, 200)
+            turn_entry = [e for e in resp.get_json()["ice_servers"]
+                          if e["urls"][0].lower().startswith("turn")][0]
+            self.assertEqual(turn_entry["credential"], "provider-credential")
+            self.assertEqual(resp.get_json()["ice_transport_policy"], "all")
+
+    def test_86_a_near_json_paste_from_a_dashboard_still_yields_four_urls(self):
+        """Operator tolerance: an *almost*-JSON array must not degrade to 0 URLs.
+
+        A trailing comma or single quotes make ``json.loads`` fail; the
+        delimiter fallback then still has to recover the URLs rather than report
+        ``turn_url_count: 0`` and leave the deployment silently STUN-only.
+        """
+        for label, raw in (
+            ("trailing comma", '["turn:global.relay.metered.ca:80","turn:global.relay.metered.ca:443",]'),
+            ("single quotes", "['turn:global.relay.metered.ca:80','turn:global.relay.metered.ca:443']"),
+            ("outer quotes kept", '"["turn:global.relay.metered.ca:80", "turn:global.relay.metered.ca:443"]"'),
+        ):
+            with self.subTest(shape=label):
+                self.set_static_env(urls=raw)
+                self.assertEqual(turn_config.turn_urls(),
+                                 ("turn:global.relay.metered.ca:80", "turn:global.relay.metered.ca:443"))
+                self.assertEqual(turn_config.describe()["turn_url_count"], 2)
+
+        # A genuine non-array value is untouched by the trimming.
+        self.set_static_env(urls="turn:global.relay.metered.ca:443?transport=tcp")
+        self.assertEqual(turn_config.turn_urls(), ("turn:global.relay.metered.ca:443?transport=tcp",))
 
 
 if __name__ == "__main__":

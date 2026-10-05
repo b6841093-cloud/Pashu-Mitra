@@ -4,17 +4,24 @@ STUN alone discovers a peer's public address but cannot relay media when both
 peers sit behind symmetric NAT or a restrictive firewall; those calls need a
 TURN relay. This module never ships a permanent TURN credential to the browser:
 
-* Preferred mode — **ephemeral credentials**: set ``SIH_TURN_SECRET`` to the
-  ``static-auth-secret`` of a coturn server (``use-auth-secret``) and each
-  request receives a short-lived ``username``/``credential`` pair computed as
-  in the coturn REST API:
+* Mode 1 — **ephemeral credentials** (self-hosted coturn): set
+  ``SIH_TURN_SECRET`` to the ``static-auth-secret`` of a coturn server
+  (``use-auth-secret``) and each request receives a short-lived
+  ``username``/``credential`` pair computed as in the coturn REST API:
 
       username   = "<expiry-unix-timestamp>:<user-id>"
       credential = base64(HMAC-SHA1(secret, username))
 
-* Fallback mode — **static credentials** (``SIH_TURN_USERNAME`` /
-  ``SIH_TURN_CREDENTIAL``) for a TURN server that does not support the REST
-  API, such as a managed TURN provider that gives a fixed username/password.
+* Mode 2 — **static credentials** (managed provider such as Metered):
+  ``SIH_TURN_URLS`` + ``SIH_TURN_USERNAME`` + ``SIH_TURN_CREDENTIAL`` for a TURN
+  server that does not implement the coturn REST API. This is a first-class
+  mode, not a degraded one — ``SIH_TURN_SECRET`` must be **absent or empty**,
+  because a non-empty secret wins the mode selection and the backend would then
+  hand the browser coturn-style credentials that a managed provider rejects.
+
+Mode selection: URLs first (no ``turn:``/``turns:`` URL ⇒ ``turn_mode: none``
+whatever the credentials say), then a non-empty ``SIH_TURN_SECRET`` ⇒
+``ephemeral``, then a complete username+credential pair ⇒ ``static``.
 
 If no TURN server is configured, the API reports ``turn_configured: false`` and
 the clients still get STUN. Calls between peers on the same network or with
@@ -58,6 +65,10 @@ DEFAULT_TURN_TTL_SECONDS = 3600
 TURN_ENV_KEYS = ("SIH_TURN_URLS", "SIH_TURN_USERNAME", "SIH_TURN_CREDENTIAL", "SIH_TURN_SECRET")
 _TURN_SCHEMES = ("turn:", "turns:")
 _DELIMITERS = re.compile(r"[,\s]+")
+# JSON-ish punctuation that survives a hand-pasted array (see ``_clean_token``).
+# It never occurs inside a real TURN URL, so stripping it from the *ends* of a
+# token is always safe; the scheme check that follows is the real gate.
+_TOKEN_NOISE = re.compile(r"^[\[\]{}\"',;]+|[\[\]{}\"',;]+$")
 
 
 def _unquote(raw: str) -> str:
@@ -75,6 +86,21 @@ def _unquote(raw: str) -> str:
     return value
 
 
+def _clean_token(part: str) -> str:
+    """Trim one entry of a pasted list to a bare URL.
+
+    A deployment operator pastes ``SIH_TURN_URLS`` from a dashboard or this
+    README. The two shapes that matter are a JSON array and a plain delimited
+    list; both are handled by ``_split_env``. This covers the shape that falls
+    between them — an *almost*-JSON array (a trailing comma, single quotes, a
+    bracket left in place). Every delimiter-separated token is stripped of
+    whitespace plus the surrounding ``[]{}"'`` / ``;`` punctuation that JSON
+    would otherwise have consumed, so a near-miss paste still produces usable
+    ``turn:`` URLs instead of silently degrading to ``turn_url_count: 0``.
+    """
+    return _TOKEN_NOISE.sub("", (part or "").strip()).strip()
+
+
 def _split_env(name: str, default: tuple[str, ...] = ()) -> tuple[str, ...]:
     """Parse an env var as either a JSON array or a delimited string.
 
@@ -84,7 +110,10 @@ def _split_env(name: str, default: tuple[str, ...] = ()) -> tuple[str, ...]:
       query strings such as ``?transport=tcp`` intact.
     * Comma / whitespace / newline separated string — the original format.
 
-    One layer of surrounding quotes is stripped first (see ``_unquote``).
+    One layer of surrounding quotes is stripped first (see ``_unquote``), and an
+    array that is *almost* valid JSON still parses token by token (see
+    ``_clean_token``). Entries are returned as written; the caller decides which
+    schemes are usable.
     """
     raw = _unquote(os.environ.get(name) or "")
     if not raw:
@@ -95,8 +124,8 @@ def _split_env(name: str, default: tuple[str, ...] = ()) -> tuple[str, ...]:
         except ValueError:
             parsed = None
         if isinstance(parsed, list):
-            return tuple(str(item).strip() for item in parsed if str(item).strip())
-    return tuple(part for part in _DELIMITERS.split(raw) if part)
+            return tuple(item for item in (_clean_token(str(each)) for each in parsed) if item)
+    return tuple(item for item in (_clean_token(part) for part in _DELIMITERS.split(raw)) if item)
 
 
 def stun_urls() -> tuple[str, ...]:
@@ -140,6 +169,11 @@ def ice_transport_policy() -> str:
 
 
 def turn_mode() -> str:
+    """``none`` | ``ephemeral`` | ``static`` — see the module docstring.
+
+    ``static`` needs no secret: URLs + username + credential are complete on
+    their own, which is what a managed TURN provider (Metered) requires.
+    """
     urls = turn_urls()
     if not urls:
         return "none"

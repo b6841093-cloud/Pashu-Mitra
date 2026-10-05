@@ -364,6 +364,9 @@ def health():
         database_ok = False
     gateway = sms_gateway.gateway_public_info()
     otp_status = otp_login_status()
+    # One snapshot: the three TURN fields below must never disagree with each
+    # other, and describe() is secret-free by construction.
+    ice = turn_config.describe()
     return jsonify({
         "status": "ok" if database_ok else "degraded",
         "service": "pashu-shield-backend",
@@ -413,9 +416,13 @@ def health():
             "push_configured": is_push_configured(),
             "redis_message_queue": bool((os.environ.get("SIH_REDIS_URL") or "").strip()),
             "worker_configuration_safe": worker_configuration_safe(),
-            "turn_configured": turn_config.describe()["turn_configured"],
-            "turn_mode": turn_config.describe()["turn_mode"],
-            "ice": turn_config.describe(),
+            "turn_configured": ice["turn_configured"],
+            "turn_mode": ice["turn_mode"],
+            "turn_url_count": ice["turn_url_count"],
+            # Secret-free diagnosis: the *name* of the variable that is missing
+            # or empty (turn_config_issue / turn_env), never a value.
+            "turn_config_issue": ice["turn_config_issue"],
+            "ice": ice,
         },
     }), 200 if database_ok else 503
 
