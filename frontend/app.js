@@ -2320,17 +2320,10 @@ async function vetDashboard() {
       ${statCard("MH", "State: Maharashtra")}
     </div>
     <div class="section-card">
-      <div class="section-title">☎️ Helpline Availability</div>
-      <div class="meta" style="margin-bottom:10px">Effective status: <span class="badge ${availability.effective_status === 'AVAILABLE' ? 'badge-green' : 'badge-orange'}">${availability.effective_status}</span></div>
-      <div class="form-row">
-        <div class="field"><label>Call Status</label><select id="vetAvailabilityStatus">
-          ${["AVAILABLE", "BUSY", "OFFLINE"].map(s => `<option ${availability.configured_status === s ? "selected" : ""}>${s}</option>`).join("")}
-        </select></div>
-        <div class="field"><label>Call Languages</label><select id="vetAvailabilityLanguages" multiple size="4">
-          ${[["en","English"],["te","Telugu"],["hi","Hindi"],["mr","Marathi"]].map(([code,label]) => `<option value="${code}" ${(availability.supported_languages || []).includes(code) ? "selected" : ""}>${label}</option>`).join("")}
-        </select></div>
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="saveVetAvailability()">Save Availability</button>
+      <div class="section-title">☎️ Helpline / IVR Routing</div>
+      <div class="meta" style="margin-bottom:10px">This panel is read-only. The canonical availability controls for both web calls and helpline routing are in the <b>Web call availability</b> card below.</div>
+      <div class="meta" style="margin-bottom:6px">Current status: <span class="badge ${availability.effective_status === 'AVAILABLE' ? 'badge-green' : availability.effective_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${availability.effective_status}</span></div>
+      <div class="small-muted">Languages: ${(availability.supported_languages || []).map((code) => ({ en: 'English', te: 'Telugu', hi: 'Hindi', mr: 'Marathi' }[code] || code.toUpperCase())).join(', ') || '—'}</div>
     </div>
     <div class="section-card">
       <div class="section-title">📞 IVR / Helpline Status</div>
@@ -2366,13 +2359,7 @@ async function vetDashboard() {
 }
 
 window.saveVetAvailability = async function() {
-  const status = document.getElementById("vetAvailabilityStatus")?.value;
-  const supported_languages = Array.from(document.getElementById("vetAvailabilityLanguages")?.selectedOptions || []).map(o => o.value);
-  try {
-    await api("/vet/availability", { method: "PUT", body: { status, supported_languages } });
-    toast("Helpline availability updated");
-    vetDashboard();
-  } catch (err) { toast(err.message, true); }
+  toast("Use the Web call availability card below to change your availability.");
 };
 
 async function govtDashboard() {

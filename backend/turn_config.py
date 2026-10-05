@@ -14,7 +14,7 @@ TURN relay. This module never ships a permanent TURN credential to the browser:
 
 * Fallback mode — **static credentials** (``SIH_TURN_USERNAME`` /
   ``SIH_TURN_CREDENTIAL``) for a TURN server that does not support the REST
-  API. Less safe, and clearly reported as such.
+  API, such as a managed TURN provider that gives a fixed username/password.
 
 If no TURN server is configured, the API reports ``turn_configured: false`` and
 the clients still get STUN. Calls between peers on the same network or with
@@ -26,6 +26,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import os
 import time
 
@@ -34,10 +35,26 @@ DEFAULT_TURN_TTL_SECONDS = 3600
 
 
 def _split_env(name: str, default: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """Parse an env var as either a JSON array or a delimited string.
+
+    Supported formats:
+
+    * JSON array — safest for TURN URLs because it is unambiguous and preserves
+      query strings such as ``?transport=tcp`` intact.
+    * Comma/newline-separated string — kept for backward compatibility.
+    """
     raw = (os.environ.get(name) or "").strip()
     if not raw:
         return default
-    return tuple(part.strip() for part in raw.split(",") if part.strip())
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, list):
+            return tuple(str(item).strip() for item in parsed if str(item).strip())
+    normalized = raw.replace("\r", "\n").replace("\n", ",")
+    return tuple(part.strip() for part in normalized.split(",") if part.strip())
 
 
 def stun_urls() -> tuple[str, ...]:
@@ -64,9 +81,13 @@ def ice_transport_policy() -> str:
 
 
 def turn_mode() -> str:
-    if turn_urls() and (os.environ.get("SIH_TURN_SECRET") or "").strip():
+    urls = turn_urls()
+    if not urls:
+        return "none"
+    if (os.environ.get("SIH_TURN_SECRET") or "").strip():
         return "ephemeral"
-    if turn_urls() and (os.environ.get("SIH_TURN_USERNAME") or "").strip():
+    if ((os.environ.get("SIH_TURN_USERNAME") or "").strip()
+            and (os.environ.get("SIH_TURN_CREDENTIAL") or "").strip()):
         return "static"
     return "none"
 
@@ -113,5 +134,5 @@ def describe() -> dict:
         "turn_url_count": len(turn_urls()),
         "ice_transport_policy": ice_transport_policy(),
         "ephemeral_credentials": mode == "ephemeral",
-        "credential_ttl_seconds": turn_ttl_seconds() if mode != "none" else None,
+        "credential_ttl_seconds": turn_ttl_seconds() if mode == "ephemeral" else None,
     }

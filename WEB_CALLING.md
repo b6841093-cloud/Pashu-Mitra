@@ -8,6 +8,15 @@ the ones that were not), remaining blockers, and a verification checklist.
 
 Authoritative verification ladder: `backend/tests/webrtc/README.md`.
 
+> Audit update (2026-10-05): for split Vercel + Render deployments, web-call
+> signaling must use `SIH_PUBLIC_BACKEND_URL` so the browser opens WSS directly
+> to Render; the Vercel `/api` rewrite remains REST-only. TURN supports either
+> coturn REST-secret credentials (`SIH_TURN_SECRET`) or static managed
+> credentials such as Metered (`SIH_TURN_USERNAME` / `SIH_TURN_CREDENTIAL`).
+> Never expose TURN, VAPID or JWT secrets in frontend code, logs or `/api/health`.
+> Keep Gunicorn at `--worker-class gthread --workers 1 --threads 100` unless
+> `SIH_REDIS_URL` is configured for cross-worker Socket.IO fan-out.
+
 | Layer | State |
 |-------|-------|
 | Backend (FSM, routing, signaling, auth, push) | Implemented, **47/47 tests pass** |

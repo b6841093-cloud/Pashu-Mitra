@@ -40,6 +40,7 @@
   const MEDIA_CONFIRM_TIMEOUT_MS = 9000;
   const ICE_RESTART_LIMIT = 3;
   const SPEAKER_HINT_MS = 1200;
+  const SIGNAL_OFFLINE_WARNING_MS = 10000;
 
   const state = {
     config: null,
@@ -52,6 +53,10 @@
     notificationTimer: null,
     lastIncomingCallId: null,
     audioUnlocked: false,
+    signalingOfflineSince: null,
+    signalingWarningTimer: null,
+    lastAvailabilityCheck: null,
+    presence: null,
   };
 
   // --------------------------------------------------------------- helpers --
@@ -103,6 +108,45 @@
   function rerenderRoute() {
     if (typeof window.router === "function") window.router();
   }
+  function currentHelpline() {
+    return (state.config && state.config.helpline) || { number: "7382210251", pstn_connected: false };
+  }
+  function offlineWarningSeconds() {
+    const configured = Number(state.config && state.config.signaling && state.config.signaling.offline_warning_seconds);
+    return Number.isFinite(configured) && configured > 0 ? configured : (SIGNAL_OFFLINE_WARNING_MS / 1000);
+  }
+  function clearSignalingWarningTimer() {
+    if (state.signalingWarningTimer) {
+      clearTimeout(state.signalingWarningTimer);
+      state.signalingWarningTimer = null;
+    }
+  }
+  function signalingStatus() {
+    const connected = !!(state.socket && state.socket.connected);
+    const offlineSince = connected ? null : state.signalingOfflineSince;
+    const offlineLong = !!(offlineSince && (Date.now() - offlineSince >= offlineWarningSeconds() * 1000));
+    return { connected, offlineSince, offlineLong };
+  }
+  function scheduleSignalingStatusRefresh() {
+    clearSignalingWarningTimer();
+    const status = signalingStatus();
+    if (status.connected || !status.offlineSince) return;
+    const wait = Math.max(0, (offlineWarningSeconds() * 1000) - (Date.now() - status.offlineSince));
+    state.signalingWarningTimer = setTimeout(() => {
+      state.signalingWarningTimer = null;
+      updateOverlayStatus();
+    }, wait + 5);
+  }
+  function setSignalingConnected(connected) {
+    if (connected) {
+      state.signalingOfflineSince = null;
+      clearSignalingWarningTimer();
+    } else if (!state.signalingOfflineSince) {
+      state.signalingOfflineSince = Date.now();
+      scheduleSignalingStatusRefresh();
+    }
+    updateOverlayStatus();
+  }
 
   /** REST helper for the call API.
    *
@@ -142,7 +186,11 @@
     if (state.config && !force) return Promise.resolve(state.config);
     if (state.configPromise && !force) return state.configPromise;
     state.configPromise = pmFetch("/webcall/config")
-      .then((cfg) => { state.config = cfg; return cfg; })
+      .then((cfg) => {
+        state.config = cfg;
+        if (cfg && cfg.presence) state.presence = cfg.presence;
+        return cfg;
+      })
       .catch((err) => { state.configPromise = null; throw err; })
       .finally(() => { /* keep the promise for the session */ });
     return state.configPromise;
@@ -251,18 +299,19 @@
         timeout: 10000,
       });
       state.socket = socket;
+      setSignalingConnected(false);
 
       socket.on("connect", () => {
-        updateOverlayStatus();
+        setSignalingConnected(true);
         if (currentRole() === "vet") startPresenceHeartbeat();
       });
       socket.on("disconnect", () => {
         stopPresenceHeartbeat();
-        updateOverlayStatus();
+        setSignalingConnected(false);
       });
       socket.on("connect_error", (err) => {
         if (err && (err.message || "").length < 120) console.warn("[webcall] signaling error:", err.message);
-        updateOverlayStatus();
+        setSignalingConnected(false);
       });
       socket.on("session:ready", () => resolve(socket));
       socket.on("call:incoming", (payload) => handleIncomingCall(payload && payload.call));
@@ -803,12 +852,25 @@
   }
 
   function updateOverlayStatus() {
+    const status = signalingStatus();
     const badge = document.getElementById("pmCallLinkBadge");
     if (badge) {
-      const connected = state.socket && state.socket.connected;
-      badge.textContent = connected ? t("webcall.online", "Web calls online") : t("webcall.offline", "Web calls offline");
-      badge.className = "badge " + (connected ? "badge-green" : "badge-orange");
+      badge.textContent = status.connected ? t("webcall.online", "Web calls online") : t("webcall.offline", "Web calls offline");
+      badge.className = "badge " + (status.connected ? "badge-green" : "badge-orange");
     }
+    const farmerNotice = document.getElementById("pmCallSignalStatus");
+    if (farmerNotice) {
+      farmerNotice.textContent = status.offlineLong
+        ? t("webcall.signal_offline_farmer", "Web calling connection is offline. Please check your connection or try again.")
+        : "";
+    }
+    const vetNotice = document.getElementById("pmVetSignalStatus");
+    if (vetNotice) {
+      vetNotice.textContent = status.offlineLong
+        ? t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting...")
+        : "";
+    }
+    scheduleSignalingStatusRefresh();
   }
 
   function callerContextHtml(call) {
@@ -1132,22 +1194,65 @@
   }
 
   // ------------------------------------------------------------- vet card ---
+  function currentVetAvailability() {
+    return (state.config && state.config.availability) || { status: "OFFLINE", supported_languages: ["en"] };
+  }
+
+  function currentPresenceState() {
+    return state.presence || (state.config && state.config.presence) || { online: false, presence: "OFFLINE" };
+  }
+
+  function vetRoutabilityState() {
+    const availability = currentVetAvailability();
+    const presence = currentPresenceState();
+    const socketOnline = !!(state.socket && state.socket.connected);
+    const activeCall = presence.active_call || presence.active_call_id || presence.active_call_status === "connected";
+    if (availability.status === "AVAILABLE" && presence.online && socketOnline && !activeCall) {
+      return {
+        badgeClass: "badge-green",
+        label: "AVAILABLE · Routable",
+        detail: "Available, portal live, and ready to receive routed web calls.",
+      };
+    }
+    if (availability.status === "AVAILABLE" && (!presence.online || !socketOnline)) {
+      return {
+        badgeClass: "badge-orange",
+        label: "AVAILABLE · Reconnect",
+        detail: socketOnline
+          ? "Available, but the portal is not live yet. Keep this tab open to receive calls."
+          : t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting..."),
+      };
+    }
+    if (availability.status === "BUSY" || activeCall) {
+      return {
+        badgeClass: "badge-red",
+        label: "BUSY · Not routable",
+        detail: "You are marked busy, so farmers will not be routed to you right now.",
+      };
+    }
+    return {
+      badgeClass: "badge-red",
+      label: "OFFLINE · Not routable",
+      detail: "You are offline for web calls. Switch to AVAILABLE and keep this portal connected.",
+    };
+  }
+
   function vetCardHtml() {
-    const presence = state.presence || {};
-    const availability = (state.config && state.config.availability) || { status: "OFFLINE", supported_languages: ["en"] };
+    const availability = currentVetAvailability();
     const languages = ["en", "hi", "mr", "te"];
+    const routability = vetRoutabilityState();
     return `
       <div class="section-card" id="pmVetCallCard">
         <div class="section-title">📞 ${esc(t("webcall.vet_card_title", "Web call availability"))}</div>
         <div class="meta" style="margin-bottom:8px">
           ${esc(t("webcall.vet_card_help", "Farmers can call you directly in the browser while this portal stays open."))}
         </div>
-        <div class="meta" style="margin-bottom:8px">
-          ${esc(t("webcall.signaling", "Signaling"))}: <span id="pmCallLinkBadge" class="badge badge-orange">…</span>
-          <span class="badge ${presence.online ? "badge-green" : "badge-orange"}" style="margin-left:6px">
-            ${esc(presence.online ? t("webcall.online", "Web calls online") : t("webcall.offline", "Web calls offline"))}
-          </span>
+        <div class="pm-vet-card-live" style="margin-bottom:8px">
+          <span class="badge badge-orange" id="pmCallLinkBadge">…</span>
+          <span class="badge ${routability.badgeClass}" id="pmVetRoutableBadge">${esc(routability.label)}</span>
         </div>
+        <div class="small-muted" id="pmVetRoutableStatus" style="margin-bottom:8px">${esc(routability.detail)}</div>
+        <div class="small-muted" id="pmVetSignalStatus" style="margin-bottom:8px"></div>
         <div class="form-row">
           <div class="field"><label>${esc(t("webcall.receive_calls", "Receive web calls"))}</label>
             <select id="pmVetAvailability">
@@ -1173,7 +1278,6 @@
     const host = document.getElementById("pmVetCallHost");
     if (!host) return;
     host.innerHTML = vetCardHtml();
-    updateOverlayStatus();
     const save = document.getElementById("pmVetSaveAvailability");
     if (save) save.addEventListener("click", async () => {
       const status = document.getElementById("pmVetAvailability").value;
@@ -1181,7 +1285,10 @@
       try {
         await pmFetch("/vet/availability", { method: "PUT", body: { status, supported_languages } });
         notify(t("webcall.saved", "Availability updated."));
-        loadConfig(true).then(() => refreshVetCard(state.presence)).catch(() => {});
+        loadConfig(true).then((cfg) => {
+          if (cfg && cfg.presence) state.presence = cfg.presence;
+          refreshVetCard(state.presence);
+        }).catch(() => {});
       } catch (err) { notify(err.message, true); }
     });
     const push = document.getElementById("pmVetEnablePush");
@@ -1190,13 +1297,25 @@
   }
 
   function refreshVetCard(presence) {
-    const badge = document.getElementById("pmCallLinkBadge");
-    if (badge) updateOverlayStatus();
-    const stateBadge = document.querySelector("#pmVetCallCard .badge.badge-green, #pmVetCallCard .badge.badge-orange");
-    if (stateBadge && presence && "online" in presence) {
-      stateBadge.textContent = presence.online ? t("webcall.online", "Web calls online") : t("webcall.offline", "Web calls offline");
-      stateBadge.className = "badge " + (presence.online ? "badge-green" : "badge-orange");
+    if (presence) state.presence = presence;
+    const availability = currentVetAvailability();
+    const availabilitySelect = document.getElementById("pmVetAvailability");
+    if (availabilitySelect) availabilitySelect.value = availability.status || "OFFLINE";
+    const languagesSelect = document.getElementById("pmVetLanguages");
+    if (languagesSelect) {
+      Array.from(languagesSelect.options || []).forEach((option) => {
+        option.selected = (availability.supported_languages || []).includes(option.value);
+      });
     }
+    const routability = vetRoutabilityState();
+    const badge = document.getElementById("pmVetRoutableBadge");
+    if (badge) {
+      badge.textContent = routability.label;
+      badge.className = "badge " + routability.badgeClass;
+    }
+    const detail = document.getElementById("pmVetRoutableStatus");
+    if (detail) detail.textContent = routability.detail;
+    updateOverlayStatus();
   }
 
   async function enablePushForCalls() {
@@ -1257,7 +1376,9 @@
           <textarea id="pmCallNotes" rows="3" maxlength="500" placeholder="${esc(ft("call_notes_placeholder", "Symptoms, since when, animal tag…"))}"></textarea>
         </div>
         <div id="pmCallAnimalOptions" class="field"></div>
-        <button class="btn btn-primary" id="pmCallStart">📞 ${esc(ft("start_call", "Start call"))}</button>
+        <div id="pmCallAvailabilityBox" class="small-muted" style="margin-top:6px;margin-bottom:10px"></div>
+        <button class="btn btn-primary" id="pmCallStart" disabled>📞 ${esc(ft("start_call", "Start call"))}</button>
+        <div class="small-muted" id="pmCallSignalStatus" style="margin-top:8px"></div>
         <div class="small-muted" id="pmCallPrepStatus" style="margin-top:8px"></div>
       </div>
       ${helplineFallbackHtml()}
@@ -1265,7 +1386,7 @@
   }
 
   function helplineFallbackHtml() {
-    const helpline = (state.config && state.config.helpline) || {};
+    const helpline = currentHelpline();
     return `
       <div class="section-card">
         <div class="section-title">☎️ ${esc(ft("helpline", "Helpline (phone call)"))}</div>
@@ -1273,6 +1394,93 @@
           "If nobody is online for a web call, you can dial the helpline from a phone. This is a separate telephone service."))}</div>
         ${helpline.number ? `<div class="meta"><b>${esc(helpline.number)}</b> · PSTN: ${esc(helpline.pstn_connected ? "connected" : "not connected (MOCK mode)")}</div>` : ""}
       </div>`;
+  }
+
+  function farmerLanguageName(code) {
+    const languages = (state.config && state.config.supported_languages) || [];
+    const match = languages.find((lang) => lang.code === code);
+    return (match && match.name) || String(code || "").toUpperCase();
+  }
+
+  function farmerAvailabilityParams(params) {
+    return {
+      language: document.getElementById("pmCallLanguage")?.value,
+      reason: document.getElementById("pmCallReason")?.value || "animal_sick",
+      reasonNote: document.getElementById("pmCallNotes")?.value || "",
+      caseId: (params && params.case) ? params.case : undefined,
+      animalId: (params && params.animal) ? params.animal : undefined,
+    };
+  }
+
+  function bindAlternativeLanguageButtons(params) {
+    document.querySelectorAll("[data-alt-language]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const select = document.getElementById("pmCallLanguage");
+        if (select) select.value = button.getAttribute("data-alt-language") || select.value;
+        refreshFarmerAvailability(params).catch(() => {});
+      });
+    });
+  }
+
+  function renderFarmerAvailabilityResult(result, params) {
+    const box = document.getElementById("pmCallAvailabilityBox");
+    const start = document.getElementById("pmCallStart");
+    if (!box || !start) return;
+    const helpline = result.helpline || currentHelpline();
+    start.disabled = !result.routable;
+    const badgeClass = result.routable ? "badge-green" : "badge-orange";
+    const badgeText = result.routable ? "Vet online now" : "Not routable now";
+    const selected = result.selected_vet
+      ? `<div class="small-muted" style="margin-top:6px">Matched vet: <b>${esc(result.selected_vet.name)}</b>${result.selected_vet.district ? ` · ${esc(result.selected_vet.district)}` : ""}</div>`
+      : "";
+    const fallback = !result.routable && helpline.number
+      ? `<div class="small-muted" style="margin-top:6px">If you need help now, call the helpline <b>${esc(helpline.number)}</b>.</div>`
+      : "";
+    const alternatives = (result.alternatives || []).length
+      ? `<div class="small-muted" style="margin-top:8px">Try another language with an online veterinarian:</div>
+         <div class="btn-row" style="margin-top:6px">${result.alternatives.map((alt) => `<button type="button" class="btn btn-ghost btn-sm" data-alt-language="${esc(alt.code)}">${esc(alt.name)}</button>`).join("")}</div>`
+      : "";
+    box.innerHTML = `
+      <div><span class="badge ${badgeClass}">${esc(badgeText)}</span></div>
+      <div class="meta" style="margin-top:6px">${esc(result.message || `No veterinarian for ${farmerLanguageName(result.requested_language)} is currently online.`)}</div>
+      ${selected}
+      ${fallback}
+      ${alternatives}`;
+    bindAlternativeLanguageButtons(params);
+  }
+
+  async function refreshFarmerAvailability(params, options) {
+    const opts = options || {};
+    const box = document.getElementById("pmCallAvailabilityBox");
+    const start = document.getElementById("pmCallStart");
+    if (start) start.disabled = true;
+    if (box && !opts.keepExisting) {
+      box.innerHTML = `<span class="badge badge-orange">Checking availability…</span>`;
+    }
+    const query = new URLSearchParams();
+    const request = farmerAvailabilityParams(params);
+    if (request.language) query.set("language", request.language);
+    if (request.reason) query.set("reason", request.reason);
+    if (request.caseId) query.set("case_id", request.caseId);
+    if (request.animalId) query.set("animal_id", request.animalId);
+    try {
+      const result = await pmFetch(`/webcall/availability?${query.toString()}`);
+      state.lastAvailabilityCheck = result;
+      renderFarmerAvailabilityResult(result, params);
+      updateOverlayStatus();
+      return result;
+    } catch (err) {
+      state.lastAvailabilityCheck = null;
+      if (start) start.disabled = true;
+      if (box) {
+        const helpline = currentHelpline();
+        box.innerHTML = `
+          <div><span class="badge badge-orange">Could not check availability</span></div>
+          <div class="meta" style="margin-top:6px">${esc(err.message || "Could not check whether a veterinarian is online.")}</div>
+          ${helpline.number ? `<div class="small-muted" style="margin-top:6px">If this continues, call the helpline <b>${esc(helpline.number)}</b>.</div>` : ""}`;
+      }
+      return null;
+    }
   }
 
   async function renderOwnerCallView(params) {
@@ -1289,13 +1497,14 @@
       renderInCallOverlay(state.activeSession);
       return;
     }
-    start.addEventListener("click", () => startFarmerCallFlow({
-      language: document.getElementById("pmCallLanguage").value,
-      reason: document.getElementById("pmCallReason").value,
-      reasonNote: document.getElementById("pmCallNotes").value,
-      caseId: (params && params.case) ? params.case : undefined,
-      animalId: (params && params.animal) ? params.animal : undefined,
-    }));
+    const rerunAvailability = () => refreshFarmerAvailability(params).catch(() => {});
+    document.getElementById("pmCallLanguage")?.addEventListener("change", rerunAvailability);
+    document.getElementById("pmCallReason")?.addEventListener("change", rerunAvailability);
+    start.addEventListener("click", async () => {
+      const latest = await refreshFarmerAvailability(params, { keepExisting: true });
+      if (!latest || !latest.routable) return;
+      startFarmerCallFlow(farmerAvailabilityParams(params));
+    });
     // Microphone availability is reported up-front (honest, no surprise).
     const status = document.getElementById("pmCallPrepStatus");
     if (status && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
@@ -1307,6 +1516,8 @@
         }
       } catch (e) { /* permission not granted yet: nothing to report */ }
     }
+    await refreshFarmerAvailability(params).catch(() => {});
+    updateOverlayStatus();
   }
 
   // -------------------------------------------------------- call history ----
@@ -1392,8 +1603,13 @@
     state.config = null;
     state.configPromise = null;
     state.lastIncomingCallId = null;
+    state.lastAvailabilityCheck = null;
+    state.presence = null;
+    state.signalingOfflineSince = null;
+    clearSignalingWarningTimer();
     if (state.activeSession) state.activeSession.teardown();
     hideOverlay();
+    updateOverlayStatus();
     if (authToken()) PM.init();
   };
 
@@ -1405,6 +1621,7 @@
   PM.config = () => state.config;
   PM.status = () => ({
     signaling: !!(state.socket && state.socket.connected),
+    signaling_offline_long: signalingStatus().offlineLong,
     active_call: state.activeSession ? state.activeSession.call.call_id : null,
     call_status: state.activeSession ? state.activeSession.call.status : null,
     media_confirmed: state.activeSession ? state.activeSession.mediaConfirmed : false,

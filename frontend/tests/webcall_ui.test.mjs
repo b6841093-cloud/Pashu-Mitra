@@ -97,7 +97,7 @@ function makeElement(tag = "div") {
       handlers.forEach((handler) => handler({ preventDefault() {}, ...event }));
       return handlers.length;
     },
-    click() { return this.dispatch("click"); },
+    click() { if (this.disabled) return 0; return this.dispatch("click"); },
     focus() {},
     play: () => Promise.resolve(),
     listeners,
@@ -321,7 +321,7 @@ function loadCallClient({
       AudioContext: FakeAudioContext,
       RTCPeerConnection: FakePeerConnection,
       RTCPeerConnection_: null,
-      render() {},
+      render: (html) => { element("app").innerHTML = html; },
       toast: (message, isError) => toasts.push({ message, isError }),
       header: (title) => `<header>${title}</header>`,
       bottomNav: () => "<nav></nav>",
@@ -389,7 +389,7 @@ const CONFIG = {
   ice_servers: [{ urls: ["stun:stun.example.org:3478"] }],
   ice: { turn_configured: false },
   ice_transport_policy: "all",
-  signaling: { url: "", path: "socket.io" },
+  signaling: { url: "", path: "socket.io", offline_warning_seconds: 10 },
   ring_timeout_seconds: 45,
   call_reasons: ["animal_sick", "emergency"],
   supported_languages: [{ code: "en", name: "English" }],
@@ -402,6 +402,15 @@ function callApi(routes = {}) {
   return (url) => {
     const path = url.replace(/^\/api/, "");
     if (path.startsWith("/webcall/config")) return json(routes.config || CONFIG);
+    if (path.startsWith("/webcall/availability")) {
+      if (typeof routes.availability === "function") return json(routes.availability(path));
+      return json(routes.availability || {
+        requested_language: "en", requested_language_name: "English", routable: true,
+        message: "A veterinarian for English is currently online.",
+        alternatives: [], selected_vet: { vet_id: 7, name: "Dr. Test", district: "Pune" },
+        helpline: { number: "7382210251", pstn_connected: false },
+      });
+    }
     if (path.startsWith("/webcall/calls/current")) return json({ call: routes.current || null });
     if (path.includes("/signals")) {
       // Deliberately independent of the detail payload: the signal backfill must
@@ -441,6 +450,10 @@ function pushCallUpdate(client, call) {
   client.socket().receive("call:update", { call_id: call.call_id, status: call.status, event: "test" });
   return Promise.resolve();
 }
+
+
+const OWNER = { id: 5, role: "owner", full_name: "Rajesh Patil", preferred_language: "mr" };
+
 
 // ---------------------------------------------------------------------------
 test("the signaling socket is opened WebSocket-first with a polling fallback", async () => {
@@ -713,6 +726,35 @@ test("farmer call flow attaches the microphone track and follows the server stat
   assert.equal(pc.config.iceServers[0].urls[0], "stun:stun.example.org:3478", "ICE servers come from the server");
 });
 
+test("owner call view pre-check keeps Start Call disabled until a routable vet is online", async () => {
+  const client = loadCallClient({
+    storage: makeStorage({ token: TOKEN, user: JSON.stringify(OWNER) }),
+    session: { token: TOKEN, user: OWNER },
+  });
+  client.setFetch(callApi({
+    config: {
+      ...CONFIG,
+      user: { id: 5, role: "owner", language: "te" },
+      supported_languages: [{ code: "en", name: "English" }, { code: "te", name: "Telugu" }],
+      helpline: { number: "7382210251", pstn_connected: false },
+    },
+    availability: {
+      requested_language: "te",
+      requested_language_name: "Telugu",
+      routable: false,
+      message: "No veterinarian for Telugu is currently online.",
+      alternatives: [{ code: "en", name: "English", vet_id: 7, vet_name: "Dr. Test", district: "Pune" }],
+      selected_vet: null,
+      helpline: { number: "7382210251", pstn_connected: false },
+      skipped_codes: ["LANGUAGE_NOT_SUPPORTED"],
+    },
+  }));
+  await client.run("window.PMCall.renderOwnerCallView({})");
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(client.el("pmCallStart").disabled, true, "the farmer cannot start a call before a routable vet is found");
+  assert.match(client.element("app").innerHTML, /7382210251/, "the helpline fallback stays visible");
+});
+
 test("availability card is rendered with the persisted server state", async () => {
   const client = loadCallClient();
   client.elements.set("pmVetCallHost", client.element("pmVetCallHost"));
@@ -733,6 +775,38 @@ test("availability card is rendered with the persisted server state", async () =
   assert.match(host.innerHTML, /value="BUSY" selected/, "the saved availability status is shown");
   assert.match(host.innerHTML, /pmVetEnablePush/, "notification opt-in is offered");
   assert.match(host.innerHTML, /#\/vet\/calls/, "call history is reachable");
+});
+
+test("owner call view shows a signaling-offline warning after the configured timeout", async () => {
+  const client = loadCallClient({
+    storage: makeStorage({ token: TOKEN, user: JSON.stringify(OWNER) }),
+    session: { token: TOKEN, user: OWNER },
+  });
+  client.setFetch(callApi({
+    config: {
+      ...CONFIG,
+      user: { id: 5, role: "owner", language: "mr" },
+      signaling: { url: "", path: "socket.io", offline_warning_seconds: 0.01 },
+      supported_languages: [{ code: "mr", name: "Marathi" }],
+    },
+    availability: {
+      requested_language: "mr",
+      requested_language_name: "Marathi",
+      routable: true,
+      message: "A veterinarian for Marathi is currently online.",
+      alternatives: [],
+      selected_vet: { vet_id: 7, name: "Dr. Test", district: "Pune" },
+      helpline: { number: "7382210251", pstn_connected: false },
+      skipped_codes: [],
+    },
+  }));
+  await client.run("window.PMCall.renderOwnerCallView({})");
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  client.socket().connected = false;
+  client.socket().receive("disconnect");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.match(client.el("pmCallSignalStatus").textContent, /offline/i);
+  assert.equal(client.pm().status().signaling_offline_long, true);
 });
 
 test("all four farmer languages define the web-call translations", async () => {
@@ -764,4 +838,8 @@ test("all four farmer languages define the web-call translations", async () => {
   // The helpline text must not claim the in-app call is a phone call.
   assert.match(i18n.en["farmer.helpline"], /phone/i);
   assert.match(i18n.en["farmer.call_vet_help"], /microphone/i);
+  assert.match(appSource, /canonical availability controls for both web calls and helpline routing/i,
+    "app.js documents the single editable availability source of truth");
+  assert.ok(!/id=\"vetAvailabilityStatus\"/.test(appSource),
+    "the old duplicate editable helpline availability control is gone");
 });

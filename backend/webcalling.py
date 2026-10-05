@@ -356,13 +356,14 @@ def _seconds(count: int):
 def presence_state(conn, vet_id: int) -> dict:
     row = conn.execute(
         """
-        SELECT p.*, u.full_name, u.district,
+        SELECT u.id vet_id, u.full_name, u.district,
+               p.lease_expires_at, p.last_heartbeat_at, p.socket_sids,
                COALESCE(a.status, 'OFFLINE') availability_status,
                COALESCE(a.supported_languages, '["en"]') supported_languages
-        FROM vet_presence p
-        JOIN users u ON u.id = p.vet_id
-        LEFT JOIN vet_availability a ON a.vet_id = p.vet_id
-        WHERE p.vet_id=?
+        FROM users u
+        LEFT JOIN vet_presence p ON p.vet_id = u.id
+        LEFT JOIN vet_availability a ON a.vet_id = u.id
+        WHERE u.id=? AND u.role='vet'
         """,
         (vet_id,),
     ).fetchone()
@@ -374,15 +375,20 @@ def presence_state(conn, vet_id: int) -> dict:
         "ORDER BY id DESC LIMIT 1",
         (vet_id,),
     ).fetchone()
+    availability = row["availability_status"]
+    presence = "ONLINE" if online else ("STALE" if availability == "AVAILABLE" else "OFFLINE")
+    routable = bool(availability == "AVAILABLE" and online and not active)
     return {
         "vet_id": vet_id,
         "online": online,
-        "presence": "ONLINE" if online else "STALE",
-        "availability": row["availability_status"],
+        "presence": presence,
+        "availability": availability,
         "supported_languages": _loads(row["supported_languages"], ["en"]),
         "last_heartbeat_at": row["last_heartbeat_at"],
         "lease_expires_at": row["lease_expires_at"],
         "active_call_id": active["call_id"] if active else None,
+        "active_call_status": active["status"] if active else None,
+        "routable": routable,
     }
 
 
@@ -543,11 +549,20 @@ def available_veterinarians(conn) -> list[dict]:
     """Truthful availability snapshot for the portal (no phone numbers)."""
     out = []
     for vet in _vet_rows(conn):
+        presence = "ONLINE" if vet["online"] else ("STALE" if vet["availability_status"] == "AVAILABLE" else "OFFLINE")
+        routable = bool(
+            vet["availability_status"] == "AVAILABLE"
+            and vet["online"]
+            and not vet["active_web_calls"]
+            and not vet["ivr_call_id"]
+        )
         out.append({
             "vet_id": vet["vet_id"],
             "name": vet["full_name"],
             "district": vet["district"],
             "online": vet["online"],
+            "presence": presence,
+            "routable": routable,
             "availability": vet["availability_status"],
             "languages": vet["supported_languages"],
             "active_web_calls": vet["active_web_calls"],
@@ -558,6 +573,132 @@ def available_veterinarians(conn) -> list[dict]:
 # --------------------------------------------------------------------------
 # Call creation and lifecycle
 # --------------------------------------------------------------------------
+def _requested_call_context(conn, caller: dict, payload: dict) -> dict:
+    """Validated call-routing context for the authenticated farmer.
+
+    This is shared by call creation and the farmer-side availability pre-check
+    so both paths use the same identity, language and location rules.
+    """
+    caller_id = int(caller["uid"])
+    if caller.get("role") != "owner":
+        raise WebCallError("Only farmers can start a web call from this endpoint", 403, "role_not_allowed")
+
+    profile = conn.execute(
+        "SELECT id, full_name, role, mobile, preferred_language, village, block, district, state FROM users WHERE id=?",
+        (caller_id,),
+    ).fetchone()
+    if not profile:
+        raise WebCallError("Caller account not found", 401, "unknown_user")
+
+    try:
+        from ivr_config import SUPPORTED_LANGUAGES
+    except Exception:  # pragma: no cover
+        SUPPORTED_LANGUAGES = ("en", "hi", "mr", "te")
+
+    language = (payload.get("language") or profile["preferred_language"] or "en").strip().lower()
+    if language not in SUPPORTED_LANGUAGES:
+        raise WebCallError("Unsupported call language", 400, "bad_language")
+
+    reason = (payload.get("reason") or "other").strip().lower()
+    if reason not in CALL_REASONS:
+        raise WebCallError("Unknown call reason", 400, "bad_reason")
+    note = (payload.get("reason_note") or payload.get("notes") or "").strip()[:MAX_REASON_NOTE]
+
+    case_id = payload.get("case_id")
+    animal_id = payload.get("animal_id")
+    district, block, village = profile["district"], profile["block"], profile["village"]
+    state = profile["state"] or "Maharashtra"
+    if case_id not in (None, "", 0, "0"):
+        case = conn.execute(
+            "SELECT c.id, c.owner_id, c.animal_id, a.district, a.block, a.village "
+            "FROM cases c LEFT JOIN animals a ON a.id=c.animal_id WHERE c.id=?",
+            (int(case_id),),
+        ).fetchone()
+        if not case or int(case["owner_id"]) != caller_id:
+            raise WebCallError("Case not found for this farmer", 403, "case_not_authorized")
+        case_id = case["id"]
+        animal_id = case["animal_id"]
+        district = case["district"] or district
+        block = case["block"] or block
+        village = case["village"] or village
+    elif animal_id not in (None, "", 0, "0"):
+        animal = conn.execute(
+            "SELECT id, owner_id, district, block, village FROM animals WHERE id=?",
+            (int(animal_id),),
+        ).fetchone()
+        if not animal or int(animal["owner_id"]) != caller_id:
+            raise WebCallError("Animal not found for this farmer", 403, "animal_not_authorized")
+        animal_id = animal["id"]
+        district = animal["district"] or district
+        block = animal["block"] or block
+        village = animal["village"] or village
+    else:
+        case_id, animal_id = None, None
+
+    return {
+        "caller_id": caller_id,
+        "caller_role": "owner",
+        "language": language,
+        "reason": reason,
+        "reason_note": note,
+        "case_id": case_id,
+        "animal_id": animal_id,
+        "state": state,
+        "district": district,
+        "block": block,
+        "village": village,
+    }
+
+
+def preflight_farmer_availability(conn, *, caller: dict, payload: dict) -> dict:
+    """Check whether the current farmer can route a web call right now."""
+    request_context = _requested_call_context(conn, caller, payload)
+    chosen, skipped = choose_veterinarian(conn, request_context)
+
+    try:
+        from ivr_config import LANGUAGE_NAMES, SUPPORTED_LANGUAGES
+    except Exception:  # pragma: no cover
+        LANGUAGE_NAMES = {"en": "English", "hi": "Hindi", "mr": "Marathi", "te": "Telugu"}
+        SUPPORTED_LANGUAGES = tuple(LANGUAGE_NAMES.keys())
+
+    alternatives = []
+    for code in SUPPORTED_LANGUAGES:
+        if code == request_context["language"]:
+            continue
+        alt_context = dict(request_context)
+        alt_context["language"] = code
+        alt_choice, _ = choose_veterinarian(conn, alt_context)
+        if alt_choice:
+            alternatives.append({
+                "code": code,
+                "name": LANGUAGE_NAMES.get(code, code.upper()),
+                "vet_id": alt_choice["vet"]["vet_id"],
+                "vet_name": alt_choice["vet"]["full_name"],
+                "district": alt_choice["vet"]["district"],
+            })
+
+    requested_name = LANGUAGE_NAMES.get(request_context["language"], request_context["language"].upper())
+    return {
+        "requested_language": request_context["language"],
+        "requested_language_name": requested_name,
+        "routable": bool(chosen),
+        "message": (
+            f"A veterinarian for {requested_name} is currently online."
+            if chosen else f"No veterinarian for {requested_name} is currently online."
+        ),
+        "alternatives": alternatives,
+        "selected_vet": (
+            {
+                "vet_id": chosen["vet"]["vet_id"],
+                "name": chosen["vet"]["full_name"],
+                "district": chosen["vet"]["district"],
+            } if chosen else None
+        ),
+        "skipped_reasons": sorted({item["reason"] for item in skipped}),
+        "skipped_codes": sorted({item["reason"].split(":")[0] for item in skipped}),
+    }
+
+
 def _farmer_rate_limited(conn, caller_id: int) -> bool:
     recent = conn.execute(
         "SELECT COUNT(*) c FROM web_calls WHERE caller_id=? AND created_at > datetime('now', ?)",
@@ -586,57 +727,17 @@ def create_call(conn, *, caller: dict, payload: dict) -> dict:
     The caller identity, region and role come from the database (the JWT's
     subject), never from the request body.
     """
-    caller_id = int(caller["uid"])
-    if caller.get("role") != "owner":
-        raise WebCallError("Only farmers can start a web call from this endpoint", 403, "role_not_allowed")
-
-    profile = conn.execute(
-        "SELECT id, full_name, role, mobile, preferred_language, village, block, district, state FROM users WHERE id=?",
-        (caller_id,),
-    ).fetchone()
-    if not profile:
-        raise WebCallError("Caller account not found", 401, "unknown_user")
-
-    language = (payload.get("language") or profile["preferred_language"] or "en").strip().lower()
-    try:
-        from ivr_config import SUPPORTED_LANGUAGES
-    except Exception:  # pragma: no cover
-        SUPPORTED_LANGUAGES = ("en", "hi", "mr", "te")
-    if language not in SUPPORTED_LANGUAGES:
-        raise WebCallError("Unsupported call language", 400, "bad_language")
-
-    reason = (payload.get("reason") or "other").strip().lower()
-    if reason not in CALL_REASONS:
-        raise WebCallError("Unknown call reason", 400, "bad_reason")
-    note = (payload.get("reason_note") or "").strip()[:MAX_REASON_NOTE]
-
-    case_id = payload.get("case_id")
-    animal_id = payload.get("animal_id")
-    district, block, village = profile["district"], profile["block"], profile["village"]
-    state = profile["state"] or "Maharashtra"
-    if case_id not in (None, "", 0, "0"):
-        case = conn.execute(
-            "SELECT c.id, c.owner_id, c.animal_id, a.district, a.block, a.village "
-            "FROM cases c LEFT JOIN animals a ON a.id=c.animal_id WHERE c.id=?",
-            (int(case_id),),
-        ).fetchone()
-        if not case or int(case["owner_id"]) != caller_id:
-            raise WebCallError("Case not found for this farmer", 403, "case_not_authorized")
-        case_id = case["id"]
-        animal_id = case["animal_id"]
-        district = case["district"] or district
-        block = case["block"] or block
-        village = case["village"] or village
-    elif animal_id not in (None, "", 0, "0"):
-        animal = conn.execute("SELECT id, owner_id, district, block, village FROM animals WHERE id=?", (int(animal_id),)).fetchone()
-        if not animal or int(animal["owner_id"]) != caller_id:
-            raise WebCallError("Animal not found for this farmer", 403, "animal_not_authorized")
-        animal_id = animal["id"]
-        district = animal["district"] or district
-        block = animal["block"] or block
-        village = animal["village"] or village
-    else:
-        case_id, animal_id = None, None
+    request_context = _requested_call_context(conn, caller, payload)
+    caller_id = int(request_context["caller_id"])
+    language = request_context["language"]
+    reason = request_context["reason"]
+    note = request_context["reason_note"]
+    case_id = request_context["case_id"]
+    animal_id = request_context["animal_id"]
+    state = request_context["state"]
+    district = request_context["district"]
+    block = request_context["block"]
+    village = request_context["village"]
 
     existing = active_call_for(conn, caller_id, "owner")
     if existing:

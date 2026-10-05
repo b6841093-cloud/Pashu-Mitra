@@ -127,8 +127,12 @@ services:
       - key: SIH_ALLOWED_ORIGINS
         value: https://pashu-mitra-smoky.vercel.app
       # Secrets: set in the Render dashboard, never in Git.
-      # TURN is required for mobile-carrier/CGNAT peers; the frontend receives
-      # only short-lived credentials minted from SIH_TURN_SECRET (coturn REST API).
+      # TURN is required for mobile-carrier/CGNAT peers.
+      # Supported modes:
+      #   * coturn REST secret mode: set SIH_TURN_URLS + SIH_TURN_SECRET
+      #   * managed/static mode (for example Metered): set SIH_TURN_URLS +
+      #     SIH_TURN_USERNAME + SIH_TURN_CREDENTIAL
+      # Never place TURN credentials in frontend code or in this file.
       - key: SIH_TURN_URLS
         sync: false
       - key: SIH_TURN_SECRET
@@ -137,8 +141,9 @@ services:
         sync: false
       - key: SIH_TURN_CREDENTIAL
         sync: false
-      # Public HTTPS/WSS URL of this service when the browser connects directly
-      # (leave blank when the portal proxies /api and the socket path).
+      # Public HTTPS/WSS URL of this service for browser-side signaling.
+      # REQUIRED for a split Vercel frontend + Render backend so Socket.IO opens
+      # WSS directly to Render; leave blank only for same-origin/local dev.
       - key: SIH_PUBLIC_BACKEND_URL
         sync: false
       # Web Push (ringing the vet when the portal tab is in the background).

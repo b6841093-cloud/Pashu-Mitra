@@ -795,5 +795,98 @@ class TestWebCallingDoesNotBreakExistingFeatures(WebCallingTestBase):
         self.assertEqual(in_ivr, 0)
 
 
+class TestWebCallingConfigAndHealth(WebCallingTestBase):
+    def test_74_config_uses_public_backend_url_and_static_turn(self):
+        env = {
+            "SIH_PUBLIC_BACKEND_URL": "https://render.example.com",
+            "SIH_STUN_URLS": '["stun:stun1.example.net:3478"]',
+            "SIH_TURN_URLS": '["turn:global.relay.metered.ca:80","turn:global.relay.metered.ca:80?transport=tcp"]',
+            "SIH_TURN_USERNAME": "metered-user",
+            "SIH_TURN_CREDENTIAL": "metered-pass",
+        }
+        with mock.patch.dict(os.environ, env, clear=False):
+            resp = self.client.get("/api/webcall/config", headers=_auth(self.owner_token))
+        self.assertEqual(resp.status_code, 200, resp.get_json())
+        body = resp.get_json()
+        self.assertEqual(body["signaling"]["url"], "https://render.example.com")
+        self.assertEqual(body["signaling"]["offline_warning_seconds"], 10)
+        self.assertEqual(body["ice"]["turn_mode"], "static")
+        self.assertTrue(body["ice"]["turn_configured"])
+        turn_entries = [entry for entry in body["ice_servers"] if entry["urls"][0].startswith("turn:")]
+        self.assertEqual(len(turn_entries), 1)
+        self.assertEqual(turn_entries[0]["urls"], [
+            "turn:global.relay.metered.ca:80",
+            "turn:global.relay.metered.ca:80?transport=tcp",
+        ])
+        self.assertEqual(turn_entries[0]["username"], "metered-user")
+        self.assertEqual(turn_entries[0]["credential"], "metered-pass")
+
+    def test_75_health_hides_turn_vapid_and_jwt_secrets(self):
+        env = {
+            "SIH_GUNICORN_WORKERS": "2",
+            "SIH_REDIS_URL": "",
+            "SIH_TURN_URLS": '["turn:relay.example.com:3478?transport=tcp"]',
+            "SIH_TURN_USERNAME": "turn-user-secret",
+            "SIH_TURN_CREDENTIAL": "turn-pass-secret",
+            "VAPID_PUBLIC_KEY": "vapid-public-test",
+            "VAPID_PRIVATE_KEY": "vapid-private-secret",
+            "VAPID_CLAIM_EMAIL": "mailto:test@example.com",
+        }
+        with mock.patch.dict(os.environ, env, clear=False):
+            resp = self.client.get("/api/health")
+        self.assertEqual(resp.status_code, 200, resp.get_json())
+        body = resp.get_json()
+        web_calling = body["web_calling"]
+        self.assertEqual(web_calling["signaling"], "flask-socketio")
+        self.assertFalse(web_calling["worker_configuration_safe"])
+        self.assertTrue(web_calling["push_configured"])
+        self.assertTrue(web_calling["turn_configured"])
+        self.assertEqual(web_calling["turn_mode"], "static")
+        payload = json.dumps(body)
+        self.assertNotIn("turn-user-secret", payload)
+        self.assertNotIn("turn-pass-secret", payload)
+        self.assertNotIn("vapid-private-secret", payload)
+        self.assertNotIn(os.environ["SIH_SECRET_KEY"], payload)
+
+    def test_76_vapid_public_key_reports_configured_and_unconfigured_states(self):
+        with mock.patch.dict(os.environ, {
+            "VAPID_PUBLIC_KEY": "",
+            "VAPID_PRIVATE_KEY": "",
+            "VAPID_CLAIM_EMAIL": "",
+        }, clear=False):
+            resp = self.client.get("/api/push/vapid-key", headers=_auth(self.owner_token))
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.get_json(), {"publicKey": None, "configured": False})
+
+        with mock.patch.dict(os.environ, {
+            "VAPID_PUBLIC_KEY": "test-public",
+            "VAPID_PRIVATE_KEY": "test-private",
+            "VAPID_CLAIM_EMAIL": "mailto:test@example.com",
+        }, clear=False):
+            resp = self.client.get("/api/push/vapid-key", headers=_auth(self.owner_token))
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.get_json(), {"publicKey": "test-public", "configured": True})
+
+    def test_77_owner_availability_precheck_reports_routability_and_helpline(self):
+        self.make_vet_available(self.vet, languages=["en", "mr"])
+        with self.client as client:
+            resp = client.get("/api/webcall/availability?language=te&reason=animal_sick", headers=_auth(self.owner_token))
+        self.assertEqual(resp.status_code, 200, resp.get_json())
+        body = resp.get_json()
+        self.assertFalse(body["routable"])
+        self.assertEqual(body["requested_language"], "te")
+        self.assertIn("No veterinarian", body["message"])
+        self.assertIn("LANGUAGE_NOT_SUPPORTED", body["skipped_codes"])
+        self.assertEqual(body["helpline"]["number"], "7382210251")
+        self.assertTrue(any(alt["code"] == "en" for alt in body["alternatives"]))
+
+        resp = self.client.get("/api/webcall/availability?language=en&reason=animal_sick", headers=_auth(self.owner_token))
+        self.assertEqual(resp.status_code, 200, resp.get_json())
+        body = resp.get_json()
+        self.assertTrue(body["routable"])
+        self.assertEqual(body["selected_vet"]["vet_id"], self.vet["id"])
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
