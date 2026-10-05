@@ -886,6 +886,94 @@ class TestWebCallingConfigAndHealth(WebCallingTestBase):
         self.assertTrue(body["routable"])
         self.assertEqual(body["selected_vet"]["vet_id"], self.vet["id"])
 
+    def test_78_turn_diagnostics_explain_missing_or_partial_config(self):
+        """The health/config payload must say *why* TURN is inactive.
+
+        Regression guard for the deployed ``turn_mode: none`` that used to be
+        indistinguishable from "this code has no TURN support": ``describe()``
+        keeps the same ``turn_configured`` / ``turn_mode`` / ``turn_url_count``
+        contract but now also names the variable that is missing or empty and
+        the machine-readable ``turn_config_issue`` — without ever returning a
+        credential value.
+        """
+        turn_keys = ("SIH_TURN_URLS", "SIH_TURN_USERNAME", "SIH_TURN_CREDENTIAL", "SIH_TURN_SECRET")
+        saved = {key: os.environ[key] for key in turn_keys if key in os.environ}
+
+        def without_turn_env():
+            for key in turn_keys:
+                os.environ.pop(key, None)
+
+        try:
+            # 1. Absent variables — the state of a deployment whose dashboard
+            #    variables were never added to *this* service.
+            without_turn_env()
+            config = self.client.get("/api/webcall/config", headers=_auth(self.owner_token)).get_json()
+            ice = config["ice"]
+            self.assertFalse(ice["turn_configured"])
+            self.assertEqual(ice["turn_mode"], "none")
+            self.assertEqual(ice["turn_url_count"], 0)
+            self.assertEqual(ice["turn_urls_ignored"], 0)
+            self.assertEqual(ice["turn_config_issue"], "turn_urls_missing")
+            self.assertEqual(ice["turn_env"], {key: "missing" for key in turn_keys})
+            self.assertIsNone(ice["credential_ttl_seconds"])
+            # STUN-only ICE servers: the browser still gets STUN, no TURN.
+            self.assertEqual([entry for entry in config["ice_servers"] if "turn:" in entry["urls"][0]], [])
+            # /api/health and /api/webcall/config read the same configuration.
+            health = self.client.get("/api/health").get_json()["web_calling"]
+            self.assertEqual(health["ice"], ice)
+            self.assertEqual(health["turn_configured"], ice["turn_configured"])
+
+            # 2. A variable that exists but is empty (blueprint `sync: false`
+            #    key that was never filled in) is distinguishable from missing.
+            without_turn_env()
+            os.environ["SIH_TURN_URLS"] = ""
+            ice = self.client.get("/api/webcall/config", headers=_auth(self.owner_token)).get_json()["ice"]
+            self.assertEqual(ice["turn_env"]["SIH_TURN_URLS"], "empty")
+            self.assertEqual(ice["turn_config_issue"], "turn_urls_missing")
+            self.assertEqual(ice["turn_url_count"], 0)
+
+            # 3. URLs but incomplete credentials: the URL gate is open, the
+            #    credential gate is not.
+            without_turn_env()
+            os.environ["SIH_TURN_URLS"] = "turn:relay.example.org:3478"
+            os.environ["SIH_TURN_USERNAME"] = "provider-user"
+            ice = self.client.get("/api/webcall/config", headers=_auth(self.owner_token)).get_json()["ice"]
+            self.assertEqual(ice["turn_mode"], "none")
+            self.assertEqual(ice["turn_url_count"], 1)
+            self.assertEqual(ice["turn_config_issue"], "turn_credentials_missing")
+
+            # 4. Static provider mode with a quoted value (as pasted from a
+            #    dashboard) works, and the quotes never reach the ICE list.
+            without_turn_env()
+            os.environ["SIH_TURN_URLS"] = '"turn:relay.example.org:3478"'
+            os.environ["SIH_TURN_USERNAME"] = "provider-user"
+            os.environ["SIH_TURN_CREDENTIAL"] = "provider-credential"
+            config = self.client.get("/api/webcall/config", headers=_auth(self.owner_token)).get_json()
+            self.assertTrue(config["ice"]["turn_configured"])
+            self.assertEqual(config["ice"]["turn_mode"], "static")
+            self.assertEqual(config["ice"]["turn_url_count"], 1)
+            self.assertIsNone(config["ice"]["turn_config_issue"])
+            turn_entries = [e for e in config["ice_servers"] if e["urls"][0].lower().startswith("turn:")]
+            self.assertEqual(turn_entries[0]["urls"], ["turn:relay.example.org:3478"])
+
+            # 5. A non-TURN scheme cannot fake `turn_configured: true`.
+            without_turn_env()
+            os.environ["SIH_TURN_URLS"] = "stun:stun.l.google.com:19302"
+            os.environ["SIH_TURN_USERNAME"] = "provider-user"
+            os.environ["SIH_TURN_CREDENTIAL"] = "provider-credential"
+            ice = self.client.get("/api/webcall/config", headers=_auth(self.owner_token)).get_json()["ice"]
+            self.assertFalse(ice["turn_configured"])
+            self.assertEqual(ice["turn_url_count"], 0)
+            self.assertEqual(ice["turn_urls_ignored"], 1)
+            self.assertEqual(ice["turn_config_issue"], "turn_urls_unusable")
+
+            # 6. The diagnostics never leak the credential values.
+            payload = json.dumps(ice)
+            self.assertNotIn("provider-user", payload)
+            self.assertNotIn("provider-credential", payload)
+        finally:
+            without_turn_env()
+            os.environ.update(saved)
 
 
 if __name__ == "__main__":
