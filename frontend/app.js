@@ -1019,9 +1019,17 @@ function langToggle() {
 // ---------------------------------------------------------------- utils --
 function toast(msg, isError = false) {
   const el = document.getElementById("toast");
-  if (!el) return;
   if (getUserRole() === "owner") msg = farmerRuntimeText(msg);
-  el.textContent = msg;
+  // WCAG 4.1.3 Status Messages (GIGW A50): the toast is a visual notification
+  // that sighted users see but screen-reader users would otherwise miss.
+  // Announce it through the shared live region. `assertive` is used for errors
+  // only, so routine confirmations do not interrupt.
+  if (window.PashuShell && window.PashuShell.announce) {
+    window.PashuShell.announce(String(msg), !!isError);
+  }
+  if (!el) return;
+  // Colour is never the only signal: errors carry a prefix too (GIGW A12).
+  el.textContent = isError ? "Error — " + msg : msg;
   el.className = "toast show" + (isError ? " error" : "");
   clearTimeout(toast._t);
   toast._t = setTimeout(() => (el.className = "toast"), 3200);
@@ -1342,7 +1350,22 @@ function render(html) {
   document.body.classList.toggle("farmer-portal", getUserRole() === "owner" || farmerAuth);
   document.documentElement.lang = state.lang;
   window.scrollTo(0, 0);
+  // GIGW Q17 / A28 / A38: refresh title, description, canonical and lang now
+  // that the new view is in the DOM. Views may also set their own metadata by
+  // calling window.PashuShell.setPageMeta({title, description}) directly.
+  if (window.PashuShell && window.PashuShell.setPageMeta) {
+    const meta = render._pageMeta;
+    window.PashuShell.setPageMeta({
+      title: (meta && meta.title) || null,
+      description: (meta && meta.description) || null,
+      lang: state.lang,
+    });
+    render._pageMeta = null;
+  }
 }
+
+/** Optional per-view page metadata (title/description) consumed by render(). */
+function setPageMeta(meta) { render._pageMeta = meta || null; }
 
 function barChart(items) {
   if (!items || !items.length) return emptyState("No data yet.");
@@ -1380,8 +1403,25 @@ const routes = {};
 function route(path, handler, roles) { routes[path] = { handler, roles }; }
 
 function isPublic(path) {
-  return path === "#/" || path.startsWith("#/login") || path.startsWith("#/register");
+  if (path === "#/" || path.startsWith("#/login") || path.startsWith("#/register")) return true;
+  // GIGW Q09-Q14/Q18/Q31: the information pages (About, Contact, Feedback,
+  // Help, Site Map, Search, Policies) must be reachable without logging in.
+  // GIGW A31 (WCAG 2.4.5 "Multiple Ways") depends on search + sitemap being
+  // available alongside navigation.
+  return PUBLIC_INFO_ROUTES.some((p) => path === p || path.startsWith(p + "/"));
 }
+
+// Routes reachable by an anonymous visitor. Kept in one place so the router,
+// the footer and the sitemap can never disagree.
+const PUBLIC_INFO_ROUTES = [
+  "#/about",
+  "#/contact",
+  "#/feedback",
+  "#/help",
+  "#/sitemap",
+  "#/search",
+  "#/policies",
+];
 
 async function router() {
   const hash = location.hash || "#/";
