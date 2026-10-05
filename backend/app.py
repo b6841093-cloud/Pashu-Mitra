@@ -4972,3 +4972,32 @@ def webcall_summary():
         })
     finally:
         conn.close()
+
+
+# ==========================================================================
+# COMPLIANCE — application-side security, safe errors, feedback, upload rules
+# --------------------------------------------------------------------------
+# Additive only: this registers response headers, error handlers and two new
+# API routes. It does not modify, rename or remove any existing route,
+# response contract, authentication behaviour or database column.
+#
+#   GIGW 3.0 C1.2c  custom error pages, no source code in errors
+#   GIGW 3.0 C1.2d  hardened HTTP response headers (CSP report-only by default)
+#   GIGW 3.0 C1.2o  server-side input validation
+#   GIGW 3.0 Q11    feedback collected through an online form
+#   GuDApps 4.4     validation (server-side authoritative)
+#   GuDApps 4.5     document upload security
+# ==========================================================================
+import compliance_security  # noqa: E402  (imported here so `app` already exists)
+
+compliance_security.install(app, get_db=get_db)
+
+# Ensure the additive feedback table exists at startup (idempotent).
+try:
+    _c = get_db()
+    try:
+        compliance_security.ensure_feedback_table(_c)
+    finally:
+        _c.close()
+except Exception:  # pragma: no cover - never block startup on this
+    logging.getLogger(__name__).warning("site_feedback table could not be pre-created")
