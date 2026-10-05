@@ -49,6 +49,35 @@ _sweeper_started = False
 _sweeper_lock = threading.Lock()
 
 
+# Socket.IO's *browser* client concatenates the configured path straight onto
+# the origin: ``"https://host" + path``. A path without a leading slash therefore
+# produces ``https://hostsocket.io/`` — an unresolvable host — and the signaling
+# socket never connects (measured 2026-10-05: the Engine.IO handshake request
+# never reached the server, so no vet presence was ever registered and every
+# farmer call ended as NO_LIVE_SESSION).
+#
+# The Python server is *tolerant*: Engine.IO normalizes its mount point, so
+# ``socket.io`` and ``/socket.io`` are the same server route. That asymmetry is
+# exactly why a one-sided value can ship unnoticed — the server is healthy while
+# no browser can reach it. This module is the single source of truth for the
+# path, and always hands out the canonical, browser-safe form.
+DEFAULT_SOCKETIO_PATH = "/socket.io"
+
+
+def socketio_path() -> str:
+    """Canonical Socket.IO path for both the server and the browser client.
+
+    ``SIH_SOCKETIO_PATH`` is accepted in any spelling (``socket.io``,
+    ``/socket.io``, ``/socket.io/``); the result always starts with ``/``.
+    """
+    raw = (os.environ.get("SIH_SOCKETIO_PATH") or "").strip()
+    if not raw:
+        return DEFAULT_SOCKETIO_PATH
+    normalized = "/" + raw.lstrip("/")
+    normalized = normalized.rstrip("/")
+    return normalized or DEFAULT_SOCKETIO_PATH
+
+
 def _split_origins(raw: str) -> list[str]:
     return [part.strip().rstrip("/") for part in raw.split(",") if part.strip()]
 
@@ -110,7 +139,7 @@ def init_realtime(app, decode_token, get_db) -> SocketIO:
         cors_allowed_origins=allowed_origins(),
         async_mode="threading",
         message_queue=(os.environ.get("SIH_REDIS_URL") or "").strip() or None,
-        path=(os.environ.get("SIH_SOCKETIO_PATH") or "").strip() or "socket.io",
+        path=socketio_path(),
     )
     start_sweeper()
     return socketio

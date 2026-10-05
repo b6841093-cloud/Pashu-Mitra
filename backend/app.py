@@ -56,12 +56,14 @@ from disease_knowledge import DiseaseKnowledge
 import turn_config
 import webcalling
 from realtime import (
+    allowed_origins,
     emit_call_event,
     emit_to_user,
     init_realtime,
     signaling_configured,
     socket_public_url,
     socketio,
+    socketio_path,
     worker_configuration_safe,
 )
 
@@ -410,6 +412,16 @@ def health():
             "channel": "webrtc_web_call",
             "signaling": "flask-socketio",
             "signaling_configured": signaling_configured(),
+            # Secret-free signaling address diagnostics: the exact public base
+            # URL and path a browser must use (empty URL = same origin). Both
+            # are already public by design — the browser is told the same values
+            # by /api/webcall/config — and this is what makes a misconfigured
+            # SIH_PUBLIC_BACKEND_URL or SIH_SOCKETIO_PATH visible from outside.
+            "signaling_url": socket_public_url(),
+            "socketio_path": socketio_path(),
+            # Browser origins allowed to open the signaling socket (the portal
+            # origins are public by design; nothing secret is exposed here).
+            "allowed_origins": allowed_origins(),
             "ring_timeout_seconds": webcalling.ring_timeout_seconds(),
             "ring_timeout": webcalling.ring_timeout_seconds(),
             "sweeper_enabled": os.environ.get("SIH_WEBCALL_SWEEPER", "true").strip().lower() not in {"0", "false", "no", "off"},
@@ -4616,7 +4628,10 @@ def webcall_config():
                 # the absolute Render backend URL so the browser opens WSS
                 # directly to the backend instead of through the Vercel /api rewrite.
                 "url": socket_public_url(),
-                "path": (os.environ.get("SIH_SOCKETIO_PATH") or "socket.io"),
+                # Always browser-safe (leading slash): Socket.IO's client appends
+                # this value to the origin, so "socket.io" would become
+                # "https://hostsocket.io/" and never reach the server.
+                "path": socketio_path(),
                 "transports": ["websocket", "polling"],
                 "offline_warning_seconds": 10,
             },

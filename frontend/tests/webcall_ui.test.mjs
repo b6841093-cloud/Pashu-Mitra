@@ -843,3 +843,142 @@ test("all four farmer languages define the web-call translations", async () => {
   assert.ok(!/id=\"vetAvailabilityStatus\"/.test(appSource),
     "the old duplicate editable helpline availability control is gone");
 });
+
+
+// ---------------------------------------------------------------------------
+// Production regression (2026-10-05): the browser-side Socket.IO path.
+//
+// The server accepts "socket.io" and "/socket.io" (Engine.IO normalizes its
+// mount point) but the browser client concatenates the value onto the origin, so
+// "socket.io" became "wss://hostsocket.io/" — an unresolvable host. The
+// handshake never reached the backend, no vet presence was registered, and the
+// vet portal still showed AVAILABLE while every farmer call ended in
+// "No veterinarian is online right now." (NO_LIVE_SESSION).
+// ---------------------------------------------------------------------------
+test("the Socket.IO path from the server is normalized to a browser-safe value", async () => {
+  const client = loadCallClient();
+  client.setFetch(callApi({
+    config: {
+      ...CONFIG,
+      signaling: { url: "https://pashu-shield-backend-hjgr.onrender.com", path: "socket.io", transports: ["websocket", "polling"] },
+    },
+  }));
+  await client.ready();
+  const socket = client.socket();
+  assert.equal(socket.url, "https://pashu-shield-backend-hjgr.onrender.com",
+    "signaling connects directly to the backend, not through the Vercel /api rewrite");
+  assert.equal(socket.options.path, "/socket.io",
+    "a path without a leading slash resolves to https://hostsocket.io/ and never reaches the server");
+  assert.equal(socket.options.auth.token, TOKEN, "the existing JWT is presented in the handshake");
+  const status = client.pm().status();
+  assert.equal(status.signaling_path, "/socket.io");
+  assert.equal(status.signaling_url, "https://pashu-shield-backend-hjgr.onrender.com");
+
+  const normalize = client.run("window.PMCall.__test.normalizeSocketPath");
+  assert.equal(normalize("socket.io"), "/socket.io");
+  assert.equal(normalize("/socket.io/"), "/socket.io");
+  assert.equal(normalize("custom/emit"), "/custom/emit");
+  assert.equal(normalize(""), "/socket.io");
+  assert.equal(normalize(null), "/socket.io");
+  assert.equal(normalize("   "), "/socket.io");
+});
+
+test("the client uses exactly the transports the server advertises", async () => {
+  const client = loadCallClient();
+  client.setFetch(callApi({
+    config: { ...CONFIG, signaling: { url: "", path: "/socket.io", transports: ["polling"] } },
+  }));
+  await client.ready();
+  assert.equal(client.socket().options.transports.join(","), "polling",
+    "an operator that restricts transports gets a client that matches the server");
+  client.setFetch(callApi());
+});
+
+test("an AVAILABLE vet is never shown as receiving calls while signaling is down", async () => {
+  const client = loadCallClient();
+  client.elements.set("pmVetCallHost", client.element("pmVetCallHost"));
+  client.setFetch(callApi({
+    config: {
+      ...CONFIG,
+      availability: { status: "AVAILABLE", supported_languages: ["en"] },
+      presence: { online: true, presence: "ONLINE" },
+    },
+  }));
+  await client.run("window.PMCall.init()");
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  await client.run("window.PMCall.mountVetCard()");
+
+  // Signaling is up (harness default) and the lease is confirmed: routable.
+  assert.equal(client.pm().status().signaling_state, "connected");
+  assert.match(client.pm().__test.vetRoutabilityState().label, /CONNECTED · AVAILABLE/);
+
+  // The socket drops: the card must stop claiming the vet can be called.
+  const socket = client.socket();
+  socket.connected = false;
+  socket.receive("disconnect", "transport close");
+  const dropped = client.pm().__test.vetRoutabilityState();
+  assert.match(dropped.label, /NOT RECEIVING/, "an AVAILABLE vet with no signaling is not callable");
+  assert.notEqual(client.pm().status().signaling_state, "connected");
+  client.run("window.PMCall.mountVetCard()");
+  assert.match(client.elements.get("pmVetCallHost").innerHTML, /signaling offline/i,
+    "the vet card states the reason instead of hiding it");
+  assert.match(client.elements.get("pmVetSignalStatus") ? client.elements.get("pmVetSignalStatus").textContent : "",
+    /offline|reconnecting/i, "the vet sees the real channel state, not only AVAILABLE");
+
+  // Reconnect: presence is restored automatically and the card turns green again.
+  socket.connected = true;
+  socket.receive("connect");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(client.pm().status().signaling_state, "connected");
+  assert.match(client.pm().__test.vetRoutabilityState().label, /CONNECTED · AVAILABLE/);
+  assert.ok(socket.emitted.some((entry) => entry.event === "presence:heartbeat"),
+    "reconnecting renews the presence lease without any extra user action");
+});
+
+test("a rejected signaling handshake is reported instead of silently retrying", async () => {
+  const client = loadCallClient({
+    storage: makeStorage({ token: TOKEN, user: JSON.stringify(OWNER) }),
+    session: { token: TOKEN, user: OWNER },
+  });
+  client.setFetch(callApi());
+  await client.run("window.PMCall.renderOwnerCallView({})");
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  const socket = client.socket();
+  socket.connected = false;
+  socket.receive("connect_error", { message: "Connection refused", type: "HandshakeError" });
+  const status = client.pm().status();
+  assert.equal(status.signaling_state, "error", "a refused handshake is an error, not a healthy state");
+  assert.match(String(status.signaling_error), /Connection refused/);
+  assert.match(client.el("pmCallSignalStatus").textContent, /unavailable/i,
+    "the farmer sees that web calling is unavailable");
+});
+
+test("saving availability renews the presence lease on the live socket", async () => {
+  const client = loadCallClient();
+  client.elements.set("pmVetCallHost", client.element("pmVetCallHost"));
+  const calls = [];
+  client.setFetch((url, options) => {
+    calls.push({ url, options });
+    if (url.startsWith("/api/webcall/config")) {
+      return json({ ...CONFIG, availability: { status: "OFFLINE", supported_languages: ["en"] } });
+    }
+    if (url.startsWith("/api/vet/availability")) {
+      return json({ status: "AVAILABLE", supported_languages: ["en", "mr"] });
+    }
+    return json({ call: null });
+  });
+  await client.run("window.PMCall.init()");
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  await client.run("window.PMCall.mountVetCard()");
+  client.el("pmVetAvailability").value = "AVAILABLE";
+  client.el("pmVetLanguages").selectedOptions = [{ value: "en" }, { value: "mr" }];
+  client.el("pmVetSaveAvailability").click();
+  await new Promise((resolve) => setTimeout(resolve, 60));
+
+  const put = calls.find((call) => call.url === "/api/vet/availability");
+  assert.ok(put, "the availability choice is persisted server-side");
+  assert.equal(put.options.method, "PUT");
+  assert.ok(client.socket().emitted.some((entry) => entry.event === "presence:heartbeat"),
+    "choosing AVAILABLE immediately renews the presence lease (the choice alone is not routable)");
+  assert.ok(client.toasts.some((toast) => /Availability updated/i.test(toast.message)));
+});

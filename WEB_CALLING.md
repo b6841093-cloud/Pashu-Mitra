@@ -236,7 +236,7 @@ worker version bump makes existing browsers pick up the new shell.
 | `SIH_GUNICORN_WORKERS` | `1` | How many worker processes the deployment runs; used for the startup warning about per-process Socket.IO rooms. Leave at 1 unless `SIH_REDIS_URL` is set |
 | `SIH_PUBLIC_BACKEND_URL` | `https://pashu-shield-backend-hjgr.onrender.com` | Absolute WSS/REST base for a split deployment |
 | `SIH_ALLOWED_ORIGINS` | `https://pashu-mitra-smoky.vercel.app` | Origins allowed to open the signaling socket |
-| `SIH_SOCKETIO_PATH` | `socket.io` | Socket.IO path (must match the deployment) |
+| `SIH_SOCKETIO_PATH` | `/socket.io` | Socket.IO path (must match the deployment). **The browser client requires the leading slash** — it concatenates the value onto the origin, so `socket.io` becomes `https://hostsocket.io/`, the handshake never reaches the server and every farmer call ends as `NO_LIVE_SESSION`. The server accepts both spellings; the backend normalizes the value for both sides and `/api/health` now reports `web_calling.signaling_url` + `web_calling.socketio_path` + `web_calling.allowed_origins` |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_CLAIM_EMAIL` | `<generated>` / `<generated>` / `mailto:ops@example.org` | Web Push keys (empty = push disabled) |
 
 ### 5.1 Metered static TURN — the configuration this deployment uses
@@ -386,6 +386,66 @@ Checklist, in order:
    §5.1). `/api/webcall/config` returns the same `ice` object plus the actual
    `ice_servers` the browser receives.
 
+### 6.2 When a vet portal says AVAILABLE but every farmer gets `NO_LIVE_SESSION`
+
+**Incident 2026-10-05 — root cause: the Socket.IO path handed to the browser had
+no leading slash.** `/api/webcall/config` returned
+`signaling.path: "socket.io"` (the value of the `SIH_SOCKETIO_PATH` default),
+and `frontend/call.js` passed it to the Socket.IO client verbatim. Socket.IO's
+browser client concatenates `path` onto the origin, so the socket really opened
+
+```
+wss://pashu-shield-backend-hjgr.onrender.comsocket.io/?EIO=4&transport=websocket
+                                       ^^^^^^^^^^^^^^^^^^ unresolvable host
+```
+
+The handshake never reached Render (measured: the Engine.IO request never
+appeared in the access log), so **no vet presence lease was ever created**.
+`webcalling.choose_veterinarian()` therefore returned only
+`{"reason": "NO_LIVE_SESSION"}`, and every farmer saw *"No veterinarian is
+online right now."* — while the vet's own card still showed AVAILABLE, because
+availability (`vet_availability.status`) and liveness (`vet_presence` lease +
+socket) are deliberately separate server state.
+
+Why nothing else was broken:
+
+* **TURN/STUN were never involved** — media is only negotiated after a call is
+  routed to a vet, and no call was ever routed. `ice.turn_configured: true`,
+  `turn_mode: "static"`, `turn_url_count: 4` were true and correct.
+* **The REST API was healthy** — it is proxied by Vercel's `/api/*` rewrite,
+  which does not carry Socket.IO (Vercel answers `/socket.io/*` with its own
+  404). Only the browser's direct WSS connection was affected.
+* **The Python server was healthy** — Engine.IO normalizes its mount point, so
+  `socket.io` and `/socket.io` are the same *server* route. The same value is
+  invalid only on the *client* side, which is why the bug could ship unnoticed.
+
+Fix (both directions, so a one-sided value can no longer break a deployment):
+
+| Layer | Change |
+|-------|--------|
+| `backend/realtime.py` | `socketio_path()` is now the single source of truth and always returns a leading slash (`socket.io`, `/socket.io`, `/socket.io/` → `/socket.io`); `init_realtime()` uses it for the server mount |
+| `backend/app.py` | `/api/webcall/config` returns `signaling.path = socketio_path()`; `/api/health` adds the secret-free `web_calling.signaling_url` + `web_calling.socketio_path` + `web_calling.allowed_origins` |
+| `frontend/call.js` | `normalizeSocketPath()` guarantees the browser-safe form and the resolved URL/path/transports are logged (`[WEB_CALL] signaling URL … | path …`) |
+| `render.yaml` / `.env.example` | `SIH_SOCKETIO_PATH=/socket.io` (documented as required) |
+| Tests | `backend/test_webcalling.py::TestSignalingPathContract` (tests 87–92) and 5 new client tests in `frontend/tests/webcall_ui.test.mjs` |
+
+Diagnose a deployed environment in this order:
+
+1. `GET /api/health` → `web_calling.signaling_url` must be the **Render** host
+   (empty means "same origin" and cannot work behind Vercel) and
+   `web_calling.socketio_path` must start with `/`.
+2. Browser console on the vet portal: look for `[WEB_CALL] signaling URL … path …`
+   and `[WEB_CALL] socket connected`. On failure the exact Socket.IO error is
+   printed as `[WEB_CALL] socket connect_error: … | type: … | url: … | path: …`.
+3. `window.PMCall.status()` → `signaling_state` (`connected` / `connecting` /
+   `reconnecting` / `error`), `signaling_url`, `signaling_path`,
+   `signaling_error`, `presence_online`.
+4. Only when `signaling_state === "connected"` **and** `presence_online === true`
+   **and** the availability selector is `AVAILABLE` may the card read
+   `CONNECTED · AVAILABLE — receiving calls`; every other combination is rendered
+   as NOT receiving calls, and the server never routes to a vet without a live
+   lease.
+
 ---
 
 ## 7. Tests actually run (and results)
@@ -395,11 +455,13 @@ rows were re-run on 2026-10-05 after the Metered static-mode tests were added.
 
 | Command | Result |
 |---------|--------|
-| `cd backend && rm -f test_webcalling.db* && python3 -m unittest test_webcalling` | **OK — 60 tests, 0 failures** (re-run 2026-10-05: `Ran 60 tests in 1.186s`) |
+| `cd backend && rm -f test_webcalling.db* && python3 -m unittest test_webcalling` | **OK — 66 tests, 0 failures** (`Ran 66 tests in 1.124s`, re-run 2026-10-05 after the signaling-path incident; 60 before `TestSignalingPathContract` was added) |
 | `test_webcalling.TestStaticTurnConfiguration` (tests 79–86, part of the run above) | **PASS — 8 tests**: missing URLs ⇒ `turn_configured: false`; the four Metered URLs as JSON / comma / newline ⇒ `turn_url_count: 4` with `turn_mode: "static"`; invalid entries ignored and counted; `static` mode with `SIH_TURN_SECRET` **absent**, **empty** and whitespace-only; no credential value in `/api/health`; ICE credentials only on the authenticated `/api/webcall/config` (401 otherwise) |
 | A local backend started with the deployment command line and the §5.1 variables | **`turn_configured: true`, `turn_mode: "static"`, `turn_url_count: 4`, `turn_config_issue: null`**, `turn_env` = URLs/USERNAME/CREDENTIAL `set`, SECRET `missing`; `deploy_check.mjs` → **PASS — 23 checks** |
-| `node --test frontend/tests/*.test.mjs` | **45 tests: 43 pass, 0 fail, 2 skipped** (re-run 2026-10-05; the 2 skips are the Playwright browser tests, which report their skip reason) |
+| `node --test frontend/tests/*.test.mjs` | **50 tests: 48 pass, 0 fail, 2 skipped** (re-run 2026-10-05 after the signaling-path incident; the 2 skips are the Playwright browser tests, which report their skip reason) |
 | `node backend/tests/webrtc/two_peer_call.mjs` (against a local Flask instance) | **PASS — 13 steps**, real bidirectional RTP, DTLS-SRTP connected, mute relayed, terminal state + history verified |
+| `frontend/vendor/socket.io.min.js` (Socket.IO client 4.8.4) against a local gunicorn instance, path taken from `/api/webcall/config` | **Before the fix: FAIL** — transport URI `ws://127.0.0.1:5099socket.io/?EIO=4&transport=websocket`, socket never connected, no Engine.IO request in the access log, `presence:ack` never received. **After the fix: PASS** — `ws://127.0.0.1:5099/socket.io/?EIO=4&transport=websocket`, `presence:ack online=true routable=true`, farmer discovery `routable=true` (also with the legacy `SIH_SOCKETIO_PATH=socket.io`) |
+| Polling fallback + CORS with the production origin (`curl` against the local instance) | **PASS** — handshake at `/socket.io/` with `Origin: https://pashu-mitra-smoky.vercel.app` returns `200` + `Access-Control-Allow-Origin: https://pashu-mitra-smoky.vercel.app`; a foreign origin is refused with `400 "Not an accepted origin."`; a full polling session (`40{"token":…}` connect) receives `presence:ack` + `session:ready` |
 | `SIH_ICE_TRANSPORT_POLICY=relay node backend/tests/webrtc/two_peer_call.mjs` (through a real TURN server) | **PASS — 511 and 512 decoded audio frames**, both peers' selected candidate pair reported as **`relay` → `relay`**, i.e. media really traversed TURN |
 | `node backend/tests/webrtc/local_turn_ephemeral.mjs` + `/api/webcall/config` | **PASS** — with `SIH_TURN_SECRET` set, the server issued a coturn-REST username `<expiry>:<uid>` whose credential equals an independent `base64(HMAC-SHA1(secret, username))` computation (constant-time compare `True`); no static credential is used |
 | `python3 backend/tests/deploy/push_loopback_check.py` (local backend + a stand-in push service) | **PASS — 20 checks**: the healthy subscription received a VAPID-signed (`Authorization: vapid t=…`), `aes128gcm`-encrypted body (362 bytes) with `TTL: 45` and `Urgency: high`; the 410 subscription was contacted once and then pruned; unsubscribe stops delivery; no push reaches an unsubscribed endpoint |

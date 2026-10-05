@@ -126,6 +126,14 @@ services:
       # Browser origins allowed to open the signaling socket (the Vercel portal).
       - key: SIH_ALLOWED_ORIGINS
         value: https://pashu-mitra-smoky.vercel.app
+      # Socket.IO path. MUST keep the leading slash: the browser client appends
+      # this value to the origin, so "socket.io" produces
+      # "https://hostsocket.io/" (unresolvable) and signaling never connects
+      # (2026-10-05 incident). The backend normalizes the value for the server
+      # and for the browser, and /api/health reports the effective
+      # web_calling.signaling_url + web_calling.socketio_path.
+      - key: SIH_SOCKETIO_PATH
+        value: /socket.io
       # Secrets: set in the Render dashboard, never in Git.
       # TURN is required for mobile-carrier/CGNAT peers.
       #

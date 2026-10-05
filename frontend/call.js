@@ -41,6 +41,13 @@
   const ICE_RESTART_LIMIT = 3;
   const SPEAKER_HINT_MS = 1200;
   const SIGNAL_OFFLINE_WARNING_MS = 10000;
+  // Socket.IO's documented path. The browser client concatenates this value onto
+  // the origin, so it MUST start with "/": a path like "socket.io" produces
+  // "https://hostsocket.io/" (unresolvable host), the handshake never reaches
+  // the server, presence is never registered and every farmer call is answered
+  // with NO_LIVE_SESSION while the vet UI still reads AVAILABLE.
+  const DEFAULT_SOCKET_PATH = "/socket.io";
+  const DEFAULT_TRANSPORTS = ["websocket", "polling"];
 
   const state = {
     config: null,
@@ -57,7 +64,45 @@
     signalingWarningTimer: null,
     lastAvailabilityCheck: null,
     presence: null,
+    // Signaling diagnostics (never a token, never a credential).
+    signalingUrl: null,
+    signalingPath: null,
+    signalingTransports: null,
+    signalingError: null,
+    signalingErrorType: null,
+    everConnected: false,
+    disconnectedAt: null,
   };
+
+  /** Safe diagnostic logging: the exact signaling failure is never hidden. */
+  function logCall(...args) {
+    try { console.log("[WEB_CALL]", ...args); } catch (e) { /* console unavailable */ }
+  }
+  function warnCall(...args) {
+    try { console.warn("[WEB_CALL]", ...args); } catch (e) { /* console unavailable */ }
+  }
+
+  /**
+   * Normalize the Socket.IO path from the server into the only form the browser
+   * client can use: an absolute path with a leading slash. Accepts "", null,
+   * "socket.io", "/socket.io" and "/socket.io/" and always returns "/socket.io"
+   * for the default. The Python server accepts both spellings, so normalizing
+   * here can never break a deployment: it only removes the asymmetry that made
+   * the socket unreachable from the browser.
+   */
+  function normalizeSocketPath(value) {
+    const raw = String(value == null ? "" : value).trim();
+    if (!raw) return DEFAULT_SOCKET_PATH;
+    const withLeadingSlash = raw.startsWith("/") ? raw : "/" + raw;
+    const withoutTrailingSlashes = withLeadingSlash.replace(/\/+$/, "");
+    return withoutTrailingSlashes || DEFAULT_SOCKET_PATH;
+  }
+
+  function signalingTransportsFrom(cfg) {
+    const list = cfg && cfg.signaling && cfg.signaling.transports;
+    if (Array.isArray(list) && list.length) return list.map((name) => String(name));
+    return DEFAULT_TRANSPORTS.slice();
+  }
 
   // --------------------------------------------------------------- helpers --
   function authToken() {
@@ -126,6 +171,34 @@
     const offlineSince = connected ? null : state.signalingOfflineSince;
     const offlineLong = !!(offlineSince && (Date.now() - offlineSince >= offlineWarningSeconds() * 1000));
     return { connected, offlineSince, offlineLong };
+  }
+
+  /**
+   * One honest state for the signaling channel, used by every piece of UI:
+   *   "idle"         no socket has been created yet (not logged in)
+   *   "connecting"   the socket exists and is opening
+   *   "connected"    the socket is live and authenticated
+   *   "reconnecting" the socket dropped or the transport cannot reach the URL
+   *   "error"        the server refused the handshake (bad/expired JWT, origin)
+   */
+  function signalingState() {
+    const connected = !!(state.socket && state.socket.connected);
+    if (connected) return "connected";
+    if (!state.socket) return state.signalingError ? "error" : "idle";
+    if (state.signalingErrorType === "TransportError") {
+      // The transport cannot reach the signaling server at all: the URL, the
+      // path or the network is wrong. Never report this as a healthy "online".
+      return state.everConnected || state.signalingOfflineSince ? "reconnecting" : "error";
+    }
+    if (state.signalingError) return "error";
+    // A dropped socket that is being retried is "reconnecting", not "connecting".
+    return state.everConnected || state.disconnectedAt ? "reconnecting" : "connecting";
+  }
+
+  function signalingErrorText() {
+    if (!state.signalingError) return "";
+    const text = String(state.signalingError);
+    return text.length > 160 ? text.slice(0, 157) + "…" : text;
   }
   function scheduleSignalingStatusRefresh() {
     clearSignalingWarningTimer();
@@ -278,19 +351,33 @@
     if (state.socketReady) return state.socketReady;
     state.socketReady = loadConfig().then((cfg) => new Promise((resolve, reject) => {
       if (typeof window.io !== "function") {
+        state.signalingError = "Socket.IO client library not loaded (vendor/socket.io.min.js)";
+        state.signalingErrorType = "LibraryMissing";
+        warnCall("socket connect_error:", state.signalingError);
+        updateOverlayStatus();
         reject(new Error(t("webcall.signaling_unavailable",
           "Real-time signaling could not load. Check your connection and reload the page.")));
         return;
       }
-      const socket = window.io(signalingUrl(cfg), {
-        path: (cfg.signaling && cfg.signaling.path) || "socket.io",
+      // The path comes from the server so both sides always agree; it is
+      // normalized here because the browser client requires a leading slash.
+      const path = normalizeSocketPath(cfg && cfg.signaling && cfg.signaling.path);
+      const transports = signalingTransportsFrom(cfg);
+      const url = signalingUrl(cfg);
+      state.signalingUrl = url || (typeof location !== "undefined" ? location.origin : null);
+      state.signalingPath = path;
+      state.signalingTransports = transports;
+      logCall("signaling URL", state.signalingUrl, "| path", path, "| transports", transports.join(","));
+      logCall("socket connecting as", currentRole() || "unknown", "| auth token present:", !!authToken());
+      const socket = window.io(url, {
+        path,
         auth: { token: authToken() },
         // WebSocket first (a single upgraded connection, one worker process).
         // tryAllTransports keeps the long-polling fallback for networks that
         // block WebSocket upgrades; it requires the server to run a SINGLE
         // process (deployed: gunicorn --worker-class gthread --workers 1),
         // because Engine.IO polling session state is per-process.
-        transports: ["websocket", "polling"],
+        transports,
         tryAllTransports: true,
         withCredentials: false,
         reconnection: true,
@@ -302,15 +389,40 @@
       setSignalingConnected(false);
 
       socket.on("connect", () => {
+        state.signalingError = null;
+        state.signalingErrorType = null;
+        state.everConnected = true;
         setSignalingConnected(true);
-        if (currentRole() === "vet") startPresenceHeartbeat();
+        const activeTransport = socket.io && socket.io.engine && socket.io.engine.transport
+          ? socket.io.engine.transport.name : "unknown";
+        logCall("socket connected", "sid=" + (socket.id || "?"), "| transport=" + activeTransport);
+        if (currentRole() === "vet") {
+          // Presence is (re)registered by the server on every connect; ask for
+          // the fresh server state so the card and the lease agree again.
+          startPresenceHeartbeat();
+          loadConfig(true).then((fresh) => {
+            if (fresh && fresh.presence) state.presence = fresh.presence;
+            refreshVetCard(state.presence);
+          }).catch(() => {});
+        }
+        updateOverlayStatus();
       });
-      socket.on("disconnect", () => {
+      socket.on("disconnect", (reason) => {
         stopPresenceHeartbeat();
+        state.disconnectedAt = Date.now();
+        warnCall("socket disconnected:", reason || "unknown");
         setSignalingConnected(false);
       });
       socket.on("connect_error", (err) => {
-        if (err && (err.message || "").length < 120) console.warn("[webcall] signaling error:", err.message);
+        const message = (err && (err.message || err.description)) || "signaling connection failed";
+        const type = (err && err.type) || "HandshakeError";
+        state.signalingErrorType = type;
+        state.signalingError = type === "TransportError"
+          ? message + " — the signaling server could not be reached at " + state.signalingUrl
+          : message;
+        warnCall("socket connect_error:", message, "| type:", type,
+          "| url:", state.signalingUrl, "| path:", path,
+          err && err.description && err.description !== message ? "| detail: " + err.description : "");
         setSignalingConnected(false);
       });
       socket.on("session:ready", () => resolve(socket));
@@ -323,8 +435,11 @@
         if (state.activeSession) state.activeSession.peerMuteChanged(payload && payload.muted);
       });
       socket.on("presence:ack", (payload) => {
-        state.presence = payload;
-        refreshVetCard(payload);
+        logCall("presence registered", "online=" + (payload && payload.online),
+          "| presence=" + (payload && payload.presence),
+          "| availability=" + (payload && payload.availability),
+          "| lease=" + (payload && payload.lease_expires_at));
+        applyPresence(payload);
       });
       // If the handshake fails the socket closes; fall back to polling so the
       // portal still learns about calls.
@@ -333,12 +448,28 @@
     return state.socketReady;
   }
 
+  /** Apply a server presence payload (presence:ack / heartbeat ack / config). */
+  function applyPresence(payload) {
+    if (payload && typeof payload === "object" &&
+        (typeof payload.online === "boolean" || typeof payload.presence === "string")) {
+      state.presence = payload;
+    }
+    refreshVetCard(state.presence);
+  }
+
   function startPresenceHeartbeat() {
     stopPresenceHeartbeat();
     const beat = () => {
       if (!state.socket || !state.socket.connected) return;
       state.socket.emit("presence:heartbeat", {}, (ack) => {
-        if (ack && ack.ok) { state.presence = ack; refreshVetCard(ack); }
+        if (ack && ack.ok) {
+          logCall("presence heartbeat ok", "online=" + ack.online, "| routable=" + ack.routable,
+            "| lease=" + ack.lease_expires_at);
+          applyPresence(ack);
+        } else {
+          warnCall("presence heartbeat rejected:", (ack && (ack.error || ack.message)) || "no acknowledgement");
+          updateOverlayStatus();
+        }
       });
     };
     beat();
@@ -853,22 +984,37 @@
 
   function updateOverlayStatus() {
     const status = signalingStatus();
+    const channel = signalingState();
     const badge = document.getElementById("pmCallLinkBadge");
     if (badge) {
-      badge.textContent = status.connected ? t("webcall.online", "Web calls online") : t("webcall.offline", "Web calls offline");
-      badge.className = "badge " + (status.connected ? "badge-green" : "badge-orange");
+      badge.textContent = channel === "connected" ? t("webcall.online", "Web calls online")
+        : channel === "connecting" ? t("webcall.connecting_badge", "Web calls connecting…")
+        : channel === "error" ? t("webcall.error_badge", "Web calls error")
+        : t("webcall.offline", "Web calls offline");
+      badge.className = "badge " + (channel === "connected" ? "badge-green"
+        : channel === "error" ? "badge-red" : "badge-orange");
     }
     const farmerNotice = document.getElementById("pmCallSignalStatus");
     if (farmerNotice) {
-      farmerNotice.textContent = status.offlineLong
-        ? t("webcall.signal_offline_farmer", "Web calling connection is offline. Please check your connection or try again.")
-        : "";
+      farmerNotice.textContent = channel === "error" && state.signalingError
+        ? t("webcall.signal_error", "Web calling is unavailable: ") + signalingErrorText()
+        : status.offlineLong
+          ? t("webcall.signal_offline_farmer", "Web calling connection is offline. Please check your connection or try again.")
+            + (state.signalingError ? " (" + signalingErrorText() + ")" : "")
+          : "";
     }
     const vetNotice = document.getElementById("pmVetSignalStatus");
     if (vetNotice) {
-      vetNotice.textContent = status.offlineLong
-        ? t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting...")
-        : "";
+      // The vet sees the real channel state immediately — never "AVAILABLE"
+      // next to a stale or hidden failure.
+      vetNotice.textContent = channel === "connected"
+        ? t("webcall.signal_connected_vet", "Signaling connected — this portal can receive web calls.")
+        : channel === "error"
+          ? t("webcall.signal_error", "Web calling is unavailable: ") + signalingErrorText()
+          : channel === "reconnecting"
+            ? t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting...")
+              + (state.signalingError ? " (" + signalingErrorText() + ")" : "")
+            : t("webcall.signal_connecting_vet", "Connecting to call signaling…");
     }
     scheduleSignalingStatusRefresh();
   }
@@ -1202,28 +1348,58 @@
     return state.presence || (state.config && state.config.presence) || { online: false, presence: "OFFLINE" };
   }
 
+  /**
+   * The one place that decides what the vet's availability card may claim.
+   * A vet is only advertised as callable when ALL of these are true:
+   *   * the signaling socket is connected (the browser can be reached),
+   *   * the server holds a live presence lease for this vet,
+   *   * the availability choice is AVAILABLE,
+   *   * no call is already in progress.
+   * Anything else is rendered as explicitly NOT receiving calls, so the UI can
+   * never show "AVAILABLE" next to a hidden signaling failure.
+   */
   function vetRoutabilityState() {
     const availability = currentVetAvailability();
     const presence = currentPresenceState();
-    const socketOnline = !!(state.socket && state.socket.connected);
-    const activeCall = presence.active_call || presence.active_call_id || presence.active_call_status === "connected";
-    if (availability.status === "AVAILABLE" && presence.online && socketOnline && !activeCall) {
+    const channel = signalingState();
+    const socketOnline = channel === "connected";
+    const activeCall = !!(presence.active_call || presence.active_call_id ||
+      presence.active_call_status === "connected" || presence.active_call_status === "ringing");
+    const available = availability.status === "AVAILABLE";
+
+    if (available && activeCall) {
+      return {
+        badgeClass: "badge-red",
+        label: "BUSY · On a call",
+        detail: "You are in a call right now, so farmers are not routed to you.",
+      };
+    }
+    if (available && socketOnline && presence.online) {
       return {
         badgeClass: "badge-green",
-        label: "AVAILABLE · Routable",
-        detail: "Available, portal live, and ready to receive routed web calls.",
+        label: "CONNECTED · AVAILABLE — receiving calls",
+        detail: "Signaling is live and the server holds your presence lease: farmers can reach you now.",
       };
     }
-    if (availability.status === "AVAILABLE" && (!presence.online || !socketOnline)) {
+    if (available && socketOnline && !presence.online) {
       return {
         badgeClass: "badge-orange",
-        label: "AVAILABLE · Reconnect",
-        detail: socketOnline
-          ? "Available, but the portal is not live yet. Keep this tab open to receive calls."
-          : t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting..."),
+        label: "CONNECTED · AVAILABLE — registering…",
+        detail: "Signaling is live, but the server has not confirmed your presence lease yet. This should clear within a few seconds.",
       };
     }
-    if (availability.status === "BUSY" || activeCall) {
+    if (available && !socketOnline) {
+      const reason = signalingErrorText();
+      return {
+        badgeClass: "badge-red",
+        label: "AVAILABLE · NOT RECEIVING — signaling offline",
+        detail: (channel === "connecting" || channel === "idle"
+          ? t("webcall.signal_connecting_vet", "Connecting to call signaling…")
+          : t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting..."))
+          + (reason ? " (" + reason + ")" : ""),
+      };
+    }
+    if (availability.status === "BUSY") {
       return {
         badgeClass: "badge-red",
         label: "BUSY · Not routable",
@@ -1232,8 +1408,8 @@
     }
     return {
       badgeClass: "badge-red",
-      label: "OFFLINE · Not routable",
-      detail: "You are offline for web calls. Switch to AVAILABLE and keep this portal connected.",
+      label: (availability.status || "OFFLINE") + " · Not routable",
+      detail: "You are not receiving web calls. Switch to AVAILABLE and keep this portal connected.",
     };
   }
 
@@ -1284,11 +1460,19 @@
       const supported_languages = Array.from(document.getElementById("pmVetLanguages").selectedOptions).map((o) => o.value);
       try {
         await pmFetch("/vet/availability", { method: "PUT", body: { status, supported_languages } });
+        logCall("availability changed", status, "| languages=" + supported_languages.join(","));
         notify(t("webcall.saved", "Availability updated."));
-        loadConfig(true).then((cfg) => {
-          if (cfg && cfg.presence) state.presence = cfg.presence;
+        const fresh = await loadConfig(true).catch(() => null);
+        if (fresh && fresh.presence) state.presence = fresh.presence;
+        if (state.socket && state.socket.connected) {
+          // The choice only becomes routable together with a live lease, so
+          // renew it now and let the card report what the server confirmed.
+          startPresenceHeartbeat();
+        } else {
+          warnCall("availability saved while signaling is offline —",
+            "the server will not route calls to this vet until the socket reconnects");
           refreshVetCard(state.presence);
-        }).catch(() => {});
+        }
       } catch (err) { notify(err.message, true); }
     });
     const push = document.getElementById("pmVetEnablePush");
@@ -1606,6 +1790,14 @@
     state.lastAvailabilityCheck = null;
     state.presence = null;
     state.signalingOfflineSince = null;
+    state.signalingError = null;
+    state.signalingErrorType = null;
+    state.signalingUrl = null;
+    state.signalingPath = null;
+    state.signalingTransports = null;
+    state.everConnected = false;
+    state.disconnectedAt = null;
+    stopPresenceHeartbeat();
     clearSignalingWarningTimer();
     if (state.activeSession) state.activeSession.teardown();
     hideOverlay();
@@ -1621,6 +1813,13 @@
   PM.config = () => state.config;
   PM.status = () => ({
     signaling: !!(state.socket && state.socket.connected),
+    signaling_state: signalingState(),
+    signaling_url: state.signalingUrl,
+    signaling_path: state.signalingPath,
+    signaling_transports: state.signalingTransports,
+    signaling_error: state.signalingError,
+    signaling_error_type: state.signalingErrorType,
+    presence_online: !!(currentPresenceState() && currentPresenceState().online),
     signaling_offline_long: signalingStatus().offlineLong,
     active_call: state.activeSession ? state.activeSession.call.call_id : null,
     call_status: state.activeSession ? state.activeSession.call.status : null,
@@ -1630,6 +1829,14 @@
     ringtone_blocked: state.ringtone.blocked,
     overlay_open: !!document.getElementById("pmCallOverlay"),
   });
+
+  // Exposed for tests and for on-device diagnostics only (no secrets).
+  PM.__test = {
+    normalizeSocketPath,
+    signalingState,
+    vetRoutabilityState,
+    signalingStatus,
+  };
 
   window.PMCall = PM;
 
