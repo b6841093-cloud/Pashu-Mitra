@@ -55,7 +55,15 @@ from push_service import is_push_configured, get_public_key, push_notification
 from disease_knowledge import DiseaseKnowledge
 import turn_config
 import webcalling
-from realtime import emit_call_event, emit_to_user, init_realtime, socket_public_url, socketio
+from realtime import (
+    emit_call_event,
+    emit_to_user,
+    init_realtime,
+    signaling_configured,
+    socket_public_url,
+    socketio,
+    worker_configuration_safe,
+)
 
 SECRET_KEY = os.environ.get("SIH_SECRET_KEY") or secrets.token_urlsafe(48)
 if not os.environ.get("SIH_SECRET_KEY"):
@@ -398,9 +406,15 @@ def health():
         "web_calling": {
             "channel": "webrtc_web_call",
             "signaling": "flask-socketio",
+            "signaling_configured": signaling_configured(),
             "ring_timeout_seconds": webcalling.ring_timeout_seconds(),
+            "ring_timeout": webcalling.ring_timeout_seconds(),
+            "sweeper_enabled": os.environ.get("SIH_WEBCALL_SWEEPER", "true").strip().lower() not in {"0", "false", "no", "off"},
             "push_configured": is_push_configured(),
             "redis_message_queue": bool((os.environ.get("SIH_REDIS_URL") or "").strip()),
+            "worker_configuration_safe": worker_configuration_safe(),
+            "turn_configured": turn_config.describe()["turn_configured"],
+            "turn_mode": turn_config.describe()["turn_mode"],
             "ice": turn_config.describe(),
         },
     }), 200 if database_ok else 503
@@ -4398,7 +4412,7 @@ def push_unsubscribe():
 def get_vapid_public_key():
     """Return the VAPID public key for the frontend Push API."""
     key = get_public_key()
-    return jsonify({"publicKey": key, "configured": is_push_configured()})
+    return jsonify({"publicKey": key or None, "configured": is_push_configured()})
 
 
 # ================================================================
@@ -4591,9 +4605,13 @@ def webcall_config():
             "ice_transport_policy": turn_config.ice_transport_policy(),
             "signaling": {
                 # Empty means "same origin as this page" (dev / single-service).
+                # In production Vercel + Render split deployments this must be
+                # the absolute Render backend URL so the browser opens WSS
+                # directly to the backend instead of through the Vercel /api rewrite.
                 "url": socket_public_url(),
                 "path": (os.environ.get("SIH_SOCKETIO_PATH") or "socket.io"),
                 "transports": ["websocket", "polling"],
+                "offline_warning_seconds": 10,
             },
             "ring_timeout_seconds": webcalling.ring_timeout_seconds(),
             "supported_languages": [
@@ -4889,11 +4907,33 @@ def webcall_presence_offline():
 
 
 @app.get("/api/webcall/availability")
-@auth_required(roles=["vet", "govt"])
+@auth_required(roles=["owner", "vet", "govt"])
 def webcall_availability():
-    """Truthful availability/presence snapshot (no phone numbers)."""
+    """Truthful availability/presence snapshot (no phone numbers).
+
+    * Farmer/owner: a pre-call routability check for the selected language,
+      using the authenticated farmer's real profile and (optionally) their
+      selected case/animal context.
+    * Vet/Govt: a fleet snapshot for operational dashboards.
+    """
     conn = get_db()
     try:
+        if g.user["role"] == "owner":
+            payload = {
+                "language": request.args.get("language"),
+                "reason": request.args.get("reason") or "animal_sick",
+                "case_id": request.args.get("case_id"),
+                "animal_id": request.args.get("animal_id"),
+            }
+            try:
+                result = webcalling.preflight_farmer_availability(conn, caller=g.user, payload=payload)
+            except webcalling.WebCallError as exc:
+                return _webcall_error_response(exc)
+            result["helpline"] = {
+                "number": get_ivr_settings().phone_number,
+                "pstn_connected": get_ivr_settings().pstn_connected,
+            }
+            return jsonify(result)
         return jsonify({"veterinarians": webcalling.available_veterinarians(conn)})
     finally:
         conn.close()

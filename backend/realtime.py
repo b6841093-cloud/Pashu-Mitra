@@ -49,16 +49,19 @@ _sweeper_started = False
 _sweeper_lock = threading.Lock()
 
 
+def _split_origins(raw: str) -> list[str]:
+    return [part.strip().rstrip("/") for part in raw.split(",") if part.strip()]
+
+
 def allowed_origins() -> list[str]:
     """Origins allowed to open a cross-origin Socket.IO connection.
 
-    The REST API is reachable through the frontend host's ``/api`` rewrite, so
-    a same-origin deployment needs no entry here. A deployment where the static
-    frontend and the backend live on different hosts (this repository's Vercel +
-    Render split) lists the frontend origin(s) in ``SIH_ALLOWED_ORIGINS``.
+    This deployment deliberately keeps the allow-list explicit. For Vercel
+    previews, add each required preview origin to ``SIH_ALLOWED_ORIGINS``; do
+    not use a blanket ``*.vercel.app`` wildcard.
     """
     raw = (os.environ.get("SIH_ALLOWED_ORIGINS") or "").strip()
-    origins = [part.strip().rstrip("/") for part in raw.split(",") if part.strip()]
+    origins = _split_origins(raw)
     # Local development defaults; harmless in production because the deployed
     # origins are always listed explicitly.
     for origin in ("http://localhost:5001", "http://127.0.0.1:5001", "http://localhost:8000"):
@@ -67,12 +70,34 @@ def allowed_origins() -> list[str]:
     return origins
 
 
+def origin_allowed(origin: str | None) -> bool:
+    if not origin:
+        # Flask-SocketIO's test client and some non-browser clients send no
+        # Origin header. Browser security is enforced by the explicit allow-list
+        # below and by the browser's own same-origin rules.
+        return True
+    return origin.strip().rstrip("/") in allowed_origins()
+
+
 def socket_public_url() -> str:
     """Absolute base URL the browser must use for the signaling connection."""
     explicit = (os.environ.get("SIH_PUBLIC_BACKEND_URL") or "").strip().rstrip("/")
-    if explicit:
+    if explicit.startswith("https://") or explicit.startswith("http://"):
         return explicit
     return ""
+
+
+def signaling_configured() -> bool:
+    return bool(socket_public_url())
+
+
+def worker_configuration_safe() -> bool:
+    if (os.environ.get("SIH_REDIS_URL") or "").strip():
+        return True
+    workers = (os.environ.get("SIH_GUNICORN_WORKERS") or "").strip()
+    if workers.isdigit():
+        return int(workers) <= 1
+    return True
 
 
 def init_realtime(app, decode_token, get_db) -> SocketIO:
@@ -177,6 +202,11 @@ def _session_user():
 # --------------------------------------------------------------------------
 @socketio.on("connect")
 def _on_connect(auth):
+    origin = request.headers.get("Origin")
+    if not origin_allowed(origin):
+        logger.info("socket rejected: origin %s is not in SIH_ALLOWED_ORIGINS", origin)
+        return False
+
     token = None
     if isinstance(auth, dict):
         token = auth.get("token")
@@ -206,7 +236,12 @@ def _on_connect(auth):
         join_room(f"user:{user['id']}")
         if user["role"] == "vet":
             join_room("role:vet")
-            presence = webcalling.heartbeat(conn, user["id"], socket_sid=request.sid, client=(request.headers.get("User-Agent") or "")[:120])
+            presence = webcalling.heartbeat(
+                conn,
+                user["id"],
+                socket_sid=request.sid,
+                client=(request.headers.get("User-Agent") or "")[:120],
+            )
             emit("presence:ack", presence)
         emit("session:ready", {"user_id": user["id"], "role": user["role"], "socket_id": request.sid})
 
