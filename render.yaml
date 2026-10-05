@@ -133,6 +133,15 @@ services:
       #   * managed/static mode (for example Metered): set SIH_TURN_URLS +
       #     SIH_TURN_USERNAME + SIH_TURN_CREDENTIAL
       # Never place TURN credentials in frontend code or in this file.
+      # NOTE: `sync: false` means a blueprint deploy creates the key EMPTY.
+      # The value only becomes usable when it is pasted into the Render
+      # dashboard for THIS service (pashu-shield-backend) and the service is
+      # restarted/redeployed. Variables set on the Vercel frontend project or
+      # on pashu-shield-ml are invisible to this API. After a redeploy,
+      # GET /api/health -> web_calling.ice must show turn_configured: true and
+      # turn_url_count > 0; if it still shows turn_mode: none, the
+      # turn_config_issue / turn_env fields name the variable that is missing
+      # or empty (variable names and states only — never a value).
       - key: SIH_TURN_URLS
         sync: false
       - key: SIH_TURN_SECRET
@@ -141,6 +150,10 @@ services:
         sync: false
       - key: SIH_TURN_CREDENTIAL
         sync: false
+      # Lifetime of an ephemeral (coturn REST) credential; unused in static
+      # provider mode. Optional — the code default is already 3600 s.
+      - key: SIH_TURN_TTL_SECONDS
+        value: "3600"
       # Public HTTPS/WSS URL of this service for browser-side signaling.
       # REQUIRED for a split Vercel frontend + Render backend so Socket.IO opens
       # WSS directly to Render; leave blank only for same-origin/local dev.

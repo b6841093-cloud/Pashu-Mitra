@@ -225,7 +225,7 @@ worker version bump makes existing browsers pick up the new shell.
 | `SIH_WEBCALL_ABANDON_MINUTES` | `45` | Age at which the sweeper force-closes a stale call |
 | `SIH_WEBCALL_PUSH_SYNC` | `1` | Dispatch Web Push inside the request (0 = let a worker do it) |
 | `SIH_STUN_URLS` | `stun:stun.l.google.com:19302` | Comma-separated STUN URLs |
-| `SIH_TURN_URLS` | `turn:turn.example.org:3478` | TURN URL(s); empty = STUN only |
+| `SIH_TURN_URLS` | `turn:turn.example.org:3478` | TURN URL(s). Accepts a JSON array or a comma/whitespace-separated string (one layer of surrounding quotes is tolerated); only `turn:`/`turns:` entries count. Empty/absent = STUN only, **whatever the credential variables say** |
 | `SIH_TURN_SECRET` | `<coturn static-auth-secret>` | Preferred: ephemeral credentials |
 | `SIH_TURN_TTL_SECONDS` | `3600` | Lifetime of an ephemeral credential |
 | `SIH_TURN_USERNAME` / `SIH_TURN_CREDENTIAL` | `<user>` / `<pass>` | Fallback for TURN servers without the REST API |
@@ -278,6 +278,38 @@ node backend/tests/deploy/deploy_check.mjs
 #    (or set SIH_REDIS_URL so Socket.IO can fan out across workers).
 ```
 
+### 6.1 When a deployed `/api/health` still reports `turn_mode: none`
+
+`web_calling.ice` is computed **per request** from the running process's
+environment (nothing is cached at import), so it is the ground truth for the
+deployed service:
+
+| Field | What it tells you |
+|-------|-------------------|
+| `turn_url_count` | how many usable `turn:`/`turns:` URLs were parsed. **`0` means `SIH_TURN_URLS` is absent or empty inside this process** — a formatting problem would still produce a count ≥ 1, so a count of 0 is never a parsing issue |
+| `turn_urls_ignored` | entries dropped because they are not `turn:`/`turns:` |
+| `turn_env` | each of the four variable **names** with `missing` / `empty` / `set` — distinguishes "never added to this service" from "created but left blank". Values are never returned |
+| `turn_config_issue` | `turn_urls_missing`, `turn_urls_unusable` (no usable URL) or `turn_credentials_missing` (URLs fine, credentials incomplete); `null` when TURN is active |
+
+Checklist, in order:
+
+1. Set the variables on the service that actually serves the API
+   (`pashu-shield-backend`) — **not** on the Vercel frontend project and not on
+   `pashu-shield-ml`. Render only injects a variable into its own service.
+2. Remember that `render.yaml` declares them with `sync: false`: a blueprint
+   deploy creates the key **empty**, so the value must be pasted into the
+   dashboard.
+3. Use the exact names — `SIH_TURN_URLS`, plus `SIH_TURN_USERNAME` +
+   `SIH_TURN_CREDENTIAL` (static/managed provider) **or** `SIH_TURN_SECRET`
+   (coturn REST). A typo (`TURN_URLS`, `SIH_TURN_URL`, `SIH_TURN_USERS`, a
+   stray space in the key…) is invisible to the process and appears as
+   `missing` in `turn_env`.
+4. Restart/redeploy the service: a process only ever sees the variables it was
+   started with.
+5. Confirm with `GET /api/health` — **only** `turn_configured: true` **and**
+   `turn_url_count > 0` count as proof. `/api/webcall/config` returns the same
+   `ice` object plus the actual `ice_servers` the browser receives.
+
 ---
 
 ## 7. Tests actually run (and results)
@@ -318,10 +350,18 @@ subscription storage); actual delivery requires the VAPID keys and a browser.
    environment (relay-only media, ephemeral coturn REST credentials, both peers
    pairing `relay`→`relay`, 511/512 decoded frames) — what is missing is a
    production coturn (or a managed TURN) endpoint. Until `SIH_TURN_URLS` +
-   `SIH_TURN_SECRET` are set on Render, calls between two networks behind
+   `SIH_TURN_SECRET` (or `SIH_TURN_URLS` + `SIH_TURN_USERNAME` +
+   `SIH_TURN_CREDENTIAL` for a static provider) are set **on the backend
+   service** and that service is restarted, calls between two networks behind
    symmetric NAT / mobile CGNAT will honestly fail with "could not connect",
    while LANs and permissive NATs work. Provision it, then re-run
    `deploy_check.mjs` (it warns when TURN is absent).
+   Status check (2026-10-05): the deployed backend reported
+   `turn_url_count: 0` with all four variables absent, i.e. the variables had
+   never reached the running process — see §6.1 for the exact checklist. Since
+   `describe()` now reports `turn_env` (missing/empty/set per variable name)
+   and `turn_config_issue`, the next redeploy states which variable is at fault
+   instead of leaving `turn_mode: none` unexplained.
 2. **Web Push is implemented and verified as far as a server can verify it.** The
    backend was proven to send real VAPID-signed, `aes128gcm`-encrypted, `high`
    urgency pushes with `TTL` = the ring window, and to prune a 410 subscription
