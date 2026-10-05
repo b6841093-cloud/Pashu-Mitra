@@ -15,7 +15,9 @@
  *      event is emitted in a process that does not hold the browser's socket.
  *      Measured on 2026-10-04: 0/6 delivered with `--workers 2`, 4/4 in 5-9 ms
  *      with `--worker-class gthread --workers 1 --threads 100`.
- *   4. Is TURN configured (calls behind carrier-grade NAT need it)?
+ *   4. Is TURN configured (calls behind carrier-grade NAT need it)? Reported as
+ *      `turn_mode` / `turn_url_count` / `turn_config_issue` / `turn_env` so a
+ *      "not configured" verdict names the variable that is missing or empty.
  *   5. Is Web Push configured (ringing a backgrounded tab)?
  *
  * Usage:
@@ -122,9 +124,35 @@ try {
     const ice = webCalling.ice || {};
     console.log(`     ice: policy=${ice.ice_transport_policy} turn=${ice.turn_configured} (${ice.turn_mode}) stun=${ice.stun_configured}`);
     check(ice.stun_configured === true, "STUN is configured");
+    // Spell out the TURN diagnosis instead of a bare true/false: these fields
+    // are the difference between "TURN is broken" and "SIH_TURN_URLS was never
+    // pasted into this service". Names and states only — never a value.
+    if (ice.turn_env) {
+      console.log(`     turn_env: ${Object.entries(ice.turn_env).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+    }
+    console.log(`     turn_url_count=${ice.turn_url_count} turn_urls_ignored=${ice.turn_urls_ignored ?? "?"} `
+      + `turn_config_issue=${ice.turn_config_issue ?? "none"}`);
     check(ice.turn_configured === true,
-      `TURN is configured (${ice.turn_mode}) — calls between two mobile/CGNAT networks need it`,
+      `TURN is configured (${ice.turn_mode}) — calls between two mobile/CGNAT networks need it`
+      + (ice.turn_config_issue ? ` [${ice.turn_config_issue}]` : ""),
       { warnOnly: !EXPECT_TURN });
+    check((ice.turn_url_count ?? 0) > 0,
+      `at least one usable turn:/turns: URL was parsed (${ice.turn_url_count})`,
+      { warnOnly: !EXPECT_TURN });
+    // A static/managed provider (Metered) must NOT also carry a coturn secret:
+    // a non-empty SIH_TURN_SECRET wins the mode selection, so the browser would
+    // receive coturn-style credentials that a static provider rejects. Report it
+    // as a warning because the health payload itself is internally consistent —
+    // only the operator knows which of the two credential sets was intended.
+    if (ice.turn_env) {
+      const bothCredentialSets = ice.turn_env.SIH_TURN_SECRET === "set"
+        && ice.turn_env.SIH_TURN_USERNAME === "set" && ice.turn_env.SIH_TURN_CREDENTIAL === "set";
+      check(!bothCredentialSets,
+        "only one TURN credential set is configured — SIH_TURN_SECRET is set alongside "
+        + `SIH_TURN_USERNAME/SIH_TURN_CREDENTIAL, so ${ice.turn_mode} mode wins and the other is ignored. `
+        + "For Metered static credentials, delete or empty SIH_TURN_SECRET",
+        { warnOnly: true });
+    }
     check(webCalling.push_configured === true,
       "Web Push is configured (ringing a backgrounded vet tab needs it)",
       { warnOnly: !EXPECT_PUSH });

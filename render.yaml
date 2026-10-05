@@ -128,27 +128,48 @@ services:
         value: https://pashu-mitra-smoky.vercel.app
       # Secrets: set in the Render dashboard, never in Git.
       # TURN is required for mobile-carrier/CGNAT peers.
-      # Supported modes:
-      #   * coturn REST secret mode: set SIH_TURN_URLS + SIH_TURN_SECRET
-      #   * managed/static mode (for example Metered): set SIH_TURN_URLS +
-      #     SIH_TURN_USERNAME + SIH_TURN_CREDENTIAL
+      #
+      # THIS DEPLOYMENT USES METERED STATIC CREDENTIALS. Paste exactly three
+      # values into the Render dashboard for THIS service, then redeploy:
+      #
+      #   SIH_TURN_URLS        (not a secret — the four Metered endpoints)
+      #     ["turn:global.relay.metered.ca:80",
+      #      "turn:global.relay.metered.ca:80?transport=tcp",
+      #      "turn:global.relay.metered.ca:443",
+      #      "turns:global.relay.metered.ca:443?transport=tcp"]
+      #     (a JSON array, or the same four URLs comma/newline separated)
+      #   SIH_TURN_USERNAME    <your Metered username — SECRET>
+      #   SIH_TURN_CREDENTIAL  <your Metered credential — SECRET>
+      #
+      #   SIH_TURN_SECRET      MUST BE DELETED OR LEFT EMPTY.
+      #     A non-empty secret wins the mode selection and switches the backend
+      #     to coturn ephemeral credentials, which Metered rejects — the call
+      #     then fails even though turn_configured reads true.
+      #
+      # The alternative mode (self-hosted coturn) is SIH_TURN_URLS +
+      # SIH_TURN_SECRET with no username/credential; do not mix the two.
       # Never place TURN credentials in frontend code or in this file.
+      #
       # NOTE: `sync: false` means a blueprint deploy creates the key EMPTY.
       # The value only becomes usable when it is pasted into the Render
       # dashboard for THIS service (pashu-shield-backend) and the service is
       # restarted/redeployed. Variables set on the Vercel frontend project or
       # on pashu-shield-ml are invisible to this API. After a redeploy,
-      # GET /api/health -> web_calling.ice must show turn_configured: true and
-      # turn_url_count > 0; if it still shows turn_mode: none, the
-      # turn_config_issue / turn_env fields name the variable that is missing
-      # or empty (variable names and states only — never a value).
+      # GET /api/health -> web_calling.ice must show turn_configured: true,
+      # turn_mode: "static" and turn_url_count: 4; if it still shows
+      # turn_mode: none, the turn_config_issue / turn_env fields name the
+      # variable that is missing or empty (variable names and states only —
+      # never a value). Verified 2026-10-05: the deployed service reported
+      # SIH_TURN_URLS=missing with USERNAME/CREDENTIAL=set, i.e. only
+      # SIH_TURN_URLS was absent.
       - key: SIH_TURN_URLS
-        sync: false
-      - key: SIH_TURN_SECRET
         sync: false
       - key: SIH_TURN_USERNAME
         sync: false
       - key: SIH_TURN_CREDENTIAL
+        sync: false
+      # coturn REST mode only — leave unset/empty for the Metered static setup.
+      - key: SIH_TURN_SECRET
         sync: false
       # Lifetime of an ephemeral (coturn REST) credential; unused in static
       # provider mode. Optional — the code default is already 3600 s.
