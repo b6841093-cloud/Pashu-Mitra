@@ -42,6 +42,7 @@ os.environ.setdefault("SIH_WEBCALL_SWEEPER", "false")
 from app import app, make_token, socketio  # noqa: E402
 import database  # noqa: E402
 import push_service  # noqa: E402
+import realtime  # noqa: E402
 import turn_config  # noqa: E402
 import webcalling  # noqa: E402
 
@@ -975,6 +976,168 @@ class TestWebCallingConfigAndHealth(WebCallingTestBase):
         finally:
             without_turn_env()
             os.environ.update(saved)
+
+
+class TestSignalingPathContract(WebCallingTestBase):
+    """The Socket.IO path the browser receives must be usable by the browser.
+
+    Regression guard for the 2026-10-05 production incident: the server is
+    tolerant of ``socket.io`` and ``/socket.io`` (Engine.IO normalizes its mount
+    point), but Socket.IO's *browser* client concatenates the value onto the
+    origin, so ``socket.io`` produced ``https://hostsocket.io/`` — an
+    unresolvable host. The handshake never reached the server, no vet presence
+    was registered, and every farmer call ended as NO_LIVE_SESSION while the vet
+    portal still showed AVAILABLE.
+    """
+
+    def test_87_socketio_path_is_normalized_for_every_spelling(self):
+        cases = (
+            ("unset", None, "/socket.io"),
+            ("empty", "", "/socket.io"),
+            ("blank", "   ", "/socket.io"),
+            ("legacy documented value", "socket.io", "/socket.io"),
+            ("canonical", "/socket.io", "/socket.io"),
+            ("trailing slash", "/socket.io/", "/socket.io"),
+            ("relative custom", "custom/emit", "/custom/emit"),
+            ("absolute custom", "/custom/emit/", "/custom/emit"),
+        )
+        for label, raw, expected in cases:
+            with self.subTest(shape=label):
+                patched = {} if raw is None else {"SIH_SOCKETIO_PATH": raw}
+                with mock.patch.dict(os.environ, patched, clear=False):
+                    if raw is None:
+                        os.environ.pop("SIH_SOCKETIO_PATH", None)
+                    self.assertEqual(realtime.socketio_path(), expected)
+                self.assertTrue(expected.startswith("/"),
+                                "the browser client requires a leading slash")
+        # The default is the Socket.IO default.
+        self.assertEqual(realtime.DEFAULT_SOCKETIO_PATH, "/socket.io")
+
+    def test_88_config_path_is_browser_safe_and_matches_the_mounted_server_path(self):
+        resp = self.client.get("/api/webcall/config", headers=_auth(self.owner_token))
+        self.assertEqual(resp.status_code, 200, resp.get_json())
+        path = resp.get_json()["signaling"]["path"]
+        self.assertTrue(path.startswith("/"), path)
+        self.assertEqual(path, realtime.socketio_path())
+
+        # The server really serves the advertised path (real WSGI routing, not
+        # an in-process test client shortcut).
+        mounted = getattr(app.wsgi_app, "engineio_path", None)
+        self.assertIsNotNone(mounted, "the Socket.IO middleware must expose its mount path")
+        self.assertEqual(mounted.rstrip("/"), path.rstrip("/"))
+        handshake = self.client.get(f"{path}/?EIO=4&transport=polling")
+        self.assertEqual(handshake.status_code, 200, handshake.data[:200])
+        self.assertTrue(handshake.data.startswith(b"0{"), handshake.data[:60])
+
+    def test_89_legacy_env_value_cannot_produce_an_unreachable_path(self):
+        """An operator who set the old documented value is fixed by the code."""
+        with mock.patch.dict(os.environ, {"SIH_SOCKETIO_PATH": "socket.io"}, clear=False):
+            resp = self.client.get("/api/webcall/config", headers=_auth(self.vet_token))
+        body = resp.get_json()
+        self.assertEqual(body["signaling"]["path"], "/socket.io")
+        self.assertNotEqual(body["signaling"]["path"], "socket.io",
+                            "a path without a leading slash makes the browser DNS-resolve hostsocket.io")
+        # The transports the server advertises are the ones the client uses.
+        self.assertEqual(body["signaling"]["transports"], ["websocket", "polling"])
+
+    def test_90_health_reports_the_public_signaling_address(self):
+        env = {
+            "SIH_PUBLIC_BACKEND_URL": "https://backend.example.com",
+            "SIH_SOCKETIO_PATH": "socket.io",       # legacy spelling on purpose
+        }
+        with mock.patch.dict(os.environ, env, clear=False):
+            body = self.client.get("/api/health").get_json()
+        web_calling = body["web_calling"]
+        self.assertTrue(web_calling["signaling_configured"])
+        self.assertEqual(web_calling["signaling_url"], "https://backend.example.com")
+        self.assertEqual(web_calling["socketio_path"], "/socket.io")
+        self.assertTrue(web_calling["socketio_path"].startswith("/"))
+        # The origin allow-list the socket server enforces is visible (public
+        # frontend origins only), so a CORS problem is diagnosable from outside.
+        with mock.patch.dict(os.environ, {"SIH_ALLOWED_ORIGINS": "https://portal.example.com"}, clear=False):
+            body = self.client.get("/api/health").get_json()
+        self.assertIn("https://portal.example.com", body["web_calling"]["allowed_origins"])
+        # Nothing secret: the health payload is public.
+        self.assertNotIn(os.environ["SIH_SECRET_KEY"], json.dumps(body))
+
+    def test_91_available_without_a_live_signaling_session_is_never_callable(self):
+        """Requirement: AVAILABLE may not be advertised as callable without a
+        live signaling session (this is exactly what a dropped socket leaves
+        behind: the availability row stays AVAILABLE)."""
+        self.client.put(
+            "/api/vet/availability",
+            headers=_auth(self.vet_token),
+            json={"status": "AVAILABLE", "supported_languages": ["en", "hi", "mr"]},
+        )
+        # No socket, no REST heartbeat: the lease is gone.
+        self.client.delete("/api/webcall/presence", headers=_auth(self.vet_token))
+        conn = database.get_db()
+        state = webcalling.presence_state(conn, self.vet["id"])
+        conn.close()
+        self.assertEqual(state["availability"], "AVAILABLE")
+        self.assertFalse(state["online"])
+        self.assertFalse(state["routable"])
+
+        # The farmer's pre-check is truthful...
+        resp = self.client.get("/api/webcall/availability?language=en", headers=_auth(self.owner_token))
+        self.assertFalse(resp.get_json()["routable"])
+        self.assertIn("NO_LIVE_SESSION", resp.get_json()["skipped_codes"])
+
+        # ...and so is the call attempt: no call is ever offered to the vet.
+        resp = self.start_call()
+        body = resp.get_json()
+        self.assertEqual(body["outcome"], "unavailable")
+        self.assertEqual(body["call"]["status"], "missed")
+        self.assertIn("NO_LIVE_SESSION", body["skipped_codes"])
+        self.assertEqual(
+            body["message"],
+            "No veterinarian is online right now. Please try again or use the helpline number.",
+        )
+        conn = database.get_db()
+        row = conn.execute("SELECT vet_id, status FROM web_calls WHERE call_id=?",
+                           (body["call"]["call_id"],)).fetchone()
+        conn.close()
+        self.assertIsNone(row["vet_id"], "an offline vet is never assigned the call")
+        self.assertEqual(row["status"], "missed")
+
+    def test_92_socket_connect_registers_presence_for_the_advertised_path(self):
+        """Connecting through the socket layer creates the live session that
+        makes the vet routable again (disconnect -> reconnect cycle)."""
+        def safe_disconnect(client):
+            try:
+                client.disconnect()
+            except RuntimeError:  # already disconnected by the test body
+                pass
+
+        vet_socket = socketio.test_client(app, auth={"token": self.vet_token})
+        self.addCleanup(safe_disconnect, vet_socket)
+        self.assertTrue(vet_socket.is_connected())
+
+        conn = database.get_db()
+        self.assertTrue(webcalling.presence_state(conn, self.vet["id"])["online"])
+        self.assertTrue(webcalling.presence_state(conn, self.vet["id"])["routable"])
+        conn.close()
+
+        self.make_vet_available(self.vet, languages=["en", "mr"])
+        resp = self.client.get("/api/webcall/availability?language=mr", headers=_auth(self.owner_token))
+        self.assertTrue(resp.get_json()["routable"], resp.get_json())
+
+        # A dropped socket removes the live session again.
+        vet_socket.disconnect()
+        conn = database.get_db()
+        self.assertFalse(webcalling.presence_state(conn, self.vet["id"])["online"])
+        conn.close()
+        resp = self.client.get("/api/webcall/availability?language=mr", headers=_auth(self.owner_token))
+        self.assertFalse(resp.get_json()["routable"])
+        self.assertIn("NO_LIVE_SESSION", resp.get_json()["skipped_codes"])
+
+        # Reconnecting restores it without any extra client step.
+        reconnected = socketio.test_client(app, auth={"token": self.vet_token})
+        self.addCleanup(safe_disconnect, reconnected)
+        conn = database.get_db()
+        self.assertTrue(webcalling.presence_state(conn, self.vet["id"])["online"])
+        self.assertTrue(webcalling.presence_state(conn, self.vet["id"])["routable"])
+        conn.close()
 
 
 class TestStaticTurnConfiguration(WebCallingTestBase):
