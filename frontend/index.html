@@ -3,17 +3,52 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="theme-color" content="#3f51b5" />
-<title>PashuMitra | Animal Disease Management</title>
+<meta name="theme-color" content="#3d4db8" />
+<meta name="description" content="Pashu-Shield: animal disease reporting, veterinary care, laboratory diagnostics and disease surveillance for livestock owners, veterinarians, laboratories and government officers." />
+<meta name="keywords" content="animal health, livestock, disease reporting, veterinary, laboratory, surveillance, Pashu-Shield" />
+<title>Pashu-Shield — Animal Disease Reporting &amp; Veterinary Care</title>
+<link rel="canonical" href="./" />
 <link rel="stylesheet" href="style.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 <link rel="manifest" href="manifest.json" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 </head>
 <body>
-  <div id="toast" class="toast"></div>
-  <div id="app"></div>
+  <!-- GIGW 3.0 A27 / WCAG 2.4.1 — bypass blocks. The skip link is the FIRST
+       keyboard-focusable element on every page. -->
+  <a class="pm-skip-link" href="#main-content">Skip to main content</a>
+
+  <!-- Organization / owner configuration (placeholders are clearly marked).
+       Loaded before the shell so ORG is available while rendering. -->
+  <script src="org-config.js"></script>
+  <script src="shell.js"></script>
+
+  <!-- Global accessibility control bar (A- / A / A+, high contrast, motion) -->
+  <div id="pmA11yBarHost"></div>
+
+  <!-- Global organisation identity header (GIGW Q01/Q02) -->
+  <div id="pmSiteHeaderHost"></div>
+
+  <!-- Live regions for screen-reader announcements (WCAG 4.1.3 / GIGW A50).
+       These MUST be present in the initial HTML so that the first message is
+       announced; regions created later are not reliably announced. -->
+  <div id="pmLivePolite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="pmLiveAssertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+  <main id="main-content" tabindex="-1">
+    <div id="toast" class="toast"></div>
+    <div id="app"></div>
+  </main>
+
+  <!-- Global site footer (GIGW Q02/Q05/Q09-Q12/Q18 minimum content) -->
+  <div id="pmFooterHost"></div>
+
   <script src="app.js"></script>
+  <!-- GIGW information pages (About / Contact / Feedback / Help / Site Map /
+       Search / Policies). Loaded after app.js because it registers routes
+       through app.js's own route() helper. Additive only — it changes nothing
+       in the existing application. -->
+  <script src="info-pages.js"></script>
   <!-- Real-time web calling: Socket.IO client (vendored, MIT) + the calling UI
        and WebRTC client. Loaded after app.js because call.js reuses its globals
        (state/render/header/bottomNav/t/ft/toast) when they are available. -->
