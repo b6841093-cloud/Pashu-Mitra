@@ -5,14 +5,21 @@
    v7 adds the web-calling client (call.js, vendor/socket.io.min.js) and the
    push/notificationclick handlers for incoming web calls. The fetch strategy
    below is unchanged from v6; call API endpoints are never cached.
+
+   v8 (GIGW/GuDApps/UX compliance) adds the global shell: org-config.js,
+   shell.js and info-pages.js. The fetch strategy is unchanged; no
+   authenticated data is added to the offline cache.
    ================================================================= */
 
-const CACHE_NAME = "pashu-mitra-v7";  // bumped: vendored Socket.IO client + call.js
+const CACHE_NAME = "pashu-mitra-v8";  // bumped: global shell + GIGW info pages
 const STATIC_ASSETS = [
   "/",
   "/index.html",
   "/style.css",
   "/app.js",
+  "/org-config.js",
+  "/shell.js",
+  "/info-pages.js",
   "/call.js",
   "/vendor/socket.io.min.js",
   "/maharashtra_locations.json",

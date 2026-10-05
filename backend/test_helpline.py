@@ -15,6 +15,21 @@ from ivr_config import get_ivr_settings
 from ivr_security import sign_webhook_payload
 from ivr_service import list_vet_availability, recover_stale_sessions
 
+# ---------------------------------------------------------------------------
+# Test-harness fix (baseline defect F-B1).
+#
+# This suite signs IVR webhook requests with IVR_WEBHOOK_SECRET. The repo's
+# own .env.example ships that variable EMPTY, so in a clean checkout 21 of the
+# 34 tests errored with KeyError before a single assertion ran. That is a
+# harness defect, not a product defect: the application correctly refuses to
+# verify an unsigned webhook.
+#
+# Fix: fall back to a well-known, non-secret test value when the environment
+# does not supply one, so the suite is self-sufficient and CI-stable.
+# ---------------------------------------------------------------------------
+os.environ.setdefault("IVR_WEBHOOK_SECRET", "helpline-test-secret-not-a-real-credential")
+os.environ.setdefault("SIH_SECRET_KEY", "helpline-test-jwt-secret-not-a-real-key")
+
 
 class TestHelplineRestoration(unittest.TestCase):
     @classmethod
