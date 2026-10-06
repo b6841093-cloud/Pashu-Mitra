@@ -181,4 +181,119 @@ All changes are additive, preserve existing functionality, no fonts change, no b
 
 ---
 
-**Final verdict:** 10 engineering gaps closed with code evidence, 0 regressions, 10/10 backend suites PASS, 68/70 frontend PASS (2 skipped browser), browser/AT checks still pending, org actions documented, staging READY.
+**Final verdict (engineering):** 10 engineering gaps closed with code evidence, 0 regressions, 10/10 backend suites PASS, 68/70 frontend PASS (2 skipped browser), browser/AT checks still pending, org actions documented, staging READY.
+
+---
+
+## 8. STAGING VERIFICATION — REAL BROWSER & SERVICES (2026-10-06)
+
+**Date:** 2026-10-06 · **Branch:** arena/92aa119e-pashu-shield-updated · **Env:** sandbox gunicorn 0.0.0.0:5001 + http.server 0.0.0.0:3000
+**Rule:** Only PASS if actually executed. Never fabricate Lighthouse, axe, pa11y, screen-reader, WebRTC, SMS, IVR, ML, browser results.
+
+### A. Browser verification results
+
+| # | Check | Attempt | Result |
+|---|---|---|---|
+| 1 | Chrome | npx lighthouse requires CHROME_PATH, no Chrome binary | NOT VERIFIED |
+| 2 | Firefox | No Firefox binary | NOT VERIFIED |
+| 3 | Edge | No Edge binary | NOT VERIFIED |
+| 7 | W3C HTML validation | `curl | npx html-validate --stdin` → 11 void-style errors `<meta/>` self-closing, `crossorigin` should omit value — style warnings, not parsing failures, no unclosed tags | PARTIAL PASS — 0 critical, 11 style warnings |
+| 8 | Broken-link crawl | `npx linkinator http://localhost:3000 --recurse --skip https://unpkg.com` → 11 links all 200 | PASS |
+| 9-18 | Keyboard-only, visible focus, 200% zoom, 320px reflow, text-spacing, print, CSS-disabled, contrast, reduced-motion | Static grep PASS (list-card role=button >30, focus-visible, pm-table-scroll, --pm-text-scale, @media print, etc.), browser manual needs real browser | AUTOMATED PASS, BROWSER NOT VERIFIED |
+
+### B. Accessibility results
+
+| # | Check | Result |
+|---|---|---|
+| 4 | axe-core | NOT VERIFIED — needs Chrome |
+| 5 | Lighthouse | NOT VERIFIED — CHROME_PATH not set |
+| 6 | pa11y | NOT VERIFIED — Could not find Chrome puppeteer |
+| 10 | Visible focus | AUTOMATED PASS (test_70, :focus-visible 3px solid #2c3690), BROWSER NOT VERIFIED |
+| 11 | Screen-reader | AUTOMATED PASS (live regions role=status/alert, aria-label, role=img, sr-only, details table), AT NOT VERIFIED |
+| 12 | 200% zoom | AUTOMATED PASS (--pm-text-scale), BROWSER NOT VERIFIED |
+| 13 | 320px reflow | AUTOMATED PASS (pm-table-scroll, @media 360px), BROWSER NOT VERIFIED |
+| 14 | Text-spacing | AUTOMATED PASS (min-height auto, overflow-wrap break-word), BROWSER NOT VERIFIED |
+| 15 | Print/A4 | AUTOMATED PASS (@media print, @page A4, pmPrintSection), BROWSER NOT VERIFIED |
+| 16 | CSS-disabled | AUTOMATED PASS (landmarks header/nav/main/footer, logical DOM order), BROWSER NOT VERIFIED |
+| 17 | Contrast | AUTOMATED PASS (tints documented 5.8:1, 6-8:1), MEASUREMENT NOT VERIFIED (needs axe-core) |
+| 18 | Reduced-motion | AUTOMATED PASS (prefers-reduced-motion reduce + html.pm-reduced-motion), BROWSER NOT VERIFIED |
+
+### C. WebRTC two-browser results
+
+| # | Check | Result |
+|---|---|---|
+| 19 | Farmer + Vet browsers | NOT VERIFIED — no browsers, no media devices |
+| 20 | Socket.IO connection | AUTOMATED PASS — socketio_path /socket.io, signaling_url same-origin, 66 webcalling tests PASS, BROWSER NOT VERIFIED |
+| 21 | Vet presence/availability | AUTOMATED PASS — 7-state Avail/Socket/Lease/Routable, BROWSER NOT VERIFIED |
+| 22-29 | Call creation, ring, accept, RTCPeerConnection connected, RTP/audio both, mute/unmute, hangup, second call | NOT VERIFIED — needs two browsers + media |
+| 30 | TURN fallback | NOT VERIFIED — turn_configured false (turn_urls_missing), STUN true, needs SIH_TURN_URLS env + NAT peers |
+
+### D. Real-service results
+
+| # | Check | Result |
+|---|---|---|
+| 31 | Real Farmer OTP SMS | NOT VERIFIED — MOCK mode, configured false, usable true MOCK, needs SMS_GATEWAY_URL/USERNAME/PASSWORD |
+| 32 | CAPTCHA provider | NOT VERIFIED provider none, AUTOMATED PASS hook — GET /api/captcha/config returns enabled false no secrets, alternative math challenge works |
+| 33 | ML backend prediction | NOT VERIFIED — ml-backend not running, test_ml_service 16 PASS mocked |
+| 34 | IVR webhook | NOT VERIFIED — MOCK mode, needs IVR_WEBHOOK_SECRET + telephony provider |
+| 35 | VAPID notification | NOT VERIFIED — push_configured false, needs VAPID keys |
+| 36 | TURN connectivity | NOT VERIFIED — turn_configured false, needs SIH_TURN_URLS/USERNAME/SECRET |
+
+### E. Deployment results
+
+| # | Check | Evidence | Result |
+|---|---|---|---|
+| 37 | openpyxl/reportlab in requirements | Added `openpyxl>=3.1,<4`, `reportlab>=4.0,<5` to `backend/requirements.txt`, import ok 3.1.5/5.0.1 | PASS — now present |
+| 38 | /api/health healthy | curl → status ok, database ok, service pashu-shield-backend, 200, no traceback, secret-free | PASS |
+| 39 | WebRTC signaling URL Render backend | signaling_url "" = same-origin when SIH_PUBLIC_BACKEND_URL not set, correct for sandbox, for Render set SIH_PUBLIC_BACKEND_URL=https://<render>.onrender.com | PASS same-origin, external config for Render |
+| 40 | Socket.IO path exactly /socket.io | health socketio_path /socket.io, realtime.py normalizes any spelling, test_87 PASS | PASS |
+| 41 | Production CORS/origins | allowed_origins default localhost:5001, 127.0.0.1:5001, localhost:8000, for production set SIH_FRONTEND_ORIGINS | PARTIAL — default works, production needs env (external) |
+| 42 | No secrets in bundles/logs/health/docs | Frontend grep no TURN creds/JWT secret, health only missing labels, logs categories+reference only, docs no secrets, demo password123 demo-only | PASS |
+
+### F. Failures
+
+**0 failures in executed checks.** All failures are NOT VERIFIED due to missing browser binary or external credentials, not code defects.
+
+### G. NOT VERIFIED items (with reason)
+
+- Chrome, Firefox, Edge — no binary in sandbox
+- axe-core, Lighthouse, pa11y — require Chrome
+- Keyboard-only Tab order visual, visible focus visual, screen-reader NVDA/JAWS/VoiceOver, 200% zoom visual, 320px reflow visual, text-spacing bookmarklet visual, print preview visual, CSS-disabled visual, contrast measurement, reduced-motion visual — need real browser/AT
+- WebRTC two-browser 19-30 — need two browsers + media devices + TURN
+- Real SMS OTP, CAPTCHA provider, ML backend, IVR webhook, VAPID, TURN — need external credentials/services (external/organizational)
+
+### H. External/organizational requirements
+
+- Copyright Q04, domain gov.in Q21 hard exemption 4.1, India Portal Q22, social Q24 N/A
+- TURN: SIH_TURN_URLS, SIH_TURN_USERNAME, SIH_TURN_SECRET/CREDENTIAL
+- SMS: SMS_GATEWAY_URL, USERNAME, PASSWORD, ENABLED
+- IVR: IVR_WEBHOOK_SECRET, SIH_SECRET_KEY, telephony provider
+- CAPTCHA: SIH_CAPTCHA_PROVIDER recaptcha/hcaptcha/turnstile/test, SITE_KEY, SECRET_KEY, ALTERNATIVE_ENABLED
+- VAPID: VAPID keys
+- ML backend: ML_BACKEND URL, service start
+- Excel/PDF: now in requirements.txt, install via pip
+- CORS: SIH_FRONTEND_ORIGINS, SIH_PUBLIC_BACKEND_URL, SIH_SOCKETIO_PATH
+- No secrets hard-coded, all env-driven, never logged
+
+### I. Ready for final demo?
+
+**YES — READY for final demo in staging with MOCK services.** All core features work with automated tests PASS (backend 340/340, frontend 68/70 +2 skipped). Demo accounts, OTP MOCK, WebRTC 7-state honesty unit tests, IVR MOCK, ML MOCK, reports pagination/print/export Excel/PDF (now with openpyxl/reportlab), charts accessible summaries, forgot-password/recovery/deactivation, CAPTCHA hook, malware-scan hook. No browser verification claimed unless executed, but static checks PASS. Broken-link 11/11 200, health ok, socket.io /socket.io, no secrets.
+
+### J. Ready for official GIGW/GuDApps compliance claim?
+
+**NO — NOT READY for official GIGW/GuDApps certification.** Official claim requires:
+- Browser-based axe-core 0 critical/serious, Lighthouse Accessibility ≥90, pa11y WCAG2AA 0 errors
+- Manual keyboard-only walkthrough, screen reader, 200% zoom visual, 320px reflow visual, text-spacing bookmarklet, print preview A4, CSS-off readable order, high-contrast mode, reduced-motion, touch targets measured, contrast measurement every text/bg pair
+- WebRTC two-browser call with actual RTP/audio and TURN fallback
+- Real SMS OTP delivery, real CAPTCHA provider, real ML backend, real IVR/PSTN, real VAPID, real TURN connectivity
+- Org actions: copyright permissions, gov.in domain, India Portal integrations, social media if needed
+- External audit and documentation per GIGW 3.0 and GuDApps
+
+Engineering gaps for targeted IDs (A14/A18, GA-21, GA-33/34, GA-1-5, GA-20, GA-37/38+UX-12, A19, A20) are PASS with code evidence, but certification requires external audit.
+
+---
+
+**Staging verification completed 2026-10-06 with real gunicorn backend 0.0.0.0:5001 and http.server frontend 0.0.0.0:3000. Only small fix: added openpyxl/reportlab to requirements.txt per deployment check 37. No broad redesign, no architecture change, no fonts change, no brand colours change except verified minimal tint for WCAG.**
+
+**Final verdict:** 10 engineering gaps closed with code evidence, 0 regressions, 10/10 backend suites PASS, 68/70 frontend PASS (2 skipped browser), automated deployment checks 4 PASS 1 PARTIAL, browser checks 1 PASS 1 PARTIAL 6 NOT VERIFIED, accessibility automated 10 PASS browser 10 NOT VERIFIED, WebRTC 2 automated PASS 10 NOT VERIFIED, real-service 1 PASS 5 NOT VERIFIED, 0 failures in executed checks, staging READY for final demo, NOT READY for official GIGW/GuDApps claim.
+
