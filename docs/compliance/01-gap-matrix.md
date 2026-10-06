@@ -462,3 +462,87 @@ NOT VERIFIED increased because contrast and browser-dependent checks are explici
 ## L.6.4 Absolute caveat (third round)
 
 **No axe-core, pa11y, Lighthouse, screen reader, or real browser walkthrough was executed in this sandbox** (see 03-test-report.md §5). Every PASS above rests on `backend/test_compliance.py` (63 tests), `frontend/tests/*.test.mjs` (70 tests, 68 pass 2 skipped), or static grep assertions. Independent browser-based scanning remains mandatory before any compliance claim. Fonts and brand colours were **not changed** (test_67, test_68 PASS).
+
+---
+
+# L.7 Final Verification Pass (2026-10-06) — FINAL AUDIT
+
+**Branch:** `arena/92aa119e-pashu-shield-updated` · **Commit:** `ceeddf9` (a11y+security hardening)
+**Test evidence:** backend 10 suites 340 tests PASS, frontend 70 tests (68 PASS, 2 skipped browser-dependent)
+**Fonts/brand colours:** unchanged (test_67, test_68 PASS) · **Architecture:** preserved (W01-W08 PASS, WebRTC/Socket.IO/TURN/STUN intact)
+
+## L.7.1 Implemented and Verified (automated tests + static grep + safe error checks)
+
+| Category | IDs | Evidence |
+|---|---|---|
+| **Quality — responsive, metadata, ownership, info pages** | Q15, Q23, Q11, Q17/A28 (partial), Q01/Q02/Q05/Q18 (partial), Q09/Q10/Q14 (partial), Q12, Q19, L08 | Q15 media queries, Q23 :root tokens, Q11 feedback API 201+reference+lookup+rate limit, Q17 setPageMeta title/description/canonical/lang, Q01 header logo alt + aspect-ratio, Q02 footer ownership + placeholders marked [OWNER ACTION], Q05 lastReviewed, Q12 National Portal footer with noopener noreferrer + sr-only, Q19 pm-table-scroll auto-wrap via initResponsiveHelpers, L08 no under-construction links. Tests: test_60-75 PASS. |
+| **Accessibility — keyboard, focus, dialogs** | A01, A21, A22, A29, A30, A33, A10, A15, A25, A27, A31, A33, A34, A35, A38, A40, A50, A11 | A01 header-icon-btn aria-label (6), icon-item role=button tabindex=0 aria-label+onkeydown, list-card role=button tabindex=0 onkeydown Enter/Space (18+), MutationObserver in a11y.js, A21/A22 trapFocus with first/last, Esc, restore focus, A29 focus order skip link first focusable test_60 + main#main-content tabindex -1, A30 link purpose externalLink rel noopener + sr-only, A33 focus-visible --pm-focus #2c3690, A10 manifest orientation removed test_65, A15 --pm-text-scale 0.875-1.5 + calc() + test_64 viewport zoom not blocked, A25 @media prefers-reduced-motion + html.pm-reduced-motion test_69, A27 skip link test_60, A31 search+sitemap test_72, A34/A35 no path gestures standard controls, A38 lang en + dynamic update via setPageMeta test_63, A40 no focus context change, A50 static live regions pmLivePolite role=status polite + pmLiveAssertive role=alert assertive test_61 + emptyState/loadingState/errorState with live regions, A11 autocomplete tel/email/name/username/current-password/new-password/one-time-code via enhanceAutocomplete. |
+| **Accessibility — forms, labels, errors** | A44-A47, A45, A49, GA-25/28/32, UX-07 | Zero `<label>` without for (grep 0), 104 labels with for in app.js +5 in info-pages.js, all inputs have id, autocomplete 18+2, a11y.js addErrorSummary role=alert focus + setFieldError aria-invalid/aria-describedby/aria-errormessage + preventDuplicateSubmit aria-busy, feedback form reference pattern, emptyState role=status polite, loadingState role=status polite aria-busy=true, errorState role=alert assertive with Retry/Go back, pm-result-count role=status polite. |
+| **Security — headers, safe errors, auth, RBAC, upload, validation, rate limit** | C1.2b/c/d/e/g/h/j/l/n, C1.2k/GA-22, C1.2o/GA-29/31, GA-33/34, GA-6/15/23/30/35, GA-18/19, W08 | C1.2b no plaintext secrets secret scan, C1.2c safe error handlers 11 statuses + correlation id test_10-14, C1.2d hardened headers X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy mic/camera/geo, COOP same-origin, HSTS conditional, CSP report-only, Server suppressed test_01-06, C1.2e JWT localStorage documented decision, C1.2g/h directory traversal/default pages, C1.2j HTTPS, C1.2l RBAC 30 tests, C1.2n audit_log, C1.2k password policy + OTP cooldown + feedback rate limit 5/10min Retry-After test_31, C1.2o input sanitisation feedback + QR decode JSON object/string check, GA-33/34 upload validators safe_filename_parts double-extension block denied exe/sh/php/js/html/svg allow-list jpg/jpeg/png/webp/gif/pdf + validate_upload magic-byte sniff size 5MB empty check 11 tests PASS + wired into /api/qr/decode jpeg/png/webp/gif only 400/413/415/422 safe, GA-6/15/23/30/35 availability PK/RI audit client validation storage, GA-18/19 farmer OTP-only test_81, W08 TURN credentials never returned test_82. |
+| **WebRTC — state honesty** | W01-W08 | W01 7 states (availability, Socket.IO signalingState, presence lease lease_expires_at, routability breakdown.routable, WebRTC PC, ICE, media), 4 badges Avail/Socket/Lease/Routable aria-live polite, W02 routability gated AVAILABLE+online+socket+not busy, farmer Start disabled when signaling offline, W03 Connected only when remoteDescriptionSet+mediaConfirmed+pc connected+ice not failed, otherwise verifying audio, W04 accessible states Connecting/Calling/Ringing/Connecting call/Connected/Mic muted/Camera unavailable/Poor connection/Reconnecting/Call ended/Doctor unavailable with text not colour-only, W05 mute aria-pressed, W06 hangup/accept/reject real buttons 48px, W07 reconnect announced via live regions, W08 TURN secret-free. Tests: webcall_ui 22/22 + webcall_state_honesty 6/6 PASS. |
+| **XSS — output escaping** | GA-32, UX-09 | escapeHtml &, <, >, \", ', `, escapeAttr, escapeJsStr \\ ' \\n \\r \\x3c \\x3e \\x26 \\x22, safeId numeric, 341 usages, barChart/pieChart escape labels/values, QR modal escapes qr_image as attr + qr_token, helplineCard escapeHtml number/telUri/desktop note, demoAccountBox escapeHtml mobile, tests: xss_escaping.test.mjs 14 tests PASS (escape helpers, safeId, payload neutralised, DOM safe). |
+
+## L.7.2 Implemented but Browser Verification Pending (code exists, needs real browser/AT)
+
+| IDs | What exists | What needs browser |
+|---|---|---|
+| A14/A18 contrast 4.5:1 / 3:1 text + non-text 3:1 | focus-visible ring --pm-focus #2c3690, high-contrast yellow, brand colours preserved test_67 | axe-core / Lighthouse color contrast measurement, focus indicator 3:1 against adjacent, manual measurement of every text/bg pair |
+| A15 200% zoom visual | --pm-text-scale 0.875-1.5 calc(), A-/A/A+ controls, test_64 zoom not blocked | Visual check at 200% text zoom + 400% page zoom, no loss of content/function, no 2-D scroll |
+| A17 reflow 320px visual | pm-table-scroll overflow-x auto tabindex 0 role region aria-label, table-wrap, @media max-width 360px | Visual check at 320/360/375/390/414/480/768/1024/1280/1440 px portrait+landscape, tables scroll, no 2-D scroll |
+| A19 text spacing, A20 hover/focus dismissible | Containers use relative units, tooltips via title? | Spacing bookmarklet, hover content dismissible/hoverable/persistent |
+| A24 timing adjustable | OTP resend cooldown + 12h session + WebRTC timeouts | Idle-timeout warning + extend needs browser |
+| A27 skip link visual | pm-skip-link first focusable, reveals on focus, jumps to main-content test_60 | Tab from load lands on skip link, reveals, jumps |
+| A32 headings hierarchy, A07 landmarks | New info pages have pm-h1/pm-h2 + header/nav/main/footer landmarks via shell.js, breadcrumbs nav aria-label Breadcrumb aria-current | Screen reader landmark navigation + heading hierarchy logical |
+| A36 label in name, A39 language of parts, A41 on input, A42/A43 consistent nav/identification | iconItem aria-label = visible label, lang en + dynamic update, selects trigger re-render with advise | Verify visible label ⊂ accessible name, lang attributes on regional passages, no unexpected context change on input |
+| A05 live captions for WebRTC audio | Text call-state region with 11 states, diagnostics badges, but no real-time captions | Captioning capability notice + ASR integration needs ORG + browser |
+| Q13/G2-1 multi-browser, Q16 CSS-off, Q20 print, UX-13 touch targets visual | Unicode, CSS-driven, @media print hides nav chrome + @page A4, @media pointer coarse min-height 44px, pm-a11y-btn 44×44, webcall 48px | Chrome/Firefox/Edge/Safari manual, CSS disabled readable order, print preview A4 no clutter, touch targets measured |
+| W01-W08 visual + audio | 7-state badges + aria-live + diagnostics | Two real browsers + fake media stream + getStats inbound RTP both directions (webcall_browser.test.mjs) — needs playwright + PM_BROWSER_URL + vet credentials |
+
+## L.7.3 Source Verification Pending (needs owner to supply real values, not code)
+
+| IDs | Current | Needed |
+|---|---|---|
+| Q01/Q02/Q05/Q18 ownership, last reviewed, org name, logo src | org-config.js placeholders [OWNER ACTION: ...], src "", approved false, lastReviewed Not set | Real org name, address, email, phone, working hours, logo asset (not State Emblem without authorisation), lastReviewed date, WIM nomination |
+| Q04 copyright permissions | Policy page template pending approval | Org must obtain permissions for any third-party docs |
+| Q06 downloadable material metadata | Only QR images downloadable today | If more downloads added, need title/size/format/instructions/lang |
+| Q07/Q08 circular validity + archive | Campaigns/advisories have dates but no expiry/archive state | Validity fields + expiry + Archive section |
+| Q09/Q10/Q14 About/Contact/Help content | Routes exist, FAQs from actual features, but mission/vision/values/history/leadership/team are placeholders | Owner must supply real content, marked pending approval |
+| Q25 language free from errors, L05 moderation, L06 multi-lang simultaneous update | Content review policy template | Org process for review + moderation workflow config + "not yet translated" status |
+| L03 policies (Copyright, CMAP, CAP, CRP, Hyperlinking, T&C, Privacy, Security, Monitoring, Contingency) | Templates in info-pages.js POLICIES, marked pending approval | Org approval |
+| L04 external links verified, L07 no broken links | externalLink() with noopener noreferrer + sr-only, sitemap/search reference only real routes test_74 | Periodic verification + broken-link crawl |
+| L09 documents accessible formats | QR PNG + tag ID text alternative | Accessible alternative for any future docs |
+| L10 bilingual prominent language selection | 4 languages en/hi/mr/te Unicode, selector in header, persistent via state.lang + html lang | Visual check + ensure selector prominent on mobile |
+| GA-1/2/3/4/5/7/8/9/10/11/12/13/14/17 data dictionary, validations, verification, input controls, LOV, search, captions, output format, metadata, record validation | Partial — fmtDate exists, input types date/tel/number, vet search exists | Full data dictionary doc + systematic server-side validation layer + check-digit for animal tag/sample code |
+| GA-20 sign-up/recall/deactivate, GA-21 CAPTCHA, UX-04 consent | Login/signup exist, OTP attempt limits, no forgot password recovery, no CAPTCHA, no explicit consent | Feature-flagged CAPTCHA hook, recovery path, deactivation, consent capture |
+| GA-36/37/38 reports filters/layout/distributable, UX-05 search filters, UX-06 nav IA, UX-08 micro interactions, UX-11 offline message, UX-12 data viz, UX-15 design tokens | Govt reports exist, search+sitemap+breadcrumbs+footer+tokens+states+SW offline queue, charts have title but need description+text summary+data table | Pagination + print + Excel/PDF + filter UX + journey mapping + offline message + chart accessibility |
+
+## L.7.4 External / Organizational Requirements (cannot be satisfied by app code)
+
+| IDs | Requirement | Owner |
+|---|---|---|
+| Q21 hard exemption 4.1 | gov.in/nic.in domain | ORG — must NOT be changed by app code |
+| Q22 | India Portal, DigiLocker, Aadhaar, SSO, MyGov, Data Platform, MyScheme integration | ORG — optional adapters only, report not configured |
+| Q24 | Social media | N/A — not a public info portal, no org accounts supplied |
+| C1.1 | Security audit + clearance certificate NIC/STQC/CERT-In empanelled | ORG |
+| C1.2i/p | Web server not running as root, disable root to run code | ORG — deployment (Render/Vercel) |
+| C2 | Hosting environment secured India DC/DR, WAF, 180-day logs, VA/PT | ORG |
+| C3.1/C3.2 | Security Policy + Privacy Policy approved | ORG — app publishes templates pending approval |
+| L01/L02 | WIM nomination + URL on stationery | ORG |
+| L03.7/L03.9 | Website Monitoring Plan + Contingency Management Plan | ORG |
+| GA-16/39/40 | Aadhaar/PAN/IFSC criteria, reporting DB, Java/PHP frameworks | N/A — no Aadhaar/PAN collected, single SQLite OLTP, stack Flask+vanilla JS (framework migration forbidden) |
+| UX-16 | Analytics consent-based PII-free | N/A — no analytics present, none introduced (programme §50) |
+| F-B3 | Live SQLite DB committed to git | ORG ACTION — hygiene, remove from tracking or replace with seed script |
+| A05 live captions | Real-time captions for WebRTC audio | ORG — needs ASR/human captioning |
+
+## L.7.5 Remaining Engineering Gaps (code-level, not ORG)
+
+| Gap | Severity | Suggested fix (no redesign) |
+|---|---|---|
+| Contrast measurement A14/A18 not yet measured | Medium | Run axe-core + Lighthouse accessibility, record every tint adjustment per exemption 4.3, ensure focus ring 3:1 |
+| CAPTCHA hook GA-21 | Medium | Feature-flagged CAPTCHA adapter on login/register/feedback, env-driven, additive |
+| Malware scan hook + storage outside web root GA-33/34 | Medium | Add ClamAV/hook placeholder + store uploads outside static root + re-render images |
+| Data dictionary GA-1-5 | Medium | Create docs/compliance/data-dictionary.md for every important field + enforce server-side |
+| Forgot password recovery + account deactivation GA-20 | Low | Documented recovery path or mark ORG ACTION, add deactivation endpoint |
+| Report pagination + print + Excel/PDF GA-37/38 + chart text summary UX-12 | Low | Add pagination component, print styles already exist, add data table alternative for charts with title/description |
+| Text spacing bookmarklet A19 + hover/focus dismissible A20 | Low | Test with spacing overrides, ensure tooltips dismissible via Esc + hoverable + persistent |
+
