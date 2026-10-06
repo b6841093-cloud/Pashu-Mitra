@@ -1284,21 +1284,22 @@ if (typeof window !== "undefined") {
   window.__pmSafeId = safeId;
 }
 
-function emptyState(msg) {
+function emptyState(msg, action) {
   if (getUserRole() === "owner") msg = farmerRuntimeText(msg);
   const raw = String(msg);
   const isPlain = !/<[a-z][\s\S]*>/i.test(raw);
-  return `<div class="empty-state" role="status" aria-live="polite">${isPlain ? escapeHtml(raw) : raw}</div>`;
+  const actionHtml = action ? `<div style="margin-top:12px">${action}</div>` : "";
+  return `<div class="empty-state" role="status" aria-live="polite"><div style="font-size:32px;margin-bottom:12px" aria-hidden="true">📭</div><div>${isPlain ? escapeHtml(raw) : raw}</div>${actionHtml}</div>`;
 }
 function loadingState(msg) {
   const safe = escapeHtml(msg || "Loading…");
   if (window.PMA11y && window.PMA11y.announceLoading) window.PMA11y.announceLoading(safe);
-  return `<div class="loading" role="status" aria-live="polite" aria-busy="true">${safe}</div>`;
+  return `<div class="loading" role="status" aria-live="polite" aria-busy="true"><div class="pm-skeleton" style="width:60%;height:20px;margin:0 auto 12px"></div><div class="pm-skeleton" style="width:40%;height:14px;margin:0 auto"></div><div style="margin-top:16px">${safe}</div></div>`;
 }
 function errorState(msg) {
   const safe = escapeHtml(msg || "Something went wrong");
   if (window.PMA11y && window.PMA11y.announceError) window.PMA11y.announceError(safe);
-  return `<div class="pm-state pm-state-error" role="alert" aria-live="assertive"><p class="pm-state-title">Error</p><p class="pm-state-body">${safe}</p><div class="btn-row" style="margin-top:10px"><button class="btn btn-outline btn-sm" onclick="location.reload()">Retry</button> <button class="btn btn-ghost btn-sm" onclick="history.back()">Go back</button></div></div>`;
+  return `<div class="pm-state pm-state-error" role="alert" aria-live="assertive"><div style="font-size:32px;margin-bottom:12px" aria-hidden="true">⚠️</div><p class="pm-state-title">Something went wrong</p><p class="pm-state-body">${safe}</p><div class="btn-row" style="margin-top:16px;justify-content:center"><button class="btn btn-outline btn-sm" onclick="location.reload()">Retry</button> <button class="btn btn-ghost btn-sm" onclick="history.back()">Go back</button></div></div>`;
 }
 /* GA-37/38 + UX-12: pagination + print/export helpers for reports */
 function pmPaginate(items, page, pageSize) {
@@ -1334,30 +1335,37 @@ function pmPrintSection(id) {
   w.document.close(); w.focus(); setTimeout(()=>w.print(), 300);
 }
 function accountActionsCard() {
-  return `<div class="section-card"><div class="section-title">⚙️ Account</div><div class="btn-row"><button class="btn btn-ghost btn-sm" onclick="location.hash='#/account/deactivate'">Deactivate account</button><button class="btn btn-ghost btn-sm" onclick="localStorage.clear();location.hash='#/'">Log out</button></div><div class="small-muted" style="margin-top:6px">Deactivation preserves audit trail and blocks future logins. Contact support to re-activate.</div></div>`;
+  return `<div class="section-card"><h3 class="pm-h3" style="margin:0 0 12px">⚙️ Account</h3><div class="btn-row"><button class="btn btn-ghost btn-sm" onclick="location.hash='#/account/deactivate'">Deactivate account</button><button class="btn btn-ghost btn-sm" onclick="localStorage.clear();location.hash='#/'">Log out</button></div><div class="pm-caption" style="margin-top:10px">Deactivation preserves audit trail and blocks future logins. Contact support to re-activate.</div></div>`;
 }
-function statCard(num, lbl) {
+function statCard(num, lbl, opts = {}) {
   const safeNum = typeof num === "number" || /^\d+(\.\d+)?$/.test(String(num)) ? String(num) : escapeHtml(num);
-  return `<div class="stat-card"><div class="num">${safeNum}</div><div class="lbl">${escapeHtml(lbl)}</div></div>`;
+  const trend = opts.trend ? `<span class="pm-caption" style="color:${opts.trend.startsWith('+') ? 'var(--pm-success)' : opts.trend.startsWith('-') ? 'var(--pm-danger)' : 'var(--pm-text-muted)'};font-weight:700;margin-top:2px;display:block">${escapeHtml(opts.trend)}</span>` : "";
+  const sub = opts.sub ? `<span class="pm-caption" style="margin-top:2px;display:block">${escapeHtml(opts.sub)}</span>` : "";
+  return `<div class="stat-card" role="group" aria-label="${escapeAttr(lbl)}: ${escapeAttr(String(num))}"><div class="num" aria-hidden="true">${safeNum}</div><div class="lbl">${escapeHtml(lbl)}</div>${trend}${sub}</div>`;
 }
 function iconItem(emoji, label, href) {
   const safeHref = String(href).startsWith("#/") ? escapeAttr(href) : "#/";
-  return `<div class="icon-item" role="button" tabindex="0" aria-label="${escapeAttr(label)}" onclick="location.hash='${safeHref}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='${safeHref}'}"><div class="icon-circle">${escapeHtml(emoji)}</div><span>${escapeHtml(label)}</span></div>`;
+  return `<div class="icon-item" role="button" tabindex="0" aria-label="${escapeAttr(label)}" onclick="location.hash='${safeHref}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='${safeHref}'}"><div class="icon-circle" aria-hidden="true">${escapeHtml(emoji)}</div><span>${escapeHtml(label)}</span></div>`;
+}
+function pmKpiCard(name, value, unit, context) {
+  return `<div class="stat-card pm-kpi"><div class="pm-caption" style="font-weight:700;color:var(--pm-text-muted);margin-bottom:4px">${escapeHtml(name)}</div><div class="num">${escapeHtml(value)}${unit ? `<span style="font-size:14px;font-weight:600;margin-left:4px">${escapeHtml(unit)}</span>` : ""}</div>${context ? `<div class="pm-caption" style="margin-top:6px">${escapeHtml(context)}</div>` : ""}</div>`;
 }
 
 // ---------------------------------------------------------------- shell --
+// Consistent page header — GIGW Header → Title → Breadcrumb → Primary
 function header(title, opts = {}) {
   const role = getUserRole();
   const notifHref = role ? `#/${role}/notifications` : "#/";
   const profileHref = role ? `#/${role}/profile` : "#/";
   const qCount = getOfflineQueue().length;
+  const breadcrumb = opts.breadcrumb || (window.PashuShell && window.PashuShell.breadcrumbs ? window.PashuShell.breadcrumbs(location.hash, null) : "");
   if (role === "owner") {
     return `
-      <div class="app-header owner-app-header">
+      <div class="app-header owner-app-header" role="banner">
         <div class="owner-header-top">
           ${opts.back ? `<button class="header-icon-btn" aria-label="${ft("back_to_livestock")}" onclick="history.back()">←</button>`
             : `<button class="header-icon-btn" aria-label="${ft("notifications")}" onclick="location.hash='${notifHref}'">🔔${opts.notif ? '<span class="dot"></span>' : ''}</button>`}
-          <div class="owner-brand">🐄 ${ft("app_name")}</div>
+          <div class="owner-brand" aria-label="${ft("app_name")}">🐄 ${ft("app_name")}</div>
           <div class="owner-header-actions">
             ${farmerLanguageControl()}
             <button class="header-icon-btn" aria-label="${ft("profile")}" onclick="location.hash='${profileHref}'">👤</button>
@@ -1365,18 +1373,20 @@ function header(title, opts = {}) {
         </div>
         <h1 class="owner-page-title">${farmerHeaderTitle(title)}</h1>
       </div>
-      ${qCount > 0 ? `<div class="owner-sync"><span class="sync-indicator" onclick="syncOfflineQueue()">⚡ ${qCount} ${ft("offline_count")}</span></div>` : ""}`;
+      ${breadcrumb ? `<div class="pm-page-container">${breadcrumb}</div>` : ""}
+      ${qCount > 0 ? `<div class="owner-sync" role="status" aria-live="polite"><span class="sync-indicator" role="button" tabindex="0" onclick="syncOfflineQueue()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();syncOfflineQueue()}">⚡ ${qCount} ${ft("offline_count")}</span></div>` : ""}`;
   }
   return `
-  <div class="app-header">
+  <div class="app-header" role="banner">
     ${opts.back ? `<button class="header-icon-btn" aria-label="Back" onclick="history.back()">←</button>`
       : `<button class="header-icon-btn" aria-label="Notifications" onclick="location.hash='${notifHref}'">🔔${opts.notif ? '<span class="dot"></span>' : ''}</button>`}
-    <h1>${title}</h1>
+    <h1>${escapeHtml(title)}</h1>
     <button class="header-icon-btn" aria-label="Profile" onclick="location.hash='${profileHref}'">👤</button>
   </div>
+  ${breadcrumb ? `<div class="pm-page-container">${breadcrumb}</div>` : ""}
   ${qCount > 0 ? `
-    <div style="text-align:center;margin-top:6px">
-      <span class="sync-indicator" onclick="syncOfflineQueue()">⚡ ${qCount} action(s) queued offline · Tap to sync</span>
+    <div style="text-align:center;margin-top:6px" role="status" aria-live="polite">
+      <span class="sync-indicator" role="button" tabindex="0" onclick="syncOfflineQueue()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();syncOfflineQueue()}">⚡ ${qCount} action(s) queued offline · Tap to sync</span>
     </div>` : ""}`;
 }
 
@@ -1422,9 +1432,9 @@ function bottomNav(active) {
       [`#/lab/notifications`, "🔔", t("nav.alerts")]
     ];
   }
-  return `<div class="bottom-nav${navClass}">${items.map(([href, ic, lbl]) =>
-    `<button class="nav-item ${active === href ? "active" : ""}" onclick="location.hash='${href}'"><span class="ic">${ic}</span>${lbl}</button>`
-  ).join("")}</div>`;
+  return `<nav class="bottom-nav${navClass}" aria-label="Primary navigation"><div class="bottom-nav-inner" style="display:flex;justify-content:space-around;width:100%">${items.map(([href, ic, lbl]) =>
+    `<button class="nav-item ${active === href ? "active" : ""}" onclick="location.hash='${href}'" aria-label="${escapeAttr(lbl)}" ${active === href ? 'aria-current="page"' : ""}><span class="ic" aria-hidden="true">${ic}</span><span class="nav-label">${escapeHtml(lbl)}</span></button>`
+  ).join("")}</div></nav>`;
 }
 
 function render(html) {
@@ -1461,19 +1471,21 @@ function barChart(items) {
   return `
     <div role="img" aria-label="${escapeAttr(summary)}" class="pm-chart pm-bar-chart">
       <p class="sr-only">${escapeHtml(summary)}</p>
+      <div class="pm-chart-bars" style="display:flex;flex-direction:column;gap:12px">
       ${items.map(i => `
-        <div style="margin:10px 0">
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${escapeHtml(i.label)}</span><b>${escapeHtml(i.value)}</b></div>
-          <div style="background:#e8eaf3;border-radius:6px;height:12px;overflow:hidden" aria-hidden="true">
-            <div style="width:${Math.max((i.value / max) * 100, 2)}%;height:12px;background:#3f51b5;border-radius:6px"></div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="font-weight:600;color:var(--pm-text)">${escapeHtml(i.label)}</span><span style="font-weight:700;color:var(--pm-primary-dark);background:#f4f5ff;padding:2px 8px;border-radius:999px;font-size:12px">${escapeHtml(i.value)}</span></div>
+          <div style="background:#e8eaf3;border-radius:8px;height:14px;overflow:hidden;position:relative" aria-hidden="true">
+            <div style="width:${Math.max((i.value / max) * 100, 3)}%;height:100%;background:linear-gradient(90deg,var(--pm-primary-light),var(--pm-primary));border-radius:8px;transition:width 0.3s ease"></div>
           </div>
         </div>`).join("")}
-      <details class="pm-chart-details"><summary>View data table (accessible alternative)</summary>
+      </div>
+      <details class="pm-chart-details"><summary>📊 View data table (accessible alternative)</summary>
         <div class="pm-table-scroll" tabindex="0" role="region" aria-label="Bar chart data table"><table><caption>${escapeHtml(summary)}</caption><thead><tr><th scope="col">Label</th><th scope="col">Value</th></tr></thead><tbody>${tableRows}</tbody></table></div>
       </details>
     </div>`;
 }
-const PIE_COLORS = ["#3f51b5", "#e53935", "#43a047", "#fb8c00", "#8e24aa", "#00acc1", "#6d4c41", "#f4511e"];
+const PIE_COLORS = ["#3d4db8", "#e2483f", "#1fa971", "#e08a1e", "#8e24aa", "#2f6fed", "#6d4c41", "#f4511e"];
 function pieChart(items) {
   if (!items || !items.length) return emptyState("No data yet.");
   const total = items.reduce((s, i) => s + i.value, 0) || 1;
@@ -1483,20 +1495,20 @@ function pieChart(items) {
     return `${PIE_COLORS[idx % PIE_COLORS.length]} ${from}deg ${to}deg`;
   }).join(", ");
   const legend = items.map((i, idx) => `
-    <div style="display:flex;align-items:center;gap:6px;font-size:13px">
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0">
       <span style="width:12px;height:12px;border-radius:3px;background:${PIE_COLORS[idx % PIE_COLORS.length]};display:inline-block;flex:none" aria-hidden="true"></span>
-      <span>${escapeHtml(i.label)} — ${escapeHtml(i.value)} (${Math.round((i.value / total) * 100)}%)</span>
+      <span style="flex:1"><strong>${escapeHtml(i.label)}</strong> — ${escapeHtml(i.value)} (${Math.round((i.value / total) * 100)}%)</span>
     </div>`).join("");
   const summary = `Pie chart with ${items.length} categories, total ${total}. ${items.map(i => `${i.label}: ${i.value} (${Math.round((i.value/total)*100)}%)`).join(", ")}.`;
   const tableRows = items.map(i => `<tr><th scope="row">${escapeHtml(i.label)}</th><td>${escapeHtml(i.value)}</td><td>${Math.round((i.value/total)*100)}%</td></tr>`).join("");
   return `
     <div role="img" aria-label="${escapeAttr(summary)}" class="pm-chart pm-pie-chart">
       <p class="sr-only">${escapeHtml(summary)}</p>
-      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
-        <div style="width:150px;height:150px;border-radius:50%;background:conic-gradient(${stops});flex:none" aria-hidden="true"></div>
-        <div style="display:flex;flex-direction:column;gap:6px">${legend}</div>
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+        <div style="width:160px;height:160px;border-radius:50%;background:conic-gradient(${stops});flex:none;box-shadow:var(--pm-shadow-sm);border:2px solid #fff" aria-hidden="true"></div>
+        <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:200px">${legend}</div>
       </div>
-      <details class="pm-chart-details"><summary>View data table (accessible alternative)</summary>
+      <details class="pm-chart-details"><summary>📊 View data table (accessible alternative)</summary>
         <div class="pm-table-scroll" tabindex="0" role="region" aria-label="Pie chart data table"><table><caption>${escapeHtml(summary)}</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th><th scope="col">Percent</th></tr></thead><tbody>${tableRows}</tbody></table></div>
       </details>
     </div>`;
@@ -2485,29 +2497,42 @@ route("#/lab/dashboard", () => labDashboard(), ["lab"]);
 async function ownerDashboard() {
   render(`${header(ft("home"))}<div class="loading" role="status" aria-live="polite" aria-busy="true">${ft("loading_dashboard")}</div>`);
   const ivrInfo = await getIvrInfo();
+  let livestockCount = 0, activeCases = 0;
+  try {
+    const animals = await api("/animals").catch(() => []);
+    livestockCount = Array.isArray(animals) ? animals.length : 0;
+    const cases = await api("/farmer/cases").catch(() => []);
+    activeCases = Array.isArray(cases) ? cases.filter(c => c.status !== "Resolved" && c.status !== "Closed").length : 0;
+  } catch (_) {}
   render(`
     ${header(ft("home"))}
     <div class="hello-banner owner-hello">
       <div>${ft("welcome_back")}</div>
       <div class="owner-name">${escapeHtml(state.user.full_name)} 👋</div>
+      <div class="pm-small" style="margin-top:6px;color:rgba(255,255,255,0.9)">Your livestock overview — ${livestockCount} animal${livestockCount!==1?'s':''} · ${activeCases} active case${activeCases!==1?'s':''}</div>
     </div>
-    <div class="section-card owner-home-card">
-      <div class="section-title">${ft("home_prompt")}</div>
+    <div class="section-card owner-home-card pm-card-elevated">
+      <h2 class="pm-h2" style="margin:0 0 14px">${ft("home_prompt")}</h2>
       <div class="owner-home-actions">
-        <button class="owner-action-card" onclick="location.hash='#/owner/livestock'">
-          <span class="action-icon">🐄</span><span>${ft("my_livestock")}</span>
+        <button class="owner-action-card" onclick="location.hash='#/owner/livestock'" aria-label="${ft("my_livestock")}">
+          <span class="action-icon" aria-hidden="true">🐄</span><span>${ft("my_livestock")}</span>
+          <span class="pm-caption" style="margin-top:4px">${livestockCount} animal${livestockCount!==1?'s':''}</span>
         </button>
-        <button class="owner-action-card" onclick="location.hash='#/owner/report'">
-          <span class="action-icon">📋</span><span>${ft("report_problem")}</span>
+        <button class="owner-action-card" onclick="location.hash='#/owner/report'" aria-label="${ft("report_problem")}" style="border-color:var(--pm-primary-light);background:#f8f9ff">
+          <span class="action-icon" aria-hidden="true">📋</span><span>${ft("report_problem")}</span>
+          <span class="pm-caption" style="margin-top:4px">Quick report</span>
         </button>
-        <button class="owner-action-card" onclick="location.hash='#/owner/prescriptions'">
-          <span class="action-icon">💊</span><span>${ft("health_treatment")}</span>
+        <button class="owner-action-card" onclick="location.hash='#/owner/prescriptions'" aria-label="${ft("health_treatment")}">
+          <span class="action-icon" aria-hidden="true">💊</span><span>${ft("health_treatment")}</span>
         </button>
-        <button class="owner-action-card" onclick="location.hash='#/owner/webcall'">
-          <span class="action-icon">📞</span><span>${ft("call_vet")}</span>
+        <button class="owner-action-card" onclick="location.hash='#/owner/webcall'" aria-label="${ft("call_vet")}">
+          <span class="action-icon" aria-hidden="true">📞</span><span>${ft("call_vet")}</span>
         </button>
-        <button class="owner-action-card" onclick="location.hash='#/owner/notifications'">
-          <span class="action-icon">🔔</span><span>${ft("notifications")}</span>
+        <button class="owner-action-card" onclick="location.hash='#/owner/notifications'" aria-label="${ft("notifications")}">
+          <span class="action-icon" aria-hidden="true">🔔</span><span>${ft("notifications")}</span>
+        </button>
+        <button class="owner-action-card" onclick="location.hash='#/owner/herds'" aria-label="${ft("my_herds")}">
+          <span class="action-icon" aria-hidden="true">🐑</span><span>${ft("my_herds")}</span>
         </button>
       </div>
     </div>
@@ -2568,33 +2593,40 @@ async function vetDashboard() {
   const availability = availabilityRows[0] || { configured_status: "AVAILABLE", effective_status: "AVAILABLE", supported_languages: ["en"] };
   render(`
     ${header("Vet Dashboard")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Welcome,</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🩺</div></div>
-    <div class="stat-grid">
-      ${statCard(summary.new_cases, "🔴 New Cases")}
-      ${statCard(summary.vaccinations_due, "🟠 Vax Due")}
-      ${statCard(summary.lab_pending, "🧪 Lab Pending")}
-      ${statCard(summary.user_reports, "📋 Total Reports")}
-      ${statCard(summary.followups, "💊 Follow-ups")}
-      ${statCard("MH", "State: Maharashtra")}
-    </div>
-    <div class="section-card">
-      <div class="section-title">☎️ Helpline / IVR Routing (read-only)</div>
-      <div class="meta" style="margin-bottom:10px">This panel is read-only. The canonical availability controls for both web calls and helpline routing are in the <b>Web call availability</b> card below. That card shows live routability which requires Socket.IO connected + presence lease live + AVAILABLE + not busy, and is the only honest indicator for web calls.</div>
-      <div class="meta" style="margin-bottom:6px">Configured: <span class="badge ${availability.configured_status === 'AVAILABLE' ? 'badge-green' : availability.configured_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${escapeHtml(availability.configured_status)}</span> · Effective (hours): <span class="badge ${availability.effective_status === 'AVAILABLE' ? 'badge-green' : availability.effective_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${escapeHtml(availability.effective_status)}</span></div>
-      <div class="small-muted">Languages: ${(availability.supported_languages || []).map((code) => ({ en: 'English', te: 'Telugu', hi: 'Hindi', mr: 'Marathi' }[code] || code.toUpperCase())).join(', ') || '—'}</div>
-      <div class="small-muted" style="margin-top:6px">State honesty: 1 availability (your choice) · 2 Socket.IO (signaling) · 3 presence lease (server) · 4 routability (1+2+3+not busy). IVR uses 1 + working hours; web calls use 1+2+3+4.</div>
-    </div>
-    <div class="section-card">
-      <div class="section-title">📞 IVR / Helpline Status</div>
-      <div class="meta">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ivrStatus.pstn_connected ? '#43a047' : '#fb8c00'};margin-right:6px"></span>
-        Provider: <b>${ivrStatus.provider_mode}</b> · PSTN: <b>${ivrStatus.pstn_connected ? 'Connected' : 'Not Connected'}</b>
+    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Welcome,</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🩺</div><div class="pm-small" style="margin-top:6px;color:rgba(255,255,255,0.9)">${summary.new_cases} new · ${summary.active_cases || summary.user_reports || 0} active · ${summary.lab_pending} lab pending</div></div>
+    <div class="section-card pm-card-elevated">
+      <h2 class="pm-h2" style="margin:0 0 12px">Priority — Cases & Availability</h2>
+      <div class="stat-grid" style="margin:0">
+        ${statCard(summary.new_cases, "🔴 New Cases")}
+        ${statCard(summary.vaccinations_due, "🟠 Vax Due")}
+        ${statCard(summary.lab_pending, "🧪 Lab Pending")}
+        ${statCard(summary.user_reports, "📋 Total Reports")}
+        ${statCard(summary.followups, "💊 Follow-ups")}
+        ${statCard("MH", "State: Maharashtra")}
       </div>
-      ${!ivrStatus.pstn_connected ? `<div class="small-muted" style="margin-top:4px">${ivrStatus.setup_instructions || ''}</div>` : ""}
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-primary btn-sm" onclick="location.hash='#/vet/reports'">View Incoming Reports</button>
+        <button class="btn btn-outline btn-sm" onclick="location.hash='#/vet/cases'">Active Cases</button>
+      </div>
     </div>
     <div id="pmVetCallHost"></div>
     <div class="section-card">
-      <div class="section-title">Today's Tasks</div>
+      <h3 class="pm-h3" style="margin:0 0 10px">☎️ Helpline / IVR Routing (read-only)</h3>
+      <div class="pm-small" style="margin-bottom:10px">This panel is read-only. The canonical availability controls for both web calls and helpline routing are in the <b>Web call availability</b> card below. That card shows live routability which requires Socket.IO connected + presence lease live + AVAILABLE + not busy, and is the only honest indicator for web calls.</div>
+      <div class="pm-small" style="margin-bottom:8px">Configured: <span class="badge ${availability.configured_status === 'AVAILABLE' ? 'badge-green' : availability.configured_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${escapeHtml(availability.configured_status)}</span> · Effective: <span class="badge ${availability.effective_status === 'AVAILABLE' ? 'badge-green' : availability.effective_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${escapeHtml(availability.effective_status)}</span></div>
+      <div class="pm-caption">Languages: ${(availability.supported_languages || []).map((code) => ({ en: 'English', te: 'Telugu', hi: 'Hindi', mr: 'Marathi' }[code] || code.toUpperCase())).join(', ') || '—'}</div>
+      <div class="pm-caption" style="margin-top:6px">State honesty: 1 availability · 2 Socket.IO · 3 presence lease · 4 routability (1+2+3+not busy). IVR uses 1+hours; web calls use 1+2+3+4.</div>
+    </div>
+    <div class="section-card">
+      <h3 class="pm-h3" style="margin:0 0 10px">📞 IVR / Helpline Status</h3>
+      <div class="pm-small" style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ivrStatus.pstn_connected ? '#1fa971' : '#e08a1e'};flex:none" aria-hidden="true"></span>
+        <span>Provider: <b>${escapeHtml(ivrStatus.provider_mode)}</b> · PSTN: <b>${ivrStatus.pstn_connected ? 'Connected' : 'Not Connected'}</b></span>
+      </div>
+      ${!ivrStatus.pstn_connected ? `<div class="pm-caption" style="margin-top:8px">${escapeHtml(ivrStatus.setup_instructions || '')}</div>` : ""}
+    </div>
+    <div class="section-card">
+      <h2 class="pm-h2" style="margin:0 0 12px">Today's Tasks</h2>
       <div class="icon-grid">
         ${iconItem("📷", "Scan QR", "#/scan")}
         ${iconItem("📋", "User Reports", "#/vet/reports")}
@@ -2605,7 +2637,7 @@ async function vetDashboard() {
         ${iconItem("💉", "Record Vaccination", "#/vet/vaccination/new")}
         ${iconItem("🗓️", "Vax Campaigns", "#/vet/campaigns")}
         ${iconItem("🌐", "Surveillance", "#/vet/surveillance")}
-        ${iconItem("📍", "Local Disease Advisory", "#/vet/advisories")}
+        ${iconItem("📍", "Local Advisory", "#/vet/advisories")}
         ${iconItem("🚨", "Farm Alerts", "#/vet/farm-alerts")}
         ${iconItem("💊", "Prescriptions", "#/vet/prescriptions")}
         ${iconItem("📖", "Disease Info", "#/vet/diseases")}
@@ -2627,17 +2659,20 @@ async function govtDashboard() {
   const a = await api("/govt/analytics");
   render(`
     ${header("Govt Analytics")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Maharashtra Animal Disease & Vaccine Dashboard</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🏛️</div></div>
-    <div class="stat-grid">
-      ${statCard(a.totals.cases, "Total Cases")}
-      ${statCard(a.totals.active, "Active Cases")}
-      ${statCard(a.totals.animals, "Animals Registered")}
-      ${statCard(a.totals.districts, "Districts Reporting")}
-      ${statCard(a.totals.deaths || 0, "Deaths Reported")}
-      ${statCard(a.totals.deceased_animals || 0, "Deceased Animals")}
+    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Maharashtra Animal Disease & Vaccine Dashboard</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🏛️</div><div class="pm-small" style="margin-top:6px;color:rgba(255,255,255,0.9)">${a.totals.cases} cases · ${a.totals.active} active · ${a.totals.animals} animals · ${a.totals.districts} districts</div></div>
+    <div class="section-card pm-card-elevated">
+      <h2 class="pm-h2" style="margin:0 0 14px">Key Metrics</h2>
+      <div class="stat-grid" style="margin:0">
+        ${statCard(a.totals.cases, "Total Cases")}
+        ${statCard(a.totals.active, "Active Cases")}
+        ${statCard(a.totals.animals, "Animals Registered")}
+        ${statCard(a.totals.districts, "Districts Reporting")}
+        ${statCard(a.totals.deaths || 0, "Deaths Reported")}
+        ${statCard(a.totals.deceased_animals || 0, "Deceased Animals")}
+      </div>
     </div>
     <div class="section-card">
-      <div class="section-title">☎️ Helpline Reporting</div>
+      <h3 class="pm-h3" style="margin:0 0 12px">☎️ Helpline Reporting</h3>
       <div class="stat-grid" style="margin:0 0 12px">
         ${statCard(a.helpline.total_calls, "Calls")}
         ${statCard(a.helpline.vet_connections, "Vet Connections")}
@@ -2647,46 +2682,32 @@ async function govtDashboard() {
       <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/helpline'">View Helpline Reports</button>
     </div>
     <div class="section-card">
-      <div class="section-title">🗺️ GIS Risk Map & Surveillance</div>
-      <div class="meta">Live district-level disease risk plotted on the Maharashtra map, plus full case surveillance and AI early warning.</div>
-      <div class="btn-row" style="margin-top:12px">
+      <h3 class="pm-h3" style="margin:0 0 8px">🗺️ GIS Risk Map & Surveillance</h3>
+      <div class="pm-small" style="margin-bottom:12px">Live district-level disease risk plotted on the Maharashtra map, plus full case surveillance and AI early warning.</div>
+      <div class="btn-row">
         <button class="btn btn-primary btn-sm" onclick="location.hash='#/govt/gis'">Open GIS Map</button>
         <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/surveillance'">Surveillance</button>
         <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/national'">🇮🇳 National</button>
       </div>
     </div>
     <div class="section-card">
-      <div class="section-title">📊 Cases Arisen by District</div>
+      <h3 class="pm-h3" style="margin:0 0 12px">📊 Cases by District</h3>
       ${barChart(a.cases_by_district)}
     </div>
     <div class="section-card">
-      <div class="section-title">🥧 Most Spread Diseases</div>
+      <h3 class="pm-h3" style="margin:0 0 12px">🥧 Most Spread Diseases</h3>
       ${pieChart(a.disease_spread)}
     </div>
     <div class="section-card">
-      <div class="section-title">🚨 Herd & Farm Alerts</div>
-      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/farm-alerts'">View Farm Disease Alerts</button>
-    </div>
-    <div class="section-card">
-      <div class="section-title">🧠 AI Early Warning System</div>
-      <div class="meta">Disease risk prediction &amp; outbreak detection — trained ML model scored on your real district case data.</div>
-      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="location.hash='#/govt/ai'">Open AI Risk Analysis</button>
-    </div>
-    <div class="section-card">
-      <div class="section-title">📈 Disease Trends</div>
-      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/trends'">View Historical Trends</button>
-    </div>
-    <div class="section-card">
-      <div class="section-title">🏘️ Block-Level Analytics</div>
-      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/blocks'">View Block Data</button>
-    </div>
-    <div class="section-card">
-      <div class="section-title">🦠 Zoonotic Risk</div>
-      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/zoonotic'">View Zoonotic Disease Risk</button>
-    </div>
-    <div class="section-card">
-      <div class="section-title">📥 Export Data</div>
-      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/export'">Export Cases, Animals &amp; Campaigns</button>
+      <h3 class="pm-h3" style="margin:0 0 12px">Quick Access</h3>
+      <div class="icon-grid">
+        ${iconItem("🚨", "Farm Alerts", "#/govt/farm-alerts")}
+        ${iconItem("🧠", "AI Risk", "#/govt/ai")}
+        ${iconItem("📈", "Trends", "#/govt/trends")}
+        ${iconItem("🏘️", "Blocks", "#/govt/blocks")}
+        ${iconItem("🦠", "Zoonotic", "#/govt/zoonotic")}
+        ${iconItem("📥", "Export", "#/govt/export")}
+      </div>
     </div>
     ${accountActionsCard()}
     ${bottomNav("#/govt/dashboard")}
@@ -2698,15 +2719,22 @@ async function labDashboard() {
   const sum = await api("/lab/summary");
   render(`
     ${header("Laboratory Portal")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Regional Veterinary Diagnostics</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🔬</div></div>
-    <div class="stat-grid">
-      ${statCard(sum.pending_receiving, "📥 Intake Pending")}
-      ${statCard(sum.in_testing, "🧪 In Testing")}
-      ${statCard(sum.completed_today, "✅ Released Today")}
-      ${statCard(sum.rejected_samples, "⚠️ Rejections")}
+    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Regional Veterinary Diagnostics</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🔬</div><div class="pm-small" style="margin-top:6px;color:rgba(255,255,255,0.9)">${sum.pending_receiving} pending · ${sum.in_testing} testing · ${sum.completed_today} released today</div></div>
+    <div class="section-card pm-card-elevated">
+      <h2 class="pm-h2" style="margin:0 0 14px">Sample Queue Overview</h2>
+      <div class="stat-grid" style="margin:0">
+        ${statCard(sum.pending_receiving, "📥 Intake Pending")}
+        ${statCard(sum.in_testing, "🧪 In Testing")}
+        ${statCard(sum.completed_today, "✅ Released Today")}
+        ${statCard(sum.rejected_samples, "⚠️ Rejections")}
+      </div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-primary btn-sm" onclick="location.hash='#/lab/queue'">View Queue</button>
+        <button class="btn btn-outline btn-sm" onclick="location.hash='#/scan'">Scan / Receive</button>
+      </div>
     </div>
     <div class="section-card">
-      <div class="section-title">Quick Actions</div>
+      <h3 class="pm-h3" style="margin:0 0 12px">Quick Actions</h3>
       <div class="icon-grid">
         ${iconItem("📷", "Scan / Receive", "#/scan")}
         ${iconItem("🧪", "Sample Queue", "#/lab/queue")}
