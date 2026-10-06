@@ -742,6 +742,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_web_calls_active_caller
     ('created','ringing','accepted','connecting','connected');
 """
 
+# ============================================================================
+# Auth recovery & deactivation (GA-20)
+# ----------------------------------------------------------------------------
+# Additive only: password reset tokens and user status for deactivation.
+# Farmers (owner role) remain OTP-only — password reset is blocked for them
+# at the application layer. Vet/Govt/Lab can request reset and deactivate.
+SCHEMA_AUTH_RECOVERY = """
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL,
+    token_salt TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','USED','EXPIRED','INVALIDATED')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT,
+    request_ip TEXT,
+    user_agent TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_password_reset_hash ON password_reset_tokens(token_hash);
+"""
+
 
 def get_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -828,6 +852,7 @@ def init_db(reset=False):
             ensure_new_columns(conn)
             ensure_otp_tables(conn)
             ensure_webcall_tables(conn)
+            ensure_auth_recovery_tables(conn)
             conn.commit()
             if first_time:
                 seed(conn)
@@ -1073,11 +1098,23 @@ def ensure_new_columns(conn):
     if "cause_of_death" not in a_cols:
         conn.execute("ALTER TABLE animals ADD COLUMN cause_of_death TEXT")
 
-    # users columns — Req 8: sms_enabled
+    # users columns — Req 8: sms_enabled + GA-20 account status / deactivation
     u_cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "sms_enabled" not in u_cols:
         conn.execute("ALTER TABLE users ADD COLUMN sms_enabled INTEGER DEFAULT 0")
+    if "account_status" not in u_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN account_status TEXT DEFAULT 'ACTIVE'")
+    if "deactivated_at" not in u_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN deactivated_at TEXT")
+    if "deactivation_reason" not in u_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN deactivation_reason TEXT")
 
+    conn.commit()
+
+
+def ensure_auth_recovery_tables(conn):
+    """Additive migration for password reset tokens (GA-20)."""
+    conn.executescript(SCHEMA_AUTH_RECOVERY)
     conn.commit()
 
 

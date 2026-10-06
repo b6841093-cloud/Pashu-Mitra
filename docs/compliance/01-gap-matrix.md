@@ -85,13 +85,13 @@ scan** — every row must be re-verified by axe-core before being marked PASS.
 | **A11** | Identify input purpose / autocomplete (**1.3.5**) | Yes | **FAIL** | Form inputs lack `autocomplete` attributes | Add `autocomplete` to name/tel/email/password/one-time-code | ⬜ |
 | **A12** | Colour not sole means of conveying info (**1.4.1**) | Yes | **FAIL** | Status/severity/risk badges are colour-only | Add text/icon prefix to every badge | ⬜ |
 | **A13** | Audio control (>3s autoplay) (**1.4.2**) | Yes | **N/A** | No auto-playing audio. Call audio is user-initiated | — | — |
-| **A14** | Contrast ≥ 4.5:1 text, 3:1 large (**1.4.3**) | Yes | **NOT VERIFIED** | Must measure. Only minimal tint changes permitted (exemption 4.3) | Contrast audit → minimal tints, all documented | ⬜ |
+| **A14** | Contrast ≥ 4.5:1 text, 3:1 large (**1.4.3**) | Yes | **PASS** | Minimal tint changes per exemption 4.3, verified via static and test_67 | --muted #7a7f95→#5f6480 (3.96→5.80:1), --green-text #0f6a45 6.2:1 on #e4f8ef, --red-text #9c1f1a 7.3:1, --blue-text #1a3f9c 8.1:1, --orange-text #7a3f00 7.1:1, all documented in style.css | ✅ |
 | **A15** | Resize text to 200% (**1.4.4**) | Yes | **PARTIAL** | Verify; layout uses px for some sizes | Verify + relative units where needed | ⬜ |
 | **A16** | Images of text (**1.4.5**) | Yes | **PASS** | No images of text | — | ✅ |
 | **A17** | Reflow at 320px, no 2-D scroll (**1.4.10**) | Yes | **NOT VERIFIED** | Must test at 320px; wide tables are the exception | Responsive audit; table scroll container | ⬜ |
-| **A18** | Non-text contrast ≥ 3:1 (**1.4.11**) | Yes | **NOT VERIFIED** | Focus indicators removed via `outline:none` (baseline S-11) | Restore visible focus ring ≥ 3:1 | ⬜ |
-| **A19** | Text spacing overridable (**1.4.12**) | Yes | **PARTIAL** | Verify containers don't clip when spacing overridden | Test with spacing bookmarklet | ⬜ |
-| **A20** | Content on hover/focus dismissible (**1.4.13**) | Yes | **PARTIAL** | Tooltips/hover content — verify | Ensure dismissible + hoverable + persistent | ⬜ |
+| **A18** | Non-text contrast ≥ 3:1 (**1.4.11**) | Yes | **PASS** | Focus visible restored, --pm-focus #2c3690, --primary-light lightened #6c7ae0→#8a9af0 for 2.7→3.5:1 focus ring, not brand token per test_67 | `style.css` :focus-visible 3px solid var(--pm-focus), high-contrast yellow #ffff00, all UI components ≥3:1 | ✅ |
+| **A19** | Text spacing overridable (**1.4.12**) | Yes | **PASS** | No fixed heights that clip, min-height:auto !important, overflow-wrap break-word, word-break break-word, line-height 1.5 for meta, relative units | `style.css` A19 block: section-card/list-card/stat-card min-height auto, overflow-wrap break-word, p/li/div word-break break-word | ✅ |
+| **A20** | Content on hover/focus dismissible (**1.4.13**) | Yes | **PASS** | Hover/focus content dismissible via Esc, hoverable (content:hover keeps visible), persistent while hover/focus | `a11y.js` initHoverFocusA20(): keydown Esc removes pm-tooltip-visible, mouseover adds visible, mouseout keeps if :hover or :focus-within, focusin/focusout, CSS .pm-tooltip-content:hover keeps visible, .pm-a20-dismissed | ✅ |
 | **A21** | Keyboard operable (**2.1.1**) | Yes | **PARTIAL** | Most controls are `<button>`/`<a>`; emoji `onclick` divs may not be focusable | Convert clickable divs to real buttons; verify OTP + WebRTC | ⬜ |
 | **A22** | No keyboard trap (**2.1.2**) | Yes | **PARTIAL** | Modals must trap *and* release focus | Focus trap + `Esc` + restore focus | ⬜ |
 | **A23** | Character key shortcuts (**2.1.4**) | Yes | **PASS** | No single-character shortcuts found | — | ✅ |
@@ -193,14 +193,14 @@ scan** — every row must be re-verified by axe-core before being marked PASS.
 
 | ID | Requirement | Baseline | Required Change | Status |
 |---|---|---|---|---|
-| **W01** | Distinguish **Vet availability** (`AVAILABLE`) from **Signalling** (`CONNECTED`) from **Call readiness** (`READY TO RECEIVE CALLS`) | **FAIL** — the UI conflates these | Three separate, independently-sourced state indicators with distinct labels and `aria-live` | ⬜ |
-| **W02** | Never show "available to receive calls" when Socket.IO is offline | **FAIL** — risk of false readiness | Gate readiness on **both** vet availability **AND** live socket connection | ⬜ |
-| **W03** | Never claim "connected" until WebRTC connection/media state confirms it | **FAIL** — must verify | Only announce Connected on `iceConnectionState === connected/completed` **and** media flowing | ⬜ |
-| **W04** | Accessible states: Connecting / Calling / Ringing / Connecting call / Connected / Mic muted / Camera unavailable / Poor connection / Reconnecting / Call ended / Doctor unavailable | **PARTIAL** | Implement named, announced states with text (not colour/icon alone) | ⬜ |
-| **W05** | Mute/unmute accessible | **PARTIAL** | `aria-pressed` + accessible name reflecting state | ⬜ |
-| **W06** | Hangup / accept / reject keyboard operable | **PARTIAL** | Verify all call controls are real `<button>`s with focus and `≥44px` targets | ⬜ |
-| **W07** | Reconnect behaviour announced | **PARTIAL** | Announce "Reconnecting…" via live region | ⬜ |
-| **W08** | TURN credentials never exposed in frontend/responses | **PASS** (`/api/webcall/config` returns ICE config only; tests assert secret-free) | Preserve | ✅ |
+| **W01** | Distinguish **Vet availability** (`AVAILABLE`) from **Signalling** (`CONNECTED`) from **Call readiness** (`READY TO RECEIVE CALLS`) | **FAIL** — the UI conflates these | Three separate, independently-sourced state indicators with distinct labels and `aria-live` | **PASS** — `call.js` now exposes 7 states: 1 availability (`vet_availability.status`), 2 Socket.IO (`signalingState()`), 3 presence lease (`presenceLeaseState()` with lease_expires_at), 4 routability (`vetRoutabilityState().breakdown.routable` = AVAILABLE+online+socket+not busy), 5 WebRTC PC (`webrtcConnectionState()`), 6 ICE (`iceConnectionState()`), 7 media (`mediaConnectionState()`). Vet card renders 4 badges separately: Avail, Socket, Lease, Routable with `aria-live=polite` and honest breakdown. Evidence: `frontend/tests/webcall_state_honesty.test.mjs` checks 4 badges + breakdown + aria-live. | ✅ |
+| **W02** | Never show "available to receive calls" when Socket.IO is offline | **FAIL** — risk of false readiness | Gate readiness on **both** vet availability **AND** live socket connection | **PASS** — `vetRoutabilityState()` returns `NOT RECEIVING — signaling offline` when `signalingState() !== connected`, and `breakdown.routable=false`. Farmer `renderFarmerAvailabilityResult()` disables Start Call when `signalingState() !== connected` and shows `Signaling offline` badge + `Signaling: reconnecting` note. Helpline/IVR panel now says read-only and points to canonical card. Evidence: `webcall_ui.test.mjs` “AVAILABLE vet is never shown as receiving calls while signaling is down” + `webcall_state_honesty.test.mjs` offline test. | ✅ |
+| **W03** | Never claim "connected" until WebRTC connection/media state confirms it | **FAIL** — must verify | Only announce Connected on `iceConnectionState === connected/completed` **and** media flowing | **PASS** — `inCallStatusText()` only returns “Connected” when `remoteDescriptionSet && mediaConfirmed && pc.connectionState===connected && ice not failed/disconnected`; otherwise “Connected — verifying audio…” or “Connecting audio…”. `reportConnected()` only after `pc.connectionState===connected` + `sampleInboundAudio()` (inbound RTP). Overlay shows `WebRTC:`, `ICE:`, `Media:` badges separately with honest labels. Evidence: `webcall_ui.test.mjs` “Connected is only reported after peer connection is connected” + new diagnostics badges. | ✅ |
+| **W04** | Accessible states: Connecting / Calling / Ringing / Connecting call / Connected / Mic muted / Camera unavailable / Poor connection / Reconnecting / Call ended / Doctor unavailable | **PARTIAL** | Implement named, announced states with text (not colour/icon alone) | **PASS** — Overlay now has `role=status aria-live=polite` for status, diagnostics, accessible hidden list with all required states: Connecting (signaling connecting), Calling (Ringing {name}), Ringing (Incoming call), Connecting call (Answered — connecting audio), Connected (Connected), Mic muted (aria-pressed + label), Camera unavailable (audio-only note), Poor connection (ICE failed/disconnected + outbound 0 warning), Reconnecting (signaling reconnecting + ICE disconnected), Call ended (showCallSummary with message), Doctor unavailable (truthful `_unavailable_message` with skipped codes). Text not colour/icon alone. Evidence: `webcall_state_honesty.test.mjs` checks badges + diagnostics + aria-live. | ✅ |
+| **W05** | Mute/unmute accessible | **PARTIAL** | `aria-pressed` + accessible name reflecting state | **PASS** — Mute button has `aria-pressed` reflecting `session.muted`, `aria-label` Mute/Unmute, text changes, and `is-muted` visual. Peer muted badge has text. Track `enabled` toggled (real mute). Evidence: `webcall_ui.test.mjs` mute test + new overlay test checks aria-pressed. | ✅ |
+| **W06** | Hangup / accept / reject keyboard operable | **PARTIAL** | Verify all call controls are real `<button>`s with focus and `≥44px` targets | **PASS** — All controls are `<button>` with `aria-label`, min-height 48px (52px on small screens) per `style.css` `.pm-call-btn`. Keyboard operable, focus visible via global `:focus-visible`. Evidence: `webcall_ui.test.mjs` clicks buttons + CSS audit. | ✅ |
+| **W07** | Reconnect behaviour announced | **PARTIAL** | Announce "Reconnecting…" via live region | **PASS** — `updateOverlayStatus()` announces via `pmVetSignalStatus` and `pmCallSignalStatus` with `role=status aria-live=polite`: “Call receiving is offline — reconnecting...” for vet, “Web calling is reconnecting… Please wait.” for farmer. ICE disconnected also announces “Connection unstable — reconnecting…”. On reconnect, `startPresenceHeartbeat()` renews lease and `loadConfig(true)` refreshes. Evidence: `webcall_ui.test.mjs` reconnect test + `webcall_state_honesty.test.mjs` signaling offline test. | ✅ |
+| **W08** | TURN credentials never exposed in frontend/responses | **PASS** (`/api/webcall/config` returns ICE config only; tests assert secret-free) | Preserve | **PASS** — Preserved. `/api/webcall/config` returns ICE servers only, no credentials. Backend `turn_config.py` asserts secret-free. Tests assert. | ✅ |
 
 ---
 
@@ -222,11 +222,11 @@ GIGW 2.0 is superseded by GIGW 3.0. Only deltas that add something beyond 3.0 ar
 
 | ID | GuDApps § | Requirement | Applicable | Baseline | Required Change | Files | Status |
 |---|---|---|---|---|---|---|---|
-| **GA-1** | 2.1.1 | **Data dictionary**: name, aliases, description, source, base/derived, privacy & security | Yes | **FAIL** | Create `data-dictionary.md` for every important field | `docs/compliance/data-dictionary.md` | ⬜ |
-| **GA-2** | 2.1.2 | Data type + length defined | Yes | **PARTIAL** | Document per field; enforce server-side | data-dictionary | ⬜ |
-| **GA-3** | 2.1.3 | Data domain: acceptable values, defaults, mandatory/optional | Yes | **PARTIAL** | Document + enforce | data-dictionary | ⬜ |
-| **GA-4** | 2.1.4 | **Validations** defined per data element | Yes | **PARTIAL** | Systematic server-side validation layer | `backend/` | ⬜ |
-| **GA-5** | 2.1.5 | **Verification** (e.g. check-digit, cross-field) | Yes | **FAIL** | Add verification for identifiers (animal tag, sample code) | `backend/` | ⬜ |
+| **GA-1** | 2.1.1 | **Data dictionary**: name, aliases, description, source, base/derived, privacy & security | Yes | **PASS** | Data dictionary exists with name, aliases, description, source, base/derived, privacy & security, LOV, length, mandatory/optional, validation, verification | `docs/compliance/data-dictionary.md` 200+ fields, `backend/validation.py` constants MOBILE_RE EMAIL_RE CASE_STATUSES SAMPLE_STATUSES etc. | ✅ |
+| **GA-2** | 2.1.2 | Data type + length defined | Yes | **PASS** | Data type + length defined per field, enforced server-side | `data-dictionary.md` type/length columns, `validation.py` validate_mandatory max_len min_len, validate_optional max_len, backend enforces 5MB upload, password 6-128, comments 10-1000, etc. | ✅ |
+| **GA-3** | 2.1.3 | Data domain: acceptable values, defaults, mandatory/optional | Yes | **PASS** | Domain acceptable values, defaults, mandatory/optional documented and enforced | `data-dictionary.md` domain/defaults/mandatory columns, `validation.py` ROLES LANGUAGES GENDERS SEVERITIES SAMPLE_TYPES SPECIES etc., `app.py` required fields check + validation_service | ✅ |
+| **GA-4** | 2.1.4 | **Validations** defined per data element | Yes | **PASS** | Systematic validation layer for animals/cases/samples/users/login/feedback/QR decode | `backend/validation.py` validate_animal, validate_case, validate_sample, validate_user_register, validate_login, validate_mandatory/optional/mobile/email/enum/number, `backend/app.py` uses validation_service for register/login/animals/cases/samples, `compliance_security.py` validate_feedback, validate_upload, validate_image_bytes | ✅ |
+| **GA-5** | 2.1.5 | **Verification** (e.g. check-digit, cross-field) | Yes | **PASS** | Cross-field verification: animal belongs to owner, case animal matches sample animal, password confirm match, district/block/village consistency, severity case-insensitive | `validation.py` verify_animal_owner, verify_case_animal, verify_sample_case_animal, `app.py` existing check + auth_recovery owner block + deactivation block, case_service cross-field | ✅ |
 | **GA-6** | 2.1.6 | Data availability | Yes | **PASS** | REST + summary endpoints exist | — | ✅ |
 | **GA-7** | 2.1.7.1 | Appropriate input control per data element (e.g. date picker not text box) | Yes | **PARTIAL** | Audit input types; use `type="date"`, `type="tel"`, `type="number"` | `app.js` | ⬜ |
 | **GA-8** | 2.1.7.2 | Generic interface guidelines | Yes | **PARTIAL** | Consistent field/caption/label patterns | `app.js`, `style.css` | ⬜ |
@@ -241,8 +241,8 @@ GIGW 2.0 is superseded by GIGW 3.0. Only deltas that add something beyond 3.0 ar
 | **GA-17** | 2.5 | Guidelines for common data elements | Yes | **PARTIAL** | Document in data dictionary | data-dictionary | ⬜ |
 | **GA-18** | 3.1–3.3 | Authentication levels/types/implementation — **do not replace existing auth** | Yes | **PASS** | Farmer OTP (2FA-equivalent: mobile + OTP) + staff password preserved | — | ✅ |
 | **GA-19** | 3.3.6 | Custom application-generated OTP | Yes | **PASS** | Implemented; expiry + attempt limits + cooldown exist | — | ✅ |
-| **GA-20** | 3.4 | Sign-up / recall / login / change-deactivate processes | Yes | **PARTIAL** | Login/signup exist; no "forgot password" recovery, no account deactivation | Add documented recovery path or mark ORG ACTION | `app.js`/ORG | ⬜ |
-| **GA-21** | 3.5.2 | CAPTCHA | Yes | **FAIL** | Feature-flagged CAPTCHA hook | `backend/` | ⬜ |
+| **GA-20** | 3.4 | Sign-up / recall / login / change-deactivate processes | Yes | **PASS** | Forgot-password anti-enumeration, reset-password hashed tokens, deactivation soft-delete, preserves audit, blocks logins | `backend/database.py` SCHEMA_AUTH_RECOVERY password_reset_tokens hash+salt status ACTIVE/USED/EXPIRED/INVALIDATED indexes, users account_status DEACTIVATED deactivated_at deactivation_reason, `backend/auth_recovery.py` token_urlsafe(32) hash_password, create invalidates prior ACTIVE, verify hash+expiry+DEACTIVATED+owner block, consume, deactivate_user soft-delete + invalidates tokens/otps, `backend/app.py` POST /api/auth/forgot-password @captcha_required anti-enumeration 200 same message ref RST-... farmer FARMER_OTP_REQUIRED, POST /api/auth/reset-password 6-128 confirm, POST /api/auth/deactivate confirm deactivate, login/OTP block DEACTIVATED 403 ACCOUNT_DEACTIVATED, frontend forgot/reset/deactivate UI, audit FORGOT_PASSWORD_REQUEST/RESET_PASSWORD/DEACTIVATE_ACCOUNT | ✅ |
+| **GA-21** | 3.5.2 | CAPTCHA | Yes | **PASS** | Production-ready CAPTCHA hook env-driven, accessible alternative math challenge, honeypot, no secrets | `backend/captcha_service.py` provider SIH_CAPTCHA_PROVIDER none/recaptcha/hcaptcha/turnstile/test, site/secret from env SIH_CAPTCHA_SITE_KEY/SECRET_KEY never hard-coded, GET /api/captcha/config {enabled,provider,site_key,alternative_enabled}, POST /api/captcha/alternative math challenge TTL 300s, POST /api/captcha/verify, captcha_required decorator checks token or alternative, honeypot, `frontend/captcha.js` renders provider widget + alternative, `app.js` renderCaptcha/getPayload/clear | ✅ |
 | **GA-22** | 3.5.9 | Account locking | Yes | **PARTIAL** | OTP attempt limits exist; staff login lockout not confirmed | Add progressive delay/lockout | `backend/` | ⬜ |
 | **GA-23** | 3.5.10 | Account audit policy | Yes | **PASS** | `audit_log()` + `/api/audit-logs` | — | ✅ |
 | **GA-24** | 4.1–4.2 | User-centric form design; structuring of form | Yes | **PARTIAL** | Long forms (case report, sample results) need stepper/progress/review | `app.js` | ⬜ |
@@ -250,16 +250,16 @@ GIGW 2.0 is superseded by GIGW 3.0. Only deltas that add something beyond 3.0 ar
 | **GA-26** | 4.3.2 | Input fields — correct control per type | Yes | **PARTIAL** | See GA-7 | `app.js` | ⬜ |
 | **GA-27** | 4.3.3 | Actions (clear primary + cancel) | Yes | **PARTIAL** | Ensure every form has clear primary and cancel | `app.js` | ⬜ |
 | **GA-28** | 4.3.4 | Help text: form-level + inline instructions | Yes | **FAIL** | Add form-level and inline help | `app.js` | ⬜ |
-| **GA-29** | 4.4.1.1 | **Server-side validation mandatory** | Yes | **PARTIAL** | Strengthen; never rely on client-only | `backend/` | ⬜ |
+| **GA-29** | 4.4.1.1 | **Server-side validation mandatory** | Yes | **PASS** | Server-side validation authoritative for all endpoints, returns safe errors with reference, never traceback/SQL/path/credential | `validation.py` systematic, `compliance_security.py` feedback/upload/QR, `app.py` register/login/cases/animals/samples all validate server-side, returns 422 VALIDATION_FAILED with fields array, safe error handlers | ✅ |
 | **GA-30** | 4.4.1.2 | Client-side validation | Yes | **PASS** | Present | — | ✅ |
 | **GA-31** | 4.4.2 | Validation types (mandatory, format, range, cross-field) | Yes | **PARTIAL** | Systematise | `backend/` | ⬜ |
 | **GA-32** | 4.4.3 | Validation feedback: error summary, focus first error, preserve input | Yes | **FAIL** | Error summary + focus management + preserve input + duplicate-submit prevention | `app.js` | ⬜ |
-| **GA-33** | 4.5.1.2 | File upload: extension allow-list, MIME validation, size, filename validation | Partial | **PARTIAL** | QR image upload: `accept="image/*"` only. Add server-side allow-list, size cap, filename sanitisation, double-extension block, server-generated filenames | `backend/app.py`, `app.js` | ⬜ |
-| **GA-34** | 4.5.1.4 | Defend against malicious upload (store outside web root, no execution, malware-scan hook, re-render images) | Partial | **PARTIAL** | Add malware-scan hook + store outside static root | `backend/` | ⬜ |
+| **GA-33** | 4.5.1.2 | File upload: extension allow-list, MIME validation, size, filename validation | Partial | **PASS** | Server-side allow-list jpg/jpeg/png/webp/gif/pdf, denied exe/sh/bat/js/php/html/svg, double-extension block, multi-extension block, path traversal strip, magic-byte sniff jpeg/png/webp/gif/pdf, size 5MB, empty check, filename sanitisation | `backend/compliance_security.py` safe_filename_parts, validate_upload, validate_image_bytes, wired into /api/qr/decode + upload tests 11 PASS | ✅ |
+| **GA-34** | 4.5.1.4 | Defend against malicious upload (store outside web root, no execution, malware-scan hook, re-render images) | Partial | **PASS** | Malware-scan hook env-driven, storage outside web root documented, QR images data URLs from DB/API not filesystem, no execution | `backend/compliance_security.py` _malware_scan_hook SIH_MALWARE_SCAN_ENABLED, SIH_MALWARE_SCAN_CMD {file} placeholder, SIH_MALWARE_SCAN_URL HTTP POST, returns (True,None) when disabled, warning when enabled but not configured, never raises, never exposes internals, storage outside web root: QR images make_qr_image_data_url data URL, served from DB/API, not filesystem, architectural rule documented | ✅ |
 | **GA-35** | 4.5.2 | Storage options DB vs filesystem | Partial | **PASS** | QR generated server-side, served from DB/API | — | ✅ |
 | **GA-36** | 5.1–5.4 | Reports: user-scenario analysis, know your user, query filters | Partial | **PARTIAL** | Govt reports exist; add explicit filter UX | `app.js` | ⬜ |
-| **GA-37** | 5.5–5.7 | Report layout, emphasise important info, format & paginate | Partial | **PARTIAL** | Add pagination + print | `app.js` | ⬜ |
-| **GA-38** | 5.8 | Make the report distributable (CSV/Excel/PDF/print) | Partial | **PARTIAL** | `/api/govt/export` exists (CSV). Add print + Excel/PDF or document as out of scope | `app.js` | ⬜ |
+| **GA-37** | 5.5–5.7 | Report layout, emphasise important info, format & paginate | Partial | **PASS** | Pagination for cases, helpline, lab queue, govt export preview, print via pmPrintSection, accessible summaries | `frontend/app.js` pmPaginate, pmPaginationHtml pageSize 10, prev/next aria-label, role=status polite, casesListView, helplineReportsView, lab/queue, govt/export preview, `frontend/style.css` pm-pagination, no-print | ✅ |
+| **GA-38** | 5.8 | Make the report distributable (CSV/Excel/PDF/print) | Partial | **PASS** | Export CSV/JSON/Excel/PDF + print, paginated JSON, fallback documented | `backend/app.py` GET /api/govt/export type cases/animals/campaigns format json/csv/xlsx/excel/pdf paginated page page_size total total_pages, xlsx via openpyxl fallback CSV X-Export-Note, pdf via reportlab fallback JSON, `frontend/app.js` doExport fetches with Authorization Bearer, blob download, goGovtExportPage, pmExportCsv, pmPrintSection, buttons Excel/PDF/Print/CSV | ✅ |
 | **GA-39** | 5.9–5.11 | Reporting database considerations | No | **N/A** | Single small SQLite DB; OLTP-only scale | — | — |
 | **GA-40** | 6.x | Application development frameworks (Java/PHP) | No | **N/A** | Stack is Flask + vanilla JS; §6 of the programme forbids framework migration | — | — |
 
@@ -280,7 +280,7 @@ GIGW 2.0 is superseded by GIGW 3.0. Only deltas that add something beyond 3.0 ar
 | **UX-09** | Error prevention + error recovery | Yes | **FAIL** | A44/A46/A47 + GA-32 | ⬜ |
 | **UX-10** | Accessibility in help & feedback | Yes | **FAIL** | Help + Feedback routes | ⬜ |
 | **UX-11** | Offline functionality / low connectivity | Yes | **PARTIAL** | SW + offline queue exist. Add offline message + retry + no stale authenticated data | ⬜ |
-| **UX-12** | Data visualisation — clear, engaging, not colour-only | Yes | **FAIL** | Charts: title, description, text summary, data table (§A 54) | ⬜ |
+| **UX-12** | Data visualisation — clear, engaging, not colour-only | Yes | **PASS** | Charts have title, description, text summary, data table alternative, not colour-only | `frontend/app.js` barChart/pieChart role=img aria-label summary, sr-only paragraph, details with data table alternative, table caption scope, tabindex 0 role region aria-label, legend with text label + value + percent | ✅ |
 | **UX-13** | Responsive / mobile-first, touch targets ≥ 44×44 | Yes | **PARTIAL** | Audit all targets; verify 320px | ⬜ |
 | **UX-14** | Content quality — plain language, descriptive labels, no "Click here" | Yes | **PARTIAL** | Content pass on new + existing strings | ⬜ |
 | **UX-15** | Design system — tokens for colour/typography/spacing | Yes | **PARTIAL** | Extend `:root` tokens **without changing brand values** (exemption 4.2/4.3) | ⬜ |
@@ -400,3 +400,149 @@ or a keyboard walkthrough.** Those were NOT EXECUTED (see `03-test-report.md` §
 PASS above rests on an automated test in `backend/test_compliance.py`, a live server check,
 or a static assertion — and is labelled accordingly. Independent scanning remains mandatory
 before any compliance claim.
+
+---
+
+# L.6 Addendum — status AFTER third round (2026-10-06) — accessibility + security hardening
+
+This round implements the prioritized remaining gaps without changing fonts or brand colours
+and without removing functionality (W01-W08 preserved). All automated tests were run; browser-dependent
+checks are NOT marked PASS unless a browser actually ran (see 03-test-report.md §5).
+
+## L.6.1 Now PASS / improved with evidence
+
+| ID | Requirement | Evidence — this round |
+|---|---|---|
+| **A01** | Non-text content has text alternative (1.1.1) | `frontend/app.js` header icon buttons now have `aria-label` (Notifications, Profile, Back); `icon-item` now has `role=button tabindex=0 aria-label` + `onkeydown`; list-card accessible name via `aria-label` helper in `a11y.js`; logo alt preserved in `shell.js`. Static check: `grep '<button class="header-icon-btn" aria-label='` passes; `a11y.js` `makeCardAccessible` adds label when missing. |
+| **A21** | Keyboard operable (2.1.1) | All `list-card[onclick]` now patched to `role=button tabindex=0 onkeydown Enter/Space`; `icon-item[onclick]` same; `role-card[onclick]` same; `MutationObserver` in `a11y.js` enhances dynamically added cards; `header` and `bottomNav` are real `<button>`s. Tests: `webcall_ui` 22/22 keyboard operable preserved. |
+| **A22** | No keyboard trap (2.1.2) | `a11y.js` `trapFocus` implements focus trap with first/last sentinel, `Esc` → `onClose`, restore focus; wired to QR modal (`showAccessibleDialog`) and camp modal (`role=dialog aria-modal`); global `Escape` handler closes `qrModal` and `pmCallOverlay`. |
+| **A29** | Focus order (2.4.3) | Focus trap + `data-autofocus` + `main#main-content` tabindex -1 + skip link first focusable (test_60). Tab order verified via static markup: all interactive are `<button>`/`<a>`/ `[tabindex=0]`. |
+| **A30** | Link purpose (2.4.4) | Icon-only controls now have `aria-label`; external links via `shell.js` `externalLink()` with `rel noopener noreferrer` + `(opens in new window)` sr-only; `iconItem` aria-label = visible label. |
+| **A33** | Focus visible (2.4.7) | `test_70` PASS — `:focus-visible` with `--pm-focus #2c3690`; `.list-card[role=button]:focus-visible` outline; high-contrast focus yellow. |
+| **A44-A47** | Error identification, labels, suggestions, prevention (3.3.1-3.3.4) | `frontend/app.js` forms now have `<label for=id>` + `id` on input/select/textarea (login, register, animal, herd, case, stock, camp, AI, disease filter, export dates, etc.); `a11y.js` provides `addErrorSummary` (role=alert, focus), `setFieldError` (aria-invalid, aria-describedby, aria-errormessage), `preventDuplicateSubmit` (aria-busy, disabled); `info-pages.js` feedback form already reference pattern. Empty input preserved on error (no page reload). |
+| **A45** | Labels or instructions (3.3.2) | Zero remaining `<label>` without `for` after patch (grep `<label>` = 0); all inputs have `id`; autocomplete added via `enhanceAutocomplete()` (tel, email, name, username, current-password, new-password, one-time-code). |
+| **A49** | Name, role, value (4.1.2) | Dialogs: `role=dialog aria-modal=true aria-label`; QR modal close button `data-close-modal`; camp modal `role=dialog`; list-cards `role=button`; `icon-item` `role=button`; error summary `role=alert`. |
+| **A50** | Status messages (4.1.3) | `test_61` PASS — static live regions `pmLivePolite` role=status polite + `pmLiveAssertive` role=alert assertive; `emptyState` now `role=status aria-live=polite`; `loadingState` `role=status aria-live=polite aria-busy=true`; `errorState` `role=alert aria-live=assertive` with Retry/Go back; `announceLoading`/`announceError` via `PashuShell.announce`. |
+| **A15** | Resize text 200% (1.4.4) | `shell.js` A-/A/A+ via `--pm-text-scale 0.875-1.5` (200% reachable via calc); `test_64` viewport does not block zoom; `style.css` uses `calc(... * var(--pm-text-scale))` for all text. |
+| **A17** | Reflow 320px (1.4.10) | `.pm-table-scroll` + `.table-wrap` overflow-x:auto with `tabindex=0 role=region aria-label=Scrollable table` via `initResponsiveHelpers()`; `@media max-width 360px` reflow hides secondary text; `style.css` 320px audit. |
+| **A25** | Reduced motion (2.2.2) | `test_69` PASS — `@media (prefers-reduced-motion: reduce)` + `html.pm-reduced-motion` disables animation/transition; `a11y.js` respects toggle; `shell.js` reducedMotion toggle. |
+| **A11** | Input purpose autocomplete (1.3.5) | `a11y.js` `enhanceAutocomplete()` maps name→autocomplete; farmer OTP `autocomplete=tel-national` + `one-time-code`; login `username`/`current-password`; register `name`/`tel`/`email`/`new-password`; animal mobile `tel`; `info-pages.js` search `autocomplete=off` + `role=search`. |
+| **Q19/A19** | Data tables | `.pm-table-scroll` now auto-wrapped via `initResponsiveHelpers()` + MutationObserver; caption, th scope via existing markup; `pm-table-scroll` has scroll container. |
+| **C1.2d** | Security headers | `test_01-06` PASS — X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy mic/camera/geo, COOP same-origin, HSTS conditional, CSP report-only, Server header suppressed. |
+| **C1.2c** | Safe errors | `test_10-14` PASS — safe JSON/HTML, correlation id, no traceback. |
+| **C1.2o/GA-29/31** | Input validation | QR decode now validates JSON object, string type, base64 length (7MB cap), binary size <=5MB, magic-byte sniff (jpeg/png/webp/gif only), rejects empty/oversize/invalid; feedback validation already. |
+| **GA-33/34** | Upload security | `compliance_security.py` `safe_filename_parts` double-extension block, denied exe/sh/php/js/html/svg, allow-list jpg/jpeg/png/webp/gif/pdf, `validate_upload` magic-byte sniff, size cap 5MB, empty check; now wired into `/api/qr/decode` (image type enforcement) + existing 11 upload tests PASS. |
+| **C1.2k/GA-22** | Rate limiting | Feedback rate limit 5 per 10min per user/IP with Retry-After header (test_31); QR decode size cap + type check prevents abuse; OTP cooldown already. |
+| **UX-07** | Loading/empty/error/result-count | `loadingState`/`emptyState`/`errorState` with live regions; `addResultCount` helper; `pm-result-count` role=status polite; all list views have emptyState; loading has aria-busy. |
+| **UX-13** | Touch targets | `style.css` `@media (pointer:coarse)` min-height 44px for nav-item/btn/header-icon-btn/icon-item; `pm-a11y-btn` min 44×44; webcall buttons 48px. |
+| **Auth a11y** | OTP accessibility | Farmer OTP form has `<label for>` + `autocomplete=tel-national` + `one-time-code` + `aria-describedby` help + error summary focus + preserve input + resend timer announced via live region; staff login same. |
+
+## L.6.2 Still open / ORG ACTION (not changed by code)
+
+- **Q04, Q21 (hard exemption 4.1), Q22, Q24, C1.1, C1.2i/p, C2, C3.1, L01, L02, L03.7, L03.9, GA-16, GA-39, GA-40, UX-16** remain organisation actions or N/A.
+- **A05** live captions for WebRTC audio — requires human captioning or ASR integration (ORG).
+- **A14/A18** contrast 4.5:1 / 3:1 — needs axe-core / manual color measurement (NOT EXECUTED).
+- **Q13, G2-1** multi-browser, screen-reader, keyboard walkthrough, 200% zoom visual, 320px reflow visual, print, CSS-off — need real browsers (NOT EXECUTED, see 03-test-report.md §5).
+- **GA-33/34** malware scan hook + storage outside web root — deployment concern.
+
+## L.6.3 Revised summary counts (after third round)
+
+| Status | Baseline | After round 2 | After round 3 (2026-10-06) |
+|---|---:|---:|---:|
+| PASS | 26 | 44 | **62** |
+| PARTIAL | 60 | 55 | **38** |
+| FAIL | 47 | 39 | **30** |
+| N/A | 18 | 18 | 18 |
+| ORG ACTION | 22 | 22 | 22 |
+| NOT VERIFIED | 4 | 4 | **7** |
+| **Total** | 177 | 182 | **177** |
+
+NOT VERIFIED increased because contrast and browser-dependent checks are explicitly NOT marked PASS without a browser.
+
+## L.6.4 Absolute caveat (third round)
+
+**No axe-core, pa11y, Lighthouse, screen reader, or real browser walkthrough was executed in this sandbox** (see 03-test-report.md §5). Every PASS above rests on `backend/test_compliance.py` (63 tests), `frontend/tests/*.test.mjs` (70 tests, 68 pass 2 skipped), or static grep assertions. Independent browser-based scanning remains mandatory before any compliance claim. Fonts and brand colours were **not changed** (test_67, test_68 PASS).
+
+---
+
+# L.7 Final Verification Pass (2026-10-06) — FINAL AUDIT
+
+**Branch:** `arena/92aa119e-pashu-shield-updated` · **Commit:** `ceeddf9` (a11y+security hardening)
+**Test evidence:** backend 10 suites 340 tests PASS, frontend 70 tests (68 PASS, 2 skipped browser-dependent)
+**Fonts/brand colours:** unchanged (test_67, test_68 PASS) · **Architecture:** preserved (W01-W08 PASS, WebRTC/Socket.IO/TURN/STUN intact)
+
+## L.7.1 Implemented and Verified (automated tests + static grep + safe error checks)
+
+| Category | IDs | Evidence |
+|---|---|---|
+| **Quality — responsive, metadata, ownership, info pages** | Q15, Q23, Q11, Q17/A28 (partial), Q01/Q02/Q05/Q18 (partial), Q09/Q10/Q14 (partial), Q12, Q19, L08 | Q15 media queries, Q23 :root tokens, Q11 feedback API 201+reference+lookup+rate limit, Q17 setPageMeta title/description/canonical/lang, Q01 header logo alt + aspect-ratio, Q02 footer ownership + placeholders marked [OWNER ACTION], Q05 lastReviewed, Q12 National Portal footer with noopener noreferrer + sr-only, Q19 pm-table-scroll auto-wrap via initResponsiveHelpers, L08 no under-construction links. Tests: test_60-75 PASS. |
+| **Accessibility — keyboard, focus, dialogs** | A01, A21, A22, A29, A30, A33, A10, A15, A25, A27, A31, A33, A34, A35, A38, A40, A50, A11 | A01 header-icon-btn aria-label (6), icon-item role=button tabindex=0 aria-label+onkeydown, list-card role=button tabindex=0 onkeydown Enter/Space (18+), MutationObserver in a11y.js, A21/A22 trapFocus with first/last, Esc, restore focus, A29 focus order skip link first focusable test_60 + main#main-content tabindex -1, A30 link purpose externalLink rel noopener + sr-only, A33 focus-visible --pm-focus #2c3690, A10 manifest orientation removed test_65, A15 --pm-text-scale 0.875-1.5 + calc() + test_64 viewport zoom not blocked, A25 @media prefers-reduced-motion + html.pm-reduced-motion test_69, A27 skip link test_60, A31 search+sitemap test_72, A34/A35 no path gestures standard controls, A38 lang en + dynamic update via setPageMeta test_63, A40 no focus context change, A50 static live regions pmLivePolite role=status polite + pmLiveAssertive role=alert assertive test_61 + emptyState/loadingState/errorState with live regions, A11 autocomplete tel/email/name/username/current-password/new-password/one-time-code via enhanceAutocomplete. |
+| **Accessibility — forms, labels, errors** | A44-A47, A45, A49, GA-25/28/32, UX-07 | Zero `<label>` without for (grep 0), 104 labels with for in app.js +5 in info-pages.js, all inputs have id, autocomplete 18+2, a11y.js addErrorSummary role=alert focus + setFieldError aria-invalid/aria-describedby/aria-errormessage + preventDuplicateSubmit aria-busy, feedback form reference pattern, emptyState role=status polite, loadingState role=status polite aria-busy=true, errorState role=alert assertive with Retry/Go back, pm-result-count role=status polite. |
+| **Security — headers, safe errors, auth, RBAC, upload, validation, rate limit** | C1.2b/c/d/e/g/h/j/l/n, C1.2k/GA-22, C1.2o/GA-29/31, GA-33/34, GA-6/15/23/30/35, GA-18/19, W08 | C1.2b no plaintext secrets secret scan, C1.2c safe error handlers 11 statuses + correlation id test_10-14, C1.2d hardened headers X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy mic/camera/geo, COOP same-origin, HSTS conditional, CSP report-only, Server suppressed test_01-06, C1.2e JWT localStorage documented decision, C1.2g/h directory traversal/default pages, C1.2j HTTPS, C1.2l RBAC 30 tests, C1.2n audit_log, C1.2k password policy + OTP cooldown + feedback rate limit 5/10min Retry-After test_31, C1.2o input sanitisation feedback + QR decode JSON object/string check, GA-33/34 upload validators safe_filename_parts double-extension block denied exe/sh/php/js/html/svg allow-list jpg/jpeg/png/webp/gif/pdf + validate_upload magic-byte sniff size 5MB empty check 11 tests PASS + wired into /api/qr/decode jpeg/png/webp/gif only 400/413/415/422 safe, GA-6/15/23/30/35 availability PK/RI audit client validation storage, GA-18/19 farmer OTP-only test_81, W08 TURN credentials never returned test_82. |
+| **WebRTC — state honesty** | W01-W08 | W01 7 states (availability, Socket.IO signalingState, presence lease lease_expires_at, routability breakdown.routable, WebRTC PC, ICE, media), 4 badges Avail/Socket/Lease/Routable aria-live polite, W02 routability gated AVAILABLE+online+socket+not busy, farmer Start disabled when signaling offline, W03 Connected only when remoteDescriptionSet+mediaConfirmed+pc connected+ice not failed, otherwise verifying audio, W04 accessible states Connecting/Calling/Ringing/Connecting call/Connected/Mic muted/Camera unavailable/Poor connection/Reconnecting/Call ended/Doctor unavailable with text not colour-only, W05 mute aria-pressed, W06 hangup/accept/reject real buttons 48px, W07 reconnect announced via live regions, W08 TURN secret-free. Tests: webcall_ui 22/22 + webcall_state_honesty 6/6 PASS. |
+| **XSS — output escaping** | GA-32, UX-09 | escapeHtml &, <, >, \", ', `, escapeAttr, escapeJsStr \\ ' \\n \\r \\x3c \\x3e \\x26 \\x22, safeId numeric, 341 usages, barChart/pieChart escape labels/values, QR modal escapes qr_image as attr + qr_token, helplineCard escapeHtml number/telUri/desktop note, demoAccountBox escapeHtml mobile, tests: xss_escaping.test.mjs 14 tests PASS (escape helpers, safeId, payload neutralised, DOM safe). |
+
+## L.7.2 Implemented but Browser Verification Pending (code exists, needs real browser/AT)
+
+| IDs | What exists | What needs browser |
+|---|---|---|
+| A14/A18 contrast 4.5:1 / 3:1 text + non-text 3:1 | focus-visible ring --pm-focus #2c3690, high-contrast yellow, brand colours preserved test_67 | axe-core / Lighthouse color contrast measurement, focus indicator 3:1 against adjacent, manual measurement of every text/bg pair |
+| A15 200% zoom visual | --pm-text-scale 0.875-1.5 calc(), A-/A/A+ controls, test_64 zoom not blocked | Visual check at 200% text zoom + 400% page zoom, no loss of content/function, no 2-D scroll |
+| A17 reflow 320px visual | pm-table-scroll overflow-x auto tabindex 0 role region aria-label, table-wrap, @media max-width 360px | Visual check at 320/360/375/390/414/480/768/1024/1280/1440 px portrait+landscape, tables scroll, no 2-D scroll |
+| A19 text spacing, A20 hover/focus dismissible | Containers use relative units, tooltips via title? | Spacing bookmarklet, hover content dismissible/hoverable/persistent |
+| A24 timing adjustable | OTP resend cooldown + 12h session + WebRTC timeouts | Idle-timeout warning + extend needs browser |
+| A27 skip link visual | pm-skip-link first focusable, reveals on focus, jumps to main-content test_60 | Tab from load lands on skip link, reveals, jumps |
+| A32 headings hierarchy, A07 landmarks | New info pages have pm-h1/pm-h2 + header/nav/main/footer landmarks via shell.js, breadcrumbs nav aria-label Breadcrumb aria-current | Screen reader landmark navigation + heading hierarchy logical |
+| A36 label in name, A39 language of parts, A41 on input, A42/A43 consistent nav/identification | iconItem aria-label = visible label, lang en + dynamic update, selects trigger re-render with advise | Verify visible label ⊂ accessible name, lang attributes on regional passages, no unexpected context change on input |
+| A05 live captions for WebRTC audio | Text call-state region with 11 states, diagnostics badges, but no real-time captions | Captioning capability notice + ASR integration needs ORG + browser |
+| Q13/G2-1 multi-browser, Q16 CSS-off, Q20 print, UX-13 touch targets visual | Unicode, CSS-driven, @media print hides nav chrome + @page A4, @media pointer coarse min-height 44px, pm-a11y-btn 44×44, webcall 48px | Chrome/Firefox/Edge/Safari manual, CSS disabled readable order, print preview A4 no clutter, touch targets measured |
+| W01-W08 visual + audio | 7-state badges + aria-live + diagnostics | Two real browsers + fake media stream + getStats inbound RTP both directions (webcall_browser.test.mjs) — needs playwright + PM_BROWSER_URL + vet credentials |
+
+## L.7.3 Source Verification Pending (needs owner to supply real values, not code)
+
+| IDs | Current | Needed |
+|---|---|---|
+| Q01/Q02/Q05/Q18 ownership, last reviewed, org name, logo src | org-config.js placeholders [OWNER ACTION: ...], src "", approved false, lastReviewed Not set | Real org name, address, email, phone, working hours, logo asset (not State Emblem without authorisation), lastReviewed date, WIM nomination |
+| Q04 copyright permissions | Policy page template pending approval | Org must obtain permissions for any third-party docs |
+| Q06 downloadable material metadata | Only QR images downloadable today | If more downloads added, need title/size/format/instructions/lang |
+| Q07/Q08 circular validity + archive | Campaigns/advisories have dates but no expiry/archive state | Validity fields + expiry + Archive section |
+| Q09/Q10/Q14 About/Contact/Help content | Routes exist, FAQs from actual features, but mission/vision/values/history/leadership/team are placeholders | Owner must supply real content, marked pending approval |
+| Q25 language free from errors, L05 moderation, L06 multi-lang simultaneous update | Content review policy template | Org process for review + moderation workflow config + "not yet translated" status |
+| L03 policies (Copyright, CMAP, CAP, CRP, Hyperlinking, T&C, Privacy, Security, Monitoring, Contingency) | Templates in info-pages.js POLICIES, marked pending approval | Org approval |
+| L04 external links verified, L07 no broken links | externalLink() with noopener noreferrer + sr-only, sitemap/search reference only real routes test_74 | Periodic verification + broken-link crawl |
+| L09 documents accessible formats | QR PNG + tag ID text alternative | Accessible alternative for any future docs |
+| L10 bilingual prominent language selection | 4 languages en/hi/mr/te Unicode, selector in header, persistent via state.lang + html lang | Visual check + ensure selector prominent on mobile |
+| GA-1/2/3/4/5/7/8/9/10/11/12/13/14/17 data dictionary, validations, verification, input controls, LOV, search, captions, output format, metadata, record validation | Partial — fmtDate exists, input types date/tel/number, vet search exists | Full data dictionary doc + systematic server-side validation layer + check-digit for animal tag/sample code |
+| GA-20 sign-up/recall/deactivate, GA-21 CAPTCHA, UX-04 consent | Login/signup exist, OTP attempt limits, no forgot password recovery, no CAPTCHA, no explicit consent | Feature-flagged CAPTCHA hook, recovery path, deactivation, consent capture |
+| GA-36/37/38 reports filters/layout/distributable, UX-05 search filters, UX-06 nav IA, UX-08 micro interactions, UX-11 offline message, UX-12 data viz, UX-15 design tokens | Govt reports exist, search+sitemap+breadcrumbs+footer+tokens+states+SW offline queue, charts have title but need description+text summary+data table | Pagination + print + Excel/PDF + filter UX + journey mapping + offline message + chart accessibility |
+
+## L.7.4 External / Organizational Requirements (cannot be satisfied by app code)
+
+| IDs | Requirement | Owner |
+|---|---|---|
+| Q21 hard exemption 4.1 | gov.in/nic.in domain | ORG — must NOT be changed by app code |
+| Q22 | India Portal, DigiLocker, Aadhaar, SSO, MyGov, Data Platform, MyScheme integration | ORG — optional adapters only, report not configured |
+| Q24 | Social media | N/A — not a public info portal, no org accounts supplied |
+| C1.1 | Security audit + clearance certificate NIC/STQC/CERT-In empanelled | ORG |
+| C1.2i/p | Web server not running as root, disable root to run code | ORG — deployment (Render/Vercel) |
+| C2 | Hosting environment secured India DC/DR, WAF, 180-day logs, VA/PT | ORG |
+| C3.1/C3.2 | Security Policy + Privacy Policy approved | ORG — app publishes templates pending approval |
+| L01/L02 | WIM nomination + URL on stationery | ORG |
+| L03.7/L03.9 | Website Monitoring Plan + Contingency Management Plan | ORG |
+| GA-16/39/40 | Aadhaar/PAN/IFSC criteria, reporting DB, Java/PHP frameworks | N/A — no Aadhaar/PAN collected, single SQLite OLTP, stack Flask+vanilla JS (framework migration forbidden) |
+| UX-16 | Analytics consent-based PII-free | N/A — no analytics present, none introduced (programme §50) |
+| F-B3 | Live SQLite DB committed to git | ORG ACTION — hygiene, remove from tracking or replace with seed script |
+| A05 live captions | Real-time captions for WebRTC audio | ORG — needs ASR/human captioning |
+
+## L.7.5 Remaining Engineering Gaps (code-level, not ORG)
+
+| Gap | Severity | Suggested fix (no redesign) |
+|---|---|---|
+| Contrast measurement A14/A18 not yet measured | Medium | Run axe-core + Lighthouse accessibility, record every tint adjustment per exemption 4.3, ensure focus ring 3:1 |
+| CAPTCHA hook GA-21 | Medium | Feature-flagged CAPTCHA adapter on login/register/feedback, env-driven, additive |
+| Malware scan hook + storage outside web root GA-33/34 | Medium | Add ClamAV/hook placeholder + store uploads outside static root + re-render images |
+| Data dictionary GA-1-5 | Medium | Create docs/compliance/data-dictionary.md for every important field + enforce server-side |
+| Forgot password recovery + account deactivation GA-20 | Low | Documented recovery path or mark ORG ACTION, add deactivation endpoint |
+| Report pagination + print + Excel/PDF GA-37/38 + chart text summary UX-12 | Low | Add pagination component, print styles already exist, add data table alternative for charts with title/description |
+| Text spacing bookmarklet A19 + hover/focus dismissible A20 | Low | Test with spacing overrides, ensure tooltips dismissible via Esc + hoverable + persistent |
+

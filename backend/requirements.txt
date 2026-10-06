@@ -19,3 +19,6 @@ simple-websocket>=1.0,<2
 # it is absent — but Render installs it so a ringing vet who is on another tab
 # still gets the notification. Requires VAPID_* to be configured to actually send.
 pywebpush>=2.0,<3
+# Reports export — Excel and PDF (GA-37/38)
+openpyxl>=3.1,<4
+reportlab>=4.0,<5

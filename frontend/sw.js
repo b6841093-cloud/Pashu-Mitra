@@ -9,14 +9,18 @@
    v8 (GIGW/GuDApps/UX compliance) adds the global shell: org-config.js,
    shell.js and info-pages.js. The fetch strategy is unchanged; no
    authenticated data is added to the offline cache.
+
+   v9 (a11y + security hardening) adds a11y.js for focus trap, dialogs,
+   keyboard operable cards, form error handling, live regions, etc.
    ================================================================= */
 
-const CACHE_NAME = "pashu-mitra-v8";  // bumped: global shell + GIGW info pages
+const CACHE_NAME = "pashu-mitra-v9";  // bumped: a11y.js + global shell + GIGW info pages
 const STATIC_ASSETS = [
   "/",
   "/index.html",
   "/style.css",
   "/app.js",
+  "/a11y.js",
   "/org-config.js",
   "/shell.js",
   "/info-pages.js",
