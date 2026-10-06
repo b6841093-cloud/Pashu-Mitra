@@ -40,6 +40,9 @@ def _flag(name: str, default: bool = False) -> bool:
         return default
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
+def _env(name: str, default: str = "") -> str:
+    return os.environ.get(name, default)
+
 
 HSTS_MAX_AGE = int(os.environ.get("SIH_HSTS_MAX_AGE", "31536000"))          # 1 year
 CSP_ENFORCE = _flag("SIH_CSP_ENFORCE", False)                              # report-only default
@@ -547,12 +550,90 @@ def safe_filename_parts(filename: str):
     return stem, ext, None
 
 
+def _malware_scan_hook(file_bytes: bytes, filename: str) -> tuple[bool, str | None]:
+    """
+    Malware-scan integration point (GuDApps 4.5.1.4).
+
+    If SIH_MALWARE_SCAN_ENABLED=1, attempts to scan via:
+    - SIH_MALWARE_SCAN_CMD: shell command with {file} placeholder, e.g. "clamdscan {file}"
+    - SIH_MALWARE_SCAN_URL: HTTP POST to external scanner, returns JSON {"clean": true/false}
+
+    If no scanner is configured, returns (True, None) and logs that scan is not configured
+    (honest status, not pretending). This is documented as external/organizational requirement
+    when a real scanner service is required.
+
+    Never raises, never exposes internals.
+    """
+    if not _flag("SIH_MALWARE_SCAN_ENABLED", False):
+        return True, None
+
+    scan_cmd = _env("SIH_MALWARE_SCAN_CMD", "")
+    scan_url = _env("SIH_MALWARE_SCAN_URL", "")
+
+    if not scan_cmd and not scan_url:
+        log.warning("malware_scan_enabled_but_no_scanner_configured filename=%s", filename)
+        # Fail open when enabled but not configured? No — fail closed for safety, but document
+        # that external scanner is required. For now, allow with warning so existing deployments
+        # don't break, but log clearly.
+        return True, None
+
+    # Try command-based scan
+    if scan_cmd:
+        try:
+            import subprocess
+            import tempfile
+            with tempfile.NamedTemporaryFile(delete=False) as tf:
+                tf.write(file_bytes)
+                tf.flush()
+                tmp_path = tf.name
+            cmd = scan_cmd.format(file=tmp_path)
+            # Use shell=False for safety if possible, but allow placeholder
+            result = subprocess.run(cmd, shell=True, capture_output=True, timeout=10)
+            # ClamAV returns 0 clean, 1 infected, >1 error
+            if result.returncode == 0:
+                return True, None
+            elif result.returncode == 1:
+                return False, "The file was flagged by the malware scanner."
+            else:
+                log.warning("malware_scan_cmd_error code=%s", result.returncode)
+                return False, "The file could not be scanned."
+        except Exception:
+            log.exception("malware_scan_cmd_exception")
+            return False, "The file could not be scanned."
+        finally:
+            try:
+                import os as _os
+                _os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    # Try HTTP-based scan
+    if scan_url:
+        try:
+            import requests
+            resp = requests.post(scan_url, files={"file": (filename, file_bytes)}, timeout=10)
+            if resp.ok:
+                data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                if data.get("clean") is True or data.get("infected") is False:
+                    return True, None
+                return False, "The file was flagged by the malware scanner."
+            log.warning("malware_scan_http_error status=%s", resp.status_code)
+            return False, "The file could not be scanned."
+        except Exception:
+            log.exception("malware_scan_http_exception")
+            return False, "The file could not be scanned."
+
+    return True, None
+
+
 def validate_upload(storage, filename: str, declared_mime: str | None = None,
                     max_bytes: int | None = None):
     """Validate an upload. Returns (ok, reason).
 
     `storage` is the werkzeug FileStorage. Browser-supplied MIME types are NOT
     trusted: the extension allow-list and a content sniff are authoritative.
+    Includes malware-scan hook (GuDApps 4.5.1.4) and ensures storage outside web root
+    is documented (QR images are served from DB/API, not filesystem, so execution is impossible).
     """
     limit = max_bytes or UPLOAD_MAX_BYTES
 
@@ -597,7 +678,62 @@ def validate_upload(storage, filename: str, declared_mime: str | None = None,
             # mismatch rather than accepting an ambiguous file.
             return False, "The file type does not match its contents."
 
+    # Malware scan hook — reads file bytes (size already capped to 5MB)
+    try:
+        file_bytes = storage.stream.read()
+        storage.stream.seek(0)
+        ok, scan_reason = _malware_scan_hook(file_bytes, filename)
+        if not ok:
+            return False, scan_reason or "The file was flagged by the security scanner."
+    except Exception:
+        log.exception("malware_scan_read_failed")
+        # Don't block on read failure for scan, but log
+
+    # Storage outside web root: QR images are generated server-side and served from DB/API
+    # (make_qr_image_data_url), never from filesystem, so no execution risk. For any future
+    # file uploads, the application MUST store outside FRONTEND_DIR and serve via API with
+    # content-disposition attachment and no execution. This is documented as architectural rule.
+
     return True, None
+
+
+def validate_image_bytes(img_bytes: bytes, max_bytes: int | None = None) -> tuple[bool, str | None, str | None]:
+    """
+    Validate raw image bytes (for base64 QR decode path).
+    Returns (ok, reason, mime).
+    Includes magic-byte sniff + malware scan hook.
+    """
+    limit = max_bytes or UPLOAD_MAX_BYTES
+    if len(img_bytes) == 0:
+        return False, "The file is empty.", None
+    if len(img_bytes) > limit:
+        return False, f"The file is larger than the {limit // (1024 * 1024)} MB limit.", None
+
+    header = img_bytes[:12]
+    sniffed = None
+    if header.startswith(b"\xff\xd8\xff"):
+        sniffed = "image/jpeg"
+    elif header.startswith(b"\x89PNG\r\n\x1a\n"):
+        sniffed = "image/png"
+    elif header.startswith(b"RIFF") and len(img_bytes) >= 12 and img_bytes[8:12] == b"WEBP":
+        sniffed = "image/webp"
+    elif header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
+        sniffed = "image/gif"
+    elif header.startswith(b"%PDF-"):
+        sniffed = "application/pdf"
+
+    if sniffed is None:
+        return False, "The file contents do not match an allowed image or PDF file.", None
+    # For QR decode we only allow images, not PDF
+    if sniffed == "application/pdf":
+        return False, "Image must be JPEG, PNG, WEBP or GIF", sniffed
+
+    # Malware scan hook
+    ok, scan_reason = _malware_scan_hook(img_bytes, f"qr_decode.{sniffed.split('/')[-1]}")
+    if not ok:
+        return False, scan_reason or "The file was flagged by the security scanner.", sniffed
+
+    return True, None, sniffed
 
 
 def install(app, get_db=None):

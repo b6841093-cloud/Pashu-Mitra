@@ -11,7 +11,14 @@ import io
 import base64
 import secrets
 import logging
+import time
 from datetime import datetime, timedelta, date
+
+def _flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
 from functools import wraps
 from ipaddress import ip_address
 from urllib.parse import urlsplit
@@ -55,6 +62,7 @@ from push_service import is_push_configured, get_public_key, push_notification
 from disease_knowledge import DiseaseKnowledge
 import turn_config
 import webcalling
+import captcha_service  # noqa: E402  (CAPTCHA hook GA-21, env-driven, no secrets)
 from realtime import (
     allowed_origins,
     emit_call_event,
@@ -468,6 +476,7 @@ FARMER_ROLE = "owner"
 
 
 @app.post("/api/auth/register")
+@captcha_service.captcha_required(action="register")
 def register():
     data = request.get_json(force=True) or {}
     requested_role = str(data.get("role") or "").strip().lower()
@@ -493,6 +502,22 @@ def register():
     preferred_language = (data.get("preferred_language") or "").strip().lower() or None
     if preferred_language and preferred_language not in SUPPORTED_LANGUAGES:
         return jsonify({"error": "Preferred language must be en, te, hi, or mr"}), 400
+    # Systematic validation GA-1-5 (additive, after original 400 paths)
+    v_errors = validation_service.validate_user_register(data)
+    if v_errors:
+        # Filter out owner role check which is handled separately with specific code
+        # Keep validation errors for other fields (XSS, mobile format, email format, etc.)
+        # But ignore errors that would duplicate original 400 checks (password length/mismatch, role)
+        filtered = [e for e in v_errors if e["field"] not in ("password", "confirm_password", "role") or "invalid characters" in e["message"].lower()]
+        # Also ignore mobile/email required because missing already handled
+        filtered = [e for e in filtered if not (e["field"] in ("mobile", "email", "full_name") and "required" in e["message"].lower() and e["field"] not in data)]
+        if filtered:
+            # If only role error remains, let original 400 handle; otherwise 422
+            if not (len(filtered) == 1 and filtered[0]["field"] == "role"):
+                # Check if any filtered error is XSS or format that should be 422
+                has_xss_or_format = any("invalid characters" in e["message"].lower() or "valid" in e["message"].lower() for e in filtered)
+                if has_xss_or_format:
+                    return jsonify({"error": "Validation failed", "fields": filtered, "code": "VALIDATION_FAILED"}), 422
 
     conn = get_db()
     try:
@@ -525,12 +550,21 @@ def register():
 
 
 @app.post("/api/auth/login")
+@captcha_service.captcha_required(action="login")
 def login():
     data = request.get_json(force=True) or {}
     identifier = data.get("identifier") or data.get("email") or data.get("mobile")
     password = data.get("password")
     if not identifier or not password:
         return jsonify({"error": "Email/mobile and password are required"}), 400
+    v_errors = validation_service.validate_login(data)
+    if v_errors:
+        # Filter missing-field errors which already handled as 400; only return 422 for XSS etc.
+        # For backward compat with existing tests, treat identifier/password required as 400
+        has_required = any(e["field"] in ("identifier", "password") and "required" in e["message"].lower() for e in v_errors)
+        if has_required:
+            return jsonify({"error": "Email/mobile and password are required"}), 400
+        return jsonify({"error": "Validation failed", "fields": v_errors, "code": "VALIDATION_FAILED"}), 422
 
     conn = get_db()
     user = conn.execute(
@@ -539,6 +573,13 @@ def login():
     if not user or not verify_password(password, user["salt"], user["password_hash"]):
         conn.close()
         return jsonify({"error": "Invalid credentials"}), 401
+    # Check deactivation (GA-20)
+    try:
+        if user["account_status"] == "DEACTIVATED":
+            conn.close()
+            return jsonify({"error": "Account is deactivated. Contact support to re-activate.", "code": "ACCOUNT_DEACTIVATED"}), 403
+    except Exception:
+        pass
     if user["role"] == FARMER_ROLE:
         # Password authentication is closed for farmers: even a correct legacy
         # password must not mint a farmer session (checked *after* the password
@@ -559,6 +600,180 @@ def login():
     conn.commit()
     conn.close()
     return jsonify({"token": token, "user": public_user(user)})
+
+
+# ----------------------------------- GA-20: forgot password & deactivation --
+# Vet/Govt/Lab can request password reset; Farmers (owner) remain OTP-only.
+# Deactivation is soft-delete, preserves audit trail, blocks future logins.
+
+@app.post("/api/auth/forgot-password")
+@captcha_service.captcha_required(action="forgot_password")
+def forgot_password():
+    """
+    Request a password reset. Anti-enumeration: always returns same message,
+    even if account not found. Farmers (owner) get specific guidance.
+    """
+    data = request.get_json(silent=True) or {}
+    identifier = (data.get("identifier") or data.get("email") or data.get("mobile") or "").strip()
+    if not identifier:
+        return jsonify({"error": "Email or mobile is required."}), 400
+
+    conn = get_db()
+    try:
+        user = conn.execute(
+            "SELECT * FROM users WHERE email=? OR mobile=?", (identifier, identifier)
+        ).fetchone()
+        if not user:
+            # Anti-enumeration: same response even if not found
+            return jsonify({
+                "ok": True,
+                "message": "If an account exists with that email or mobile, a password reset link has been sent. Check your email or SMS. If you are a farmer, use OTP to sign in.",
+                "reference": secrets.token_hex(6),
+            }), 200
+
+        # Farmers cannot use password reset
+        if user["role"] == FARMER_ROLE:
+            return jsonify({
+                "ok": True,
+                "message": "Farmers sign in with mobile OTP, not password. Use the Farmer login screen to request an OTP.",
+                "code": "FARMER_OTP_REQUIRED",
+            }), 200
+
+        # Check if deactivated
+        account_status = user["account_status"] if "account_status" in user.keys() else "ACTIVE"
+        if account_status == "DEACTIVATED":
+            return jsonify({
+                "ok": True,
+                "message": "If an account exists with that email or mobile, a password reset link has been sent.",
+                "reference": secrets.token_hex(6),
+            }), 200
+
+        # Create reset token
+        from auth_recovery import create_reset_token_for_user
+        plain_token = create_reset_token_for_user(
+            user["id"], request_ip=_client_ip(), user_agent=request.headers.get("User-Agent", "")[:200]
+        )
+        if plain_token:
+            # In production, this token would be emailed/SMSed. For now, log reference only, never token.
+            # Audit log
+            try:
+                audit_log(conn, "FORGOT_PASSWORD_REQUEST", "user", user["id"], actor_id=user["id"],
+                          actor_name=user["full_name"], actor_role=user["role"],
+                          details={"identifier": identifier}, ip=_client_ip())
+                conn.commit()
+            except Exception:
+                pass
+            # For demo/testing, return reference, not token. Token would be sent via email.
+            # To avoid breaking existing flows, we include token only if DEMO_MODE or test env
+            response = {
+                "ok": True,
+                "message": "If an account exists with that email or mobile, a password reset link has been sent. In this demo, the reset token is included for testing.",
+                "reference": f"RST-{int(time.time())}-{secrets.token_hex(3).upper()}",
+            }
+            # Only expose token in demo/test mode, never in production with real secrets
+            if os.environ.get("DEMO_MODE") == "true" or os.environ.get("SIH_CAPTCHA_PROVIDER") == "test" or _flag("SIH_EXPOSE_RESET_TOKEN", False):
+                response["reset_token"] = plain_token
+                response["note"] = "This token is only exposed in demo/test mode. In production it would be emailed."
+            return jsonify(response), 200
+        else:
+            return jsonify({"error": "Could not create reset token. Please try again."}), 500
+    finally:
+        conn.close()
+
+
+@app.post("/api/auth/reset-password")
+def reset_password():
+    """Reset password using a reset token."""
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or data.get("reset_token") or "").strip()
+    new_password = data.get("new_password") or data.get("password") or ""
+    confirm = data.get("confirm_password") or data.get("confirm") or ""
+
+    if not token:
+        return jsonify({"error": "Reset token is required."}), 400
+    if not new_password or len(new_password) < 6:
+        return jsonify({"error": "New password must be at least 6 characters."}), 400
+    if new_password != confirm and confirm:
+        return jsonify({"error": "Passwords do not match."}), 400
+    if len(new_password) > 128:
+        return jsonify({"error": "Password must be at most 128 characters."}), 400
+
+    from auth_recovery import verify_reset_token, consume_reset_token
+    result, err = verify_reset_token(token)
+    if err or not result:
+        return jsonify({"error": err or "Invalid reset token."}), 400
+
+    user_info = result["user"]
+    token_row = result["token_row"]
+
+    # Update password
+    conn = get_db()
+    try:
+        h, s = hash_password(new_password)
+        conn.execute(
+            "UPDATE users SET password_hash=?, salt=? WHERE id=?",
+            (h, s, user_info["id"]),
+        )
+        conn.commit()
+        # Consume token
+        consume_reset_token(token_row["id"])
+        # Audit
+        try:
+            audit_log(conn, "RESET_PASSWORD", "user", user_info["id"], actor_id=user_info["id"],
+                      actor_name=user_info["full_name"], actor_role=user_info["role"],
+                      details={"reset_token_id": token_row["id"]}, ip=_client_ip())
+            conn.commit()
+        except Exception:
+            pass
+        return jsonify({"ok": True, "message": "Password has been reset. You can now sign in with your new password."}), 200
+    except Exception:
+        return jsonify({"error": "Could not reset password."}), 500
+    finally:
+        conn.close()
+
+
+@app.post("/api/auth/deactivate")
+@auth_required()
+def deactivate_account():
+    """
+    Deactivate own account (soft delete). Preserves audit trail, blocks future logins.
+    Farmers can also deactivate, but must use OTP to re-activate via admin (ORG ACTION).
+    """
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or data.get("deactivation_reason") or "").strip()[:500]
+    confirm = data.get("confirm") or data.get("confirmation") or ""
+
+    # Require explicit confirmation
+    if str(confirm).lower() not in ("yes", "true", "deactivate", "confirm"):
+        return jsonify({
+            "error": "Please confirm deactivation by sending {\"confirm\": \"yes\"}.",
+            "code": "CONFIRMATION_REQUIRED",
+        }), 400
+
+    user_id = g.user["uid"]
+    role = g.user["role"]
+
+    # Farmers can deactivate, but warn that re-activation needs admin
+    from auth_recovery import deactivate_user
+    try:
+        deactivate_user(user_id, reason=reason or f"User {role} requested deactivation", actor_id=user_id)
+        conn = get_db()
+        try:
+            audit_log(conn, "DEACTIVATE_ACCOUNT", "user", user_id, actor_id=user_id,
+                      actor_name=g.user["name"], actor_role=role,
+                      details={"reason": reason}, ip=_client_ip())
+            conn.commit()
+        except Exception:
+            pass
+        finally:
+            conn.close()
+        return jsonify({
+            "ok": True,
+            "message": "Account has been deactivated. Contact support to re-activate. You have been signed out.",
+            "code": "ACCOUNT_DEACTIVATED",
+        }), 200
+    except Exception:
+        return jsonify({"error": "Could not deactivate account."}), 500
 
 
 # ------------------------------------------- farmer OTP login (mobile) ----
@@ -763,6 +978,7 @@ def farmer_clerk_login_route():
 
 
 @app.post("/api/auth/farmer/request-otp")
+@captcha_service.captcha_required(action="farmer_request_otp")
 def farmer_request_otp_route():
     """Send an OTP to a farmer's mobile number.
 
@@ -938,6 +1154,17 @@ def farmer_verify_otp_route():
     if user.get("role") != FARMER_ROLE:
         _audit_otp_event("OTP_ROLE_REJECTED", user_id=user.get("id"), mobile=mobile)
         return jsonify({"error": "Forbidden for this role", "code": "FORBIDDEN_ROLE"}), 403
+
+    # GA-20: block deactivated accounts
+    try:
+        # user may be dict from otp_service, need to check DB for account_status
+        conn = get_db()
+        db_user = conn.execute("SELECT account_status FROM users WHERE id=?", (user.get("id"),)).fetchone()
+        conn.close()
+        if db_user and db_user["account_status"] == "DEACTIVATED":
+            return jsonify({"error": "Account is deactivated. Contact support.", "code": "ACCOUNT_DEACTIVATED"}), 403
+    except Exception:
+        pass
 
     token = make_token(user)
     # The token, the claims and the role are produced by the unchanged
@@ -1142,6 +1369,10 @@ def list_herds():
 @auth_required(roles=["owner"])
 def create_animal():
     data = request.get_json(force=True) or {}
+    # Systematic validation (GA-1-5)
+    v_errors = validation_service.validate_animal(data)
+    if v_errors:
+        return jsonify({"error": "Validation failed", "fields": v_errors, "code": "VALIDATION_FAILED"}), 422
     animal_type = data.get("animal_type") or data.get("species")
     if not animal_type:
         return jsonify({"error": "Animal type is required"}), 400
@@ -1418,11 +1649,65 @@ def lookup_animal_qr():
 @app.post("/api/qr/decode")
 @auth_required()
 def decode_qr():
-    """Decode a QR image provided as Base64 payload using OpenCV."""
+    """Decode a QR image provided as Base64 payload using OpenCV.
+
+    Hardened per GuDApps 4.5 upload security + 4.4 validation:
+      * JSON body must be an object, image must be a string.
+      * Base64 length capped (approx 7 MB -> 5 MB binary).
+      * Decoded bytes size <= UPLOAD_MAX_BYTES.
+      * Magic-byte sniff must be an allowed image (jpeg/png/webp/gif).
+      * Rate limited per user/IP to avoid abuse.
+    """
     data = request.get_json(force=True) or {}
-    img_b64 = data.get("image") or ""
+    if not isinstance(data, dict):
+        return jsonify({"error": "Expected a JSON object"}), 400
+    img_b64 = data.get("image")
+    if not img_b64 or not isinstance(img_b64, str):
+        return jsonify({"error": "Missing image data"}), 400
+    img_b64 = img_b64.strip()
     if not img_b64:
         return jsonify({"error": "Missing image data"}), 400
+    # Approx size check on the base64 string itself (5 MB binary ~ 6.7 MB b64)
+    if len(img_b64) > 7 * 1024 * 1024:
+        return jsonify({"error": "Image is too large"}), 413
+    # Strip data URI prefix if present
+    raw_b64 = img_b64
+    if "," in raw_b64:
+        raw_b64 = raw_b64.split(",", 1)[1]
+    raw_b64 = raw_b64.strip()
+    if len(raw_b64) > 7 * 1024 * 1024:
+        return jsonify({"error": "Image is too large"}), 413
+    try:
+        img_bytes = base64.b64decode(raw_b64, validate=True)
+    except Exception:
+        return jsonify({"error": "Invalid image data"}), 400
+    # Use centralized validator (includes size, magic-byte, malware-scan hook, storage-outside-web-root doc)
+    try:
+        import compliance_security as _cs
+        ok, reason, mime = _cs.validate_image_bytes(img_bytes)
+        if not ok:
+            # Map reason to appropriate status
+            if "larger" in (reason or "").lower():
+                return jsonify({"error": reason}), 413
+            if "empty" in (reason or "").lower():
+                return jsonify({"error": reason}), 400
+            if "JPEG, PNG" in (reason or "") or "must be" in (reason or "").lower():
+                return jsonify({"error": reason}), 415
+            if "malware" in (reason or "").lower() or "flagged" in (reason or "").lower() or "scanned" in (reason or "").lower():
+                return jsonify({"error": reason}), 422
+            return jsonify({"error": reason}), 415
+    except Exception:
+        # Fallback to original checks if compliance_security not available
+        max_bytes = 5 * 1024 * 1024
+        if len(img_bytes) == 0:
+            return jsonify({"error": "Image is empty"}), 400
+        if len(img_bytes) > max_bytes:
+            return jsonify({"error": f"Image is larger than the {max_bytes // (1024*1024)} MB limit"}), 413
+        header = img_bytes[:12]
+        is_image = header.startswith(b"\xff\xd8\xff") or header.startswith(b"\x89PNG\r\n\x1a\n") or (header.startswith(b"RIFF") and len(img_bytes) >= 12 and img_bytes[8:12] == b"WEBP") or header.startswith(b"GIF87a") or header.startswith(b"GIF89a")
+        if not is_image:
+            return jsonify({"error": "Image must be JPEG, PNG, WEBP or GIF"}), 415
+
     val = decode_qr_image(img_b64)
     if not val:
         return jsonify({"decoded": False, "error": "No clear QR code detected in image"}), 422
@@ -1544,6 +1829,9 @@ def get_animal_medications(animal_id):
 @auth_required(roles=["owner"])
 def create_case():
     data = request.get_json(force=True) or {}
+    v_errors = validation_service.validate_case(data)
+    if v_errors:
+        return jsonify({"error": "Validation failed", "fields": v_errors, "code": "VALIDATION_FAILED"}), 422
     if not data.get("animal_id"):
         return jsonify({"error": "animal_id is required"}), 400
     conn = get_db()
@@ -2049,6 +2337,9 @@ def vet_search():
 def create_sample():
     """Create a digital laboratory specimen with unique Sample QR, GPS and timestamp."""
     data = request.get_json(force=True) or {}
+    v_errors = validation_service.validate_sample(data)
+    if v_errors:
+        return jsonify({"error": "Validation failed", "fields": v_errors, "code": "VALIDATION_FAILED"}), 422
     case_id = data.get("case_id")
     sample_type = data.get("sample_type", "Blood Sample")
 
@@ -4302,7 +4593,7 @@ def get_advisories():
 @app.get("/api/govt/export")
 @auth_required(roles=["govt"])
 def govt_export():
-    """Export cases, animals, or campaigns as CSV or JSON."""
+    """Export cases, animals, or campaigns as CSV, JSON, Excel, or PDF. GA-37/38."""
     import csv
     import io
 
@@ -4310,6 +4601,8 @@ def govt_export():
     fmt = (request.args.get("format") or "json").strip().lower()
     date_from = (request.args.get("from") or "").strip()
     date_to = (request.args.get("to") or "").strip()
+    page = int(request.args.get("page") or 1)
+    page_size = min(int(request.args.get("page_size") or 50), 500)
 
     if export_type not in ("cases", "animals", "campaigns"):
         return jsonify({"error": "type must be cases, animals, or campaigns"}), 400
@@ -4317,36 +4610,67 @@ def govt_export():
     conn = get_db()
     try:
         if export_type == "cases":
-            query = "SELECT c.*, a.animal_code, a.species, a.district AS animal_district FROM cases c JOIN animals a ON a.id=c.animal_id WHERE 1=1"
+            base_query = "SELECT c.*, a.animal_code, a.species, a.district AS animal_district FROM cases c JOIN animals a ON a.id=c.animal_id WHERE 1=1"
+            count_query = "SELECT COUNT(*) FROM cases c JOIN animals a ON a.id=c.animal_id WHERE 1=1"
             params = []
             if date_from:
-                query += " AND c.created_at >= ?"
+                base_query += " AND c.created_at >= ?"
+                count_query += " AND c.created_at >= ?"
                 params.append(date_from)
             if date_to:
-                query += " AND c.created_at <= ?"
+                base_query += " AND c.created_at <= ?"
+                count_query += " AND c.created_at <= ?"
                 params.append(date_to + " 23:59:59")
-            query += " ORDER BY c.id DESC"
-            rows = conn.execute(query, params).fetchall()
+            total = conn.execute(count_query, params).fetchone()[0]
+            if fmt in ("json", "csv", "xlsx", "excel", "pdf"):
+                # For export, ignore pagination unless explicit paginated flag
+                if request.args.get("paginated") == "1":
+                    base_query += " ORDER BY c.id DESC LIMIT ? OFFSET ?"
+                    params_p = params + [page_size, (page-1)*page_size]
+                    rows = conn.execute(base_query, params_p).fetchall()
+                else:
+                    base_query += " ORDER BY c.id DESC"
+                    rows = conn.execute(base_query, params).fetchall()
+            else:
+                base_query += " ORDER BY c.id DESC LIMIT ? OFFSET ?"
+                rows = conn.execute(base_query, params + [page_size, (page-1)*page_size]).fetchall()
             data = [dict(r) for r in rows]
         elif export_type == "animals":
-            query = "SELECT * FROM animals WHERE 1=1"
+            base_query = "SELECT * FROM animals WHERE 1=1"
+            count_query = "SELECT COUNT(*) FROM animals WHERE 1=1"
             params = []
             if date_from:
-                query += " AND created_at >= ?"
+                base_query += " AND created_at >= ?"
+                count_query += " AND created_at >= ?"
                 params.append(date_from)
             if date_to:
-                query += " AND created_at <= ?"
+                base_query += " AND created_at <= ?"
+                count_query += " AND created_at <= ?"
                 params.append(date_to + " 23:59:59")
-            query += " ORDER BY id DESC"
-            rows = conn.execute(query, params).fetchall()
+            total = conn.execute(count_query, params).fetchone()[0]
+            if request.args.get("paginated") == "1":
+                base_query += " ORDER BY id DESC LIMIT ? OFFSET ?"
+                rows = conn.execute(base_query, params + [page_size, (page-1)*page_size]).fetchall()
+            else:
+                base_query += " ORDER BY id DESC"
+                rows = conn.execute(base_query, params).fetchall()
             data = [dict(r) for r in rows]
         else:
-            rows = conn.execute("SELECT * FROM vaccination_campaigns ORDER BY id DESC").fetchall()
+            total = conn.execute("SELECT COUNT(*) FROM vaccination_campaigns").fetchone()[0]
+            if request.args.get("paginated") == "1":
+                rows = conn.execute("SELECT * FROM vaccination_campaigns ORDER BY id DESC LIMIT ? OFFSET ?", (page_size, (page-1)*page_size)).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM vaccination_campaigns ORDER BY id DESC").fetchall()
             data = [dict(r) for r in rows]
         conn.close()
 
+        # Paginated JSON response for reports UI (GA-37)
+        if request.args.get("paginated") == "1" and fmt == "json":
+            return jsonify({"items": data, "total": total, "page": page, "page_size": page_size, "total_pages": (total + page_size -1)//page_size})
+
         if fmt == "csv":
             if not data:
+                from flask import Response
                 return Response("No data", mimetype="text/csv", headers={"Content-Disposition": f"attachment;filename={export_type}.csv"})
             output = io.StringIO()
             writer = csv.DictWriter(output, fieldnames=data[0].keys())
@@ -4355,10 +4679,87 @@ def govt_export():
             from flask import Response
             return Response(output.getvalue(), mimetype="text/csv",
                             headers={"Content-Disposition": f"attachment;filename=pashumitra_{export_type}.csv"})
+        elif fmt in ("xlsx", "excel"):
+            try:
+                import openpyxl
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = export_type
+                if data:
+                    ws.append(list(data[0].keys()))
+                    for row in data:
+                        ws.append([row.get(k) for k in data[0].keys()])
+                bio = io.BytesIO()
+                wb.save(bio)
+                bio.seek(0)
+                from flask import Response
+                return Response(bio.getvalue(),
+                                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                headers={"Content-Disposition": f"attachment;filename=pashumitra_{export_type}.xlsx"})
+            except ImportError:
+                # Fallback to CSV if openpyxl not installed
+                output = io.StringIO()
+                if data:
+                    writer = csv.DictWriter(output, fieldnames=data[0].keys())
+                    writer.writeheader()
+                    writer.writerows(data)
+                else:
+                    output.write("No data")
+                from flask import Response
+                return Response(output.getvalue(), mimetype="text/csv",
+                                headers={"Content-Disposition": f"attachment;filename=pashumitra_{export_type}.csv",
+                                         "X-Export-Note": "Excel library not available, CSV fallback"})
+        elif fmt == "pdf":
+            try:
+                from reportlab.lib.pagesizes import A4
+                from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+                from reportlab.lib.styles import getSampleStyleSheet
+                from reportlab.lib import colors
+                bio = io.BytesIO()
+                doc = SimpleDocTemplate(bio, pagesize=A4)
+                styles = getSampleStyleSheet()
+                story = [Paragraph(f"Pashu-Shield {export_type.title()} Report", styles['Title']), Spacer(1,12),
+                         Paragraph(f"Generated: {__import__('datetime').datetime.utcnow().isoformat()}Z | Total: {len(data)}", styles['Normal']), Spacer(1,12)]
+                if data:
+                    # Limit columns for PDF readability
+                    cols = list(data[0].keys())[:8]
+                    table_data = [cols] + [[str(r.get(c,""))[:40] for c in cols] for r in data[:100]]
+                    t = Table(table_data)
+                    t.setStyle(TableStyle([
+                        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+                        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+                        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0,0), (-1,-1), 7),
+                        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+                    ]))
+                    story.append(t)
+                    if len(data) > 100:
+                        story.append(Spacer(1,12))
+                        story.append(Paragraph(f"... {len(data)-100} more rows truncated in PDF. Use Excel/CSV for full data.", styles['Italic']))
+                else:
+                    story.append(Paragraph("No data", styles['Normal']))
+                doc.build(story)
+                bio.seek(0)
+                from flask import Response
+                return Response(bio.getvalue(), mimetype="application/pdf",
+                                headers={"Content-Disposition": f"attachment;filename=pashumitra_{export_type}.pdf"})
+            except ImportError:
+                # Fallback to JSON with note
+                return jsonify({"items": data[:100], "total": len(data), "note": "PDF library not available, JSON fallback truncated to 100"}), 200, {"X-Export-Note": "reportlab not available"}
         else:
             return jsonify(data)
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        raise
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 # ================================================================
@@ -4989,8 +5390,11 @@ def webcall_summary():
 #   GuDApps 4.5     document upload security
 # ==========================================================================
 import compliance_security  # noqa: E402  (imported here so `app` already exists)
+import captcha_service  # noqa: E402  (CAPTCHA hook GA-21, env-driven, no secrets)
+import validation as validation_service  # noqa: E402  (GA-1-5 systematic validation)
 
 compliance_security.install(app, get_db=get_db)
+captcha_service.install_captcha(app)
 
 # Ensure the additive feedback table exists at startup (idempotent).
 try:

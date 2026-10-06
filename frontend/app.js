@@ -39,6 +39,7 @@ const state = {
   user: JSON.parse(localStorage.getItem("user") || "null"),
   lang: ["en", "mr", "hi", "te"].includes(localStorage.getItem("pm_lang")) ? localStorage.getItem("pm_lang") : "en",
   route: "#/",
+  pagination: { helpline: 1, govtExport: 1, cases: 1, animals: 1, labQueue: 1, labReports: 1, pageSize: 10 },
 };
 
 function getUserRole() {
@@ -1091,9 +1092,9 @@ function helplineCard(info = DEFAULT_IVR_INFO) {
     <div class="section-card helpline-card">
       <div class="section-title">☎️ ${farmer ? ft("helpline_title") : "Need Veterinary Help?"}</div>
       <div class="small-muted">${farmer ? ft("helpline_name") : "Pashu-Shield Helpline"}</div>
-      <div class="helpline-number">${number}</div>
-      <a class="btn btn-primary helpline-call" href="${telUri}" aria-label="${farmer ? ft("call_now") : "Call Pashu-Shield helpline"} ${number}">☎ ${farmer ? ft("call_now") : "CALL NOW"}</a>
-      <div class="desktop-call-note">${farmer ? ft("desktop_call_note") : "On a desktop computer, call this number from your mobile phone."}</div>
+      <div class="helpline-number">${escapeHtml(number)}</div>
+      <a class="btn btn-primary helpline-call" href="${escapeHtml(telUri)}" aria-label="${farmer ? ft("call_now") : "Call Pashu-Shield helpline"} ${escapeHtml(number)}">☎ ${farmer ? ft("call_now") : "CALL NOW"}</a>
+      <div class="desktop-call-note">${escapeHtml(farmer ? ft("desktop_call_note") : "On a desktop computer, call this number from your mobile phone.")}</div>
     </div>`;
 }
 
@@ -1121,7 +1122,7 @@ function farmerDemoAccountSection() {
       <div class="demo-box-title">🧪 ${ft("demo_account_title")}</div>
       <div class="demo-box-row">
         <span class="demo-box-label">${ft("demo_phone_label")}</span>
-        <span class="demo-box-value">${creds.mobile}</span>
+        <span class="demo-box-value">${escapeHtml(creds.mobile)}</span>
       </div>
       <div class="demo-box-row">
         <span class="demo-box-label">${ft("demo_otp_label")}</span>
@@ -1171,7 +1172,7 @@ function demoAccountBox(role) {
     // Farmers now sign in with a mobile OTP; the demo box shows the seeded mobile.
     return `<div class="demo-box">
     <b>${label("demo_account")}</b><br />
-    ${label("demo_mobile")}: <b>${account.mobile}</b>
+    ${label("demo_mobile")}: <b>${escapeHtml(account.mobile)}</b>
   </div>`;
   }
   return `<div class="demo-box">
@@ -1251,13 +1252,97 @@ function severityBadgeClass(sev) {
 function riskBadgeClass(level) {
   return level === "High Risk" || level === "Critical" ? "badge-red" : level === "Moderate Risk" || level === "Moderate" ? "badge-orange" : "badge-green";
 }
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/`/g, "&#96;");
+}
+function escapeAttr(value) { return escapeHtml(value); }
+function escapeJsStr(value) {
+  return String(value == null ? "" : value)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/</g, "\\x3c")
+    .replace(/>/g, "\\x3e")
+    .replace(/&/g, "\\x26")
+    .replace(/"/g, "\\x22");
+}
+function safeId(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? String(Math.trunc(n)) : "0";
+}
+if (typeof window !== "undefined") {
+  window.__pmEscapeHtml = escapeHtml;
+  window.__pmEscapeAttr = escapeAttr;
+  window.__pmEscapeJsStr = escapeJsStr;
+  window.__pmSafeId = safeId;
+}
+
 function emptyState(msg) {
   if (getUserRole() === "owner") msg = farmerRuntimeText(msg);
-  return `<div class="empty-state">${msg}</div>`;
+  const raw = String(msg);
+  const isPlain = !/<[a-z][\s\S]*>/i.test(raw);
+  return `<div class="empty-state" role="status" aria-live="polite">${isPlain ? escapeHtml(raw) : raw}</div>`;
 }
-function statCard(num, lbl) { return `<div class="stat-card"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`; }
+function loadingState(msg) {
+  const safe = escapeHtml(msg || "Loading…");
+  if (window.PMA11y && window.PMA11y.announceLoading) window.PMA11y.announceLoading(safe);
+  return `<div class="loading" role="status" aria-live="polite" aria-busy="true">${safe}</div>`;
+}
+function errorState(msg) {
+  const safe = escapeHtml(msg || "Something went wrong");
+  if (window.PMA11y && window.PMA11y.announceError) window.PMA11y.announceError(safe);
+  return `<div class="pm-state pm-state-error" role="alert" aria-live="assertive"><p class="pm-state-title">Error</p><p class="pm-state-body">${safe}</p><div class="btn-row" style="margin-top:10px"><button class="btn btn-outline btn-sm" onclick="location.reload()">Retry</button> <button class="btn btn-ghost btn-sm" onclick="history.back()">Go back</button></div></div>`;
+}
+/* GA-37/38 + UX-12: pagination + print/export helpers for reports */
+function pmPaginate(items, page, pageSize) {
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page || 1), totalPages);
+  const start = (safePage - 1) * pageSize;
+  return { pageItems: items.slice(start, start + pageSize), total, totalPages, page: safePage, start, end: Math.min(start + pageSize, total) };
+}
+function pmPaginationHtml(total, page, pageSize, baseAction, opts) {
+  opts = opts || {};
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  if (totalPages <= 1) return `<div class="pm-pagination-info" role="status" aria-live="polite">${total} item${total!==1?"s":""}</div>`;
+  const prevDisabled = page <= 1 ? "disabled" : "";
+  const nextDisabled = page >= totalPages ? "disabled" : "";
+  const info = `${(page-1)*pageSize+1}–${Math.min(page*pageSize, total)} of ${total}`;
+  const label = opts.label || "Pagination";
+  return `<nav class="pm-pagination" aria-label="${escapeAttr(label)}"><div class="pm-pagination-info" role="status" aria-live="polite">${escapeHtml(info)}</div><div class="btn-row"><button class="btn btn-outline btn-sm" ${prevDisabled} onclick="${baseAction}(${page-1})" aria-label="Previous page">‹ Prev</button><span class="pm-page-indicator" aria-current="page">Page ${page} of ${totalPages}</span><button class="btn btn-outline btn-sm" ${nextDisabled} onclick="${baseAction}(${page+1})" aria-label="Next page">Next ›</button></div></nav>`;
+}
+function pmExportCsv(filename, rows, headers) {
+  try {
+    const head = headers || Object.keys(rows[0] || {});
+    const csv = [head.join(",")].concat(rows.map(r => head.map(h => `"${String(r[h] ?? "").replace(/"/g,'""')}"`).join(","))).join("\n");
+    const blob = new Blob([csv], {type:"text/csv"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  } catch(e) { console.warn("CSV export failed", e); }
+}
+function pmPrintSection(id) {
+  const el = document.getElementById(id);
+  if (!el) return window.print();
+  const w = window.open("", "_blank"); if (!w) return window.print();
+  w.document.write(`<!doctype html><html><head><title>Print</title><style>body{font-family:system-ui,sans-serif;padding:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ccc;padding:8px;text-align:left} @media print{.no-print{display:none}}</style></head><body>${el.innerHTML}</body></html>`);
+  w.document.close(); w.focus(); setTimeout(()=>w.print(), 300);
+}
+function accountActionsCard() {
+  return `<div class="section-card"><div class="section-title">⚙️ Account</div><div class="btn-row"><button class="btn btn-ghost btn-sm" onclick="location.hash='#/account/deactivate'">Deactivate account</button><button class="btn btn-ghost btn-sm" onclick="localStorage.clear();location.hash='#/'">Log out</button></div><div class="small-muted" style="margin-top:6px">Deactivation preserves audit trail and blocks future logins. Contact support to re-activate.</div></div>`;
+}
+function statCard(num, lbl) {
+  const safeNum = typeof num === "number" || /^\d+(\.\d+)?$/.test(String(num)) ? String(num) : escapeHtml(num);
+  return `<div class="stat-card"><div class="num">${safeNum}</div><div class="lbl">${escapeHtml(lbl)}</div></div>`;
+}
 function iconItem(emoji, label, href) {
-  return `<div class="icon-item" onclick="location.hash='${href}'"><div class="icon-circle">${emoji}</div><span>${label}</span></div>`;
+  const safeHref = String(href).startsWith("#/") ? escapeAttr(href) : "#/";
+  return `<div class="icon-item" role="button" tabindex="0" aria-label="${escapeAttr(label)}" onclick="location.hash='${safeHref}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='${safeHref}'}"><div class="icon-circle">${escapeHtml(emoji)}</div><span>${escapeHtml(label)}</span></div>`;
 }
 
 // ---------------------------------------------------------------- shell --
@@ -1284,10 +1369,10 @@ function header(title, opts = {}) {
   }
   return `
   <div class="app-header">
-    ${opts.back ? `<button class="header-icon-btn" onclick="history.back()">←</button>`
-      : `<button class="header-icon-btn" onclick="location.hash='${notifHref}'">🔔${opts.notif ? '<span class="dot"></span>' : ''}</button>`}
+    ${opts.back ? `<button class="header-icon-btn" aria-label="Back" onclick="history.back()">←</button>`
+      : `<button class="header-icon-btn" aria-label="Notifications" onclick="location.hash='${notifHref}'">🔔${opts.notif ? '<span class="dot"></span>' : ''}</button>`}
     <h1>${title}</h1>
-    <button class="header-icon-btn" onclick="location.hash='${profileHref}'">👤</button>
+    <button class="header-icon-btn" aria-label="Profile" onclick="location.hash='${profileHref}'">👤</button>
   </div>
   ${qCount > 0 ? `
     <div style="text-align:center;margin-top:6px">
@@ -1370,13 +1455,23 @@ function setPageMeta(meta) { render._pageMeta = meta || null; }
 function barChart(items) {
   if (!items || !items.length) return emptyState("No data yet.");
   const max = Math.max(...items.map(i => i.value), 1);
-  return items.map(i => `
-    <div style="margin:10px 0">
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${i.label}</span><b>${i.value}</b></div>
-      <div style="background:#e8eaf3;border-radius:6px;height:12px;overflow:hidden">
-        <div style="width:${Math.max((i.value / max) * 100, 2)}%;height:12px;background:#3f51b5;border-radius:6px"></div>
-      </div>
-    </div>`).join("");
+  const total = items.reduce((s, i) => s + (Number(i.value) || 0), 0);
+  const summary = `Bar chart with ${items.length} items, total ${total}. Highest: ${escapeHtml(items[0]?.label || "")} with ${items[0]?.value || 0}.`;
+  const tableRows = items.map(i => `<tr><th scope="row">${escapeHtml(i.label)}</th><td>${escapeHtml(i.value)}</td></tr>`).join("");
+  return `
+    <div role="img" aria-label="${escapeAttr(summary)}" class="pm-chart pm-bar-chart">
+      <p class="sr-only">${escapeHtml(summary)}</p>
+      ${items.map(i => `
+        <div style="margin:10px 0">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${escapeHtml(i.label)}</span><b>${escapeHtml(i.value)}</b></div>
+          <div style="background:#e8eaf3;border-radius:6px;height:12px;overflow:hidden" aria-hidden="true">
+            <div style="width:${Math.max((i.value / max) * 100, 2)}%;height:12px;background:#3f51b5;border-radius:6px"></div>
+          </div>
+        </div>`).join("")}
+      <details class="pm-chart-details"><summary>View data table (accessible alternative)</summary>
+        <div class="pm-table-scroll" tabindex="0" role="region" aria-label="Bar chart data table"><table><caption>${escapeHtml(summary)}</caption><thead><tr><th scope="col">Label</th><th scope="col">Value</th></tr></thead><tbody>${tableRows}</tbody></table></div>
+      </details>
+    </div>`;
 }
 const PIE_COLORS = ["#3f51b5", "#e53935", "#43a047", "#fb8c00", "#8e24aa", "#00acc1", "#6d4c41", "#f4511e"];
 function pieChart(items) {
@@ -1389,12 +1484,21 @@ function pieChart(items) {
   }).join(", ");
   const legend = items.map((i, idx) => `
     <div style="display:flex;align-items:center;gap:6px;font-size:13px">
-      <span style="width:12px;height:12px;border-radius:3px;background:${PIE_COLORS[idx % PIE_COLORS.length]};display:inline-block;flex:none"></span>
-      <span>${i.label} — ${i.value} (${Math.round((i.value / total) * 100)}%)</span>
+      <span style="width:12px;height:12px;border-radius:3px;background:${PIE_COLORS[idx % PIE_COLORS.length]};display:inline-block;flex:none" aria-hidden="true"></span>
+      <span>${escapeHtml(i.label)} — ${escapeHtml(i.value)} (${Math.round((i.value / total) * 100)}%)</span>
     </div>`).join("");
-  return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
-      <div style="width:150px;height:150px;border-radius:50%;background:conic-gradient(${stops});flex:none"></div>
-      <div style="display:flex;flex-direction:column;gap:6px">${legend}</div>
+  const summary = `Pie chart with ${items.length} categories, total ${total}. ${items.map(i => `${i.label}: ${i.value} (${Math.round((i.value/total)*100)}%)`).join(", ")}.`;
+  const tableRows = items.map(i => `<tr><th scope="row">${escapeHtml(i.label)}</th><td>${escapeHtml(i.value)}</td><td>${Math.round((i.value/total)*100)}%</td></tr>`).join("");
+  return `
+    <div role="img" aria-label="${escapeAttr(summary)}" class="pm-chart pm-pie-chart">
+      <p class="sr-only">${escapeHtml(summary)}</p>
+      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+        <div style="width:150px;height:150px;border-radius:50%;background:conic-gradient(${stops});flex:none" aria-hidden="true"></div>
+        <div style="display:flex;flex-direction:column;gap:6px">${legend}</div>
+      </div>
+      <details class="pm-chart-details"><summary>View data table (accessible alternative)</summary>
+        <div class="pm-table-scroll" tabindex="0" role="region" aria-label="Pie chart data table"><table><caption>${escapeHtml(summary)}</caption><thead><tr><th scope="col">Category</th><th scope="col">Value</th><th scope="col">Percent</th></tr></thead><tbody>${tableRows}</tbody></table></div>
+      </details>
     </div>`;
 }
 
@@ -1445,7 +1549,7 @@ async function router() {
 
   if (!matched) {
     const farmer = getUserRole() === "owner";
-    render(`${header(farmer ? ft("not_found") : "Not found", { back: true })}<div class="loading">${farmer ? ft("not_found") : "Page not found."} <a class="link" onclick="location.hash='${homeFor(getUserRole() || "owner")}'">${farmer ? ft("go_home") : "Go home"}</a></div>`);
+    render(`${header(farmer ? ft("not_found") : "Not found", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("not_found") : "Page not found."} <a class="link" onclick="location.hash='${homeFor(getUserRole() || "owner")}'">${farmer ? ft("go_home") : "Go home"}</a></div>`);
     return;
   }
 
@@ -1467,7 +1571,7 @@ async function router() {
   } catch (e) {
     console.error(e);
     const farmer = getUserRole() === "owner";
-    render(`${header(farmer ? ft("error") : "Error", { back: true })}<div class="loading">⚠️ ${farmer ? farmerRuntimeText(e.message) : e.message}</div>`);
+    render(`${header(farmer ? ft("error") : "Error", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">⚠️ ${escapeHtml(farmer ? farmerRuntimeText(e.message) : e.message)}</div>`);
   }
 }
 window.addEventListener("hashchange", router);
@@ -1733,6 +1837,7 @@ function farmerOtpLoginForm(mode) {
       </div>
       <div class="otp-hint" id="otpMobileHint">${signup ? ft("signup_mobile_hint") : ft("otp_mobile_hint")}</div>
     </div>
+    <div id="pmCaptchaFarmer" class="pm-captcha-host"></div>
     <button id="otpSendBtn" class="btn btn-primary" type="button">${ft("send_otp")}</button>
     <div id="farmerDemoAccountSlot" class="demo-slot" hidden></div>
     <div id="otpCodeStep" class="otp-code-step" hidden>
@@ -1900,11 +2005,13 @@ async function farmerRequestOtp(options = {}) {
       farmerOtpState.viaPhoneAuth = true;
       data = { demo: false, resend_after: 30 };
     } else {
+      let body = { mobile, intent: farmerAuthMode };
+      if (window.PMCaptcha) Object.assign(body, window.PMCaptcha.getPayload("pmCaptchaFarmer"));
       data = await api(isResend ? "/auth/farmer/resend-otp" : "/auth/farmer/request-otp", {
         method: "POST",
         // The signup intent lets the backend reach a number that has no farmer
         // account yet; the login intent never does.
-        body: { mobile, intent: farmerAuthMode },
+        body: body,
         queueOffline: false, // never claim an SMS that was not dispatched
       });
       farmerOtpState.viaPhoneAuth = false;
@@ -2068,6 +2175,7 @@ function farmerChangeMobile() {
 
 function wireFarmerOtpForm() {
   loadFarmerAuthConfig();
+  if (window.PMCaptcha) window.PMCaptcha.renderCaptcha("pmCaptchaFarmer");
 
   const form = document.getElementById("farmerOtpForm");
   const mobileInput = document.getElementById("otpMobile");
@@ -2163,10 +2271,20 @@ function renderAuth(mode, role) {
     return;
   }
 
+  // CAPTCHA hook (GA-21) — env-driven, accessible alternative
+  if (window.PMCaptcha) {
+    if (mode === "login") {
+      window.PMCaptcha.renderCaptcha("pmCaptchaLogin");
+    } else {
+      window.PMCaptcha.renderCaptcha("pmCaptchaRegister");
+    }
+  }
+
   if (mode === "login") {
     document.getElementById("loginForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = Object.fromEntries(new FormData(e.target));
+      if (window.PMCaptcha) Object.assign(fd, window.PMCaptcha.getPayload("pmCaptchaLogin"));
       try {
         const data = await api("/auth/login", { method: "POST", body: fd, queueOffline: false });
         if (data.user.role !== role) {
@@ -2177,13 +2295,17 @@ function renderAuth(mode, role) {
         const welcomeName = data.user.full_name.split(" ")[0];
         toast(role === "owner" ? ft("welcome_toast", { name: welcomeName }) : `Welcome back, ${welcomeName}!`);
         location.hash = homeFor(role);
-      } catch (err) { toast(err.message, true); }
+      } catch (err) {
+        toast(err.message, true);
+        if (window.PMCaptcha) window.PMCaptcha.clear("pmCaptchaLogin");
+      }
     });
   } else {
     document.getElementById("registerForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = Object.fromEntries(new FormData(e.target));
       fd.role = role;
+      if (window.PMCaptcha) Object.assign(fd, window.PMCaptcha.getPayload("pmCaptchaRegister"));
       if (role === "owner" && fd.password !== fd.confirm_password) {
         toast(ft("passwords_mismatch"), true);
         return;
@@ -2197,7 +2319,10 @@ function renderAuth(mode, role) {
         setAuth(data.token, data.user);
         toast(role === "owner" ? ft("account_created", { name: data.user.full_name }) : `Account created for ${data.user.full_name}!`);
         location.hash = homeFor(role);
-      } catch (err) { toast(err.message, true); }
+      } catch (err) {
+        toast(err.message, true);
+        if (window.PMCaptcha) window.PMCaptcha.clear("pmCaptchaRegister");
+      }
     });
   }
 }
@@ -2207,10 +2332,11 @@ function loginForm(role) {
   // never reach this form: #/login/owner renders the OTP screen instead.
   return `
   <form id="loginForm">
-    <div class="field"><label>${authText(role, "email_or_mobile", "Email or Mobile")}</label><input name="identifier" autocomplete="username" required /></div>
-    <div class="field"><label>${authText(role, "password", "Password")}</label><input name="password" type="password" autocomplete="current-password" required /></div>
+    <div class="field"><label for="pm_identifier">${authText(role, "email_or_mobile", "Email or Mobile")}</label><input id="pm_identifier" name="identifier" autocomplete="username" required /></div>
+    <div class="field"><label for="pm_password">${authText(role, "password", "Password")}</label><input id="pm_password" name="password" type="password" autocomplete="current-password" required /></div>
+    <div id="pmCaptchaLogin" class="pm-captcha-host"></div>
     <button class="btn btn-primary" type="submit">${t("btn.login")}</button>
-    <div class="auth-switch">${t("auth.newHere")} <a onclick="location.hash='#/register/${role}'">${t("auth.createAccount")}</a></div>
+    <div class="auth-switch" style="margin-top:10px"><a onclick="location.hash='#/forgot-password/${role}'">Forgot password?</a> · ${t("auth.newHere")} <a onclick="location.hash='#/register/${role}'">${t("auth.createAccount")}</a></div>
     ${demoAccountBox(role)}
   </form>`;
 }
@@ -2218,22 +2344,23 @@ function loginForm(role) {
 function registerForm(role) {
   return `
   <form id="registerForm">
-    <div class="field"><label>${authText(role, "full_name", "Full Name")}</label><input name="full_name" autocomplete="name" required /></div>
+    <div class="field"><label for="pm_full_name">${authText(role, "full_name", "Full Name")}</label><input id="pm_full_name" name="full_name" autocomplete="name" required /></div>
     <div class="form-row">
-      <div class="field"><label>${authText(role, "mobile", "Mobile")}</label><input name="mobile" autocomplete="tel" required /></div>
-      <div class="field"><label>${authText(role, "email", "Email")}</label><input name="email" type="email" autocomplete="email" required /></div>
+      <div class="field"><label for="pm_mobile">${authText(role, "mobile", "Mobile")}</label><input id="pm_mobile" name="mobile" autocomplete="tel" required /></div>
+      <div class="field"><label for="pm_email">${authText(role, "email", "Email")}</label><input id="pm_email" name="email" type="email" autocomplete="email" required /></div>
     </div>
     <div class="form-row">
-      <div class="field"><label>${authText(role, "password", "Password")}</label><input name="password" type="password" minlength="6" autocomplete="new-password" required /></div>
-      <div class="field"><label>${authText(role, "confirm_password", "Confirm")}</label><input name="confirm_password" type="password" minlength="6" autocomplete="new-password" required /></div>
+      <div class="field"><label for="pm_password_2">${authText(role, "password", "Password")}</label><input id="pm_password_2" name="password" type="password" minlength="6" autocomplete="new-password" required /></div>
+      <div class="field"><label for="pm_confirm_password">${authText(role, "confirm_password", "Confirm")}</label><input id="pm_confirm_password" name="confirm_password" type="password" minlength="6" autocomplete="new-password" required /></div>
     </div>
-    ${role === "vet" || role === "lab" ? `<div class="field"><label>Specialization</label><input name="specialization" placeholder="e.g. Pathology / Epidemiology" /></div>` : ""}
+    ${role === "vet" || role === "lab" ? `<div class="field"><label for="pm_specialization">Specialization</label><input id="pm_specialization" name="specialization" placeholder="e.g. Pathology / Epidemiology" /></div>` : ""}
     <div class="form-row">
-      <div class="field"><label>${authText(role, "village", "Village")}</label><input name="village" autocomplete="address-level3" /></div>
-      <div class="field"><label>${authText(role, "block", "Block")}</label><input name="block" /></div>
+      <div class="field"><label for="pm_village">${authText(role, "village", "Village")}</label><input id="pm_village" name="village" autocomplete="address-level3" /></div>
+      <div class="field"><label for="pm_block">${authText(role, "block", "Block")}</label><input id="pm_block" name="block" /></div>
     </div>
-    <div class="field"><label>${authText(role, "district", "District")}</label><input name="district" placeholder="${role === "owner" ? ft("district") : "e.g. Pune"}" required /></div>
-    ${role === "owner" ? `<div class="field"><label>${ft("preferred_helpline_language")}</label><select name="preferred_language"><option value="">${ft("ask_language_call")}</option><option value="en">English</option><option value="te">తెలుగు</option><option value="hi">हिन्दी</option><option value="mr">मराठी</option></select></div>` : ""}
+    <div class="field"><label for="pm_district">${authText(role, "district", "District")}</label><input id="pm_district" name="district" placeholder="${role === "owner" ? ft("district") : "e.g. Pune"}" required /></div>
+    ${role === "owner" ? `<div class="field"><label for="pm_preferred_language">${ft("preferred_helpline_language")}</label><select id="pm_preferred_language" name="preferred_language"><option value="">${ft("ask_language_call")}</option><option value="en">English</option><option value="te">తెలుగు</option><option value="hi">हिन्दी</option><option value="mr">मराठी</option></select></div>` : ""}
+    <div id="pmCaptchaRegister" class="pm-captcha-host"></div>
     <button class="btn btn-primary" type="submit">${t("btn.register")}</button>
     <div class="auth-switch">${t("auth.haveAccount")} <a onclick="location.hash='#/login/${role}'">${t("btn.login")}</a></div>
     ${demoAccountBox(role)}
@@ -2248,6 +2375,96 @@ route("#/login/:role/password", ({ role }) => {
   location.hash = role === "owner" ? "#/login/owner" : `#/login/${role}`;
 });
 route("#/register/:role", ({ role }) => renderAuth("register", role));
+
+// GA-20 forgot-password & reset-password
+route("#/forgot-password/:role", ({ role }) => renderForgotPassword(role));
+route("#/reset-password", () => renderResetPassword());
+route("#/account/deactivate", () => renderDeactivateAccount());
+
+function renderForgotPassword(role) {
+  if (!validRole(role) || role==="owner") { location.hash="#/login/owner"; return; }
+  const meta = ROLE_META[role]||ROLE_META.vet;
+  render(`
+    <div class="auth-wrap">
+      <div class="auth-logo"><div class="emoji">${meta.emoji}</div><h2>Forgot Password</h2><p>Reset for ${t(meta.label)}</p></div>
+      <form id="forgotForm">
+        <div class="field"><label for="fp_identifier">Email or Mobile</label><input id="fp_identifier" name="identifier" required autocomplete="username" /></div>
+        <div id="pmCaptchaForgot" class="pm-captcha-host"></div>
+        <button class="btn btn-primary" type="submit">Send reset link</button>
+        <div class="auth-switch"><a onclick="location.hash='#/login/${role}'">Back to login</a></div>
+      </form>
+      <div id="fpResult" class="section-card" style="display:none;margin-top:12px"></div>
+    </div>
+  `);
+  if (window.PMCaptcha) window.PMCaptcha.renderCaptcha("pmCaptchaForgot");
+  document.getElementById("forgotForm").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    if (window.PMCaptcha) Object.assign(fd, window.PMCaptcha.getPayload("pmCaptchaForgot"));
+    try {
+      const data = await api("/auth/forgot-password", { method:"POST", body:fd, queueOffline:false });
+      const el = document.getElementById("fpResult");
+      el.style.display="block";
+      el.innerHTML=`<div class="section-title">Check your email</div><p>${escapeHtml(data.message||"If an account exists, a reset link was sent.")}</p>${data.reset_token?`<div class="meta" style="margin-top:8px"><b>Demo reset token:</b> <code>${escapeHtml(data.reset_token)}</code><br/><a onclick="location.hash='#/reset-password?token=${encodeURIComponent(data.reset_token)}'">Reset now</a></div>`:""}<div class="small-muted">Ref: ${escapeHtml(data.reference||"")}</div>`;
+      toast("Reset request sent");
+    } catch(err){ toast(err.message,true); if(window.PMCaptcha) window.PMCaptcha.clear("pmCaptchaForgot"); }
+  });
+}
+
+function renderResetPassword() {
+  const params = new URLSearchParams((location.hash.split("?")[1]||""));
+  const tokenFromUrl = params.get("token")||"";
+  render(`
+    <div class="auth-wrap">
+      <div class="auth-logo"><div class="emoji">🔑</div><h2>Reset Password</h2><p>Enter new password</p></div>
+      <form id="resetForm">
+        <div class="field"><label for="rp_token">Reset token</label><input id="rp_token" name="token" value="${escapeAttr(tokenFromUrl)}" required /></div>
+        <div class="field"><label for="rp_new">New password</label><input id="rp_new" name="new_password" type="password" minlength="6" required autocomplete="new-password" /></div>
+        <div class="field"><label for="rp_confirm">Confirm password</label><input id="rp_confirm" name="confirm_password" type="password" minlength="6" required autocomplete="new-password" /></div>
+        <button class="btn btn-primary" type="submit">Reset password</button>
+        <div class="auth-switch"><a onclick="location.hash='#/'">Back to home</a></div>
+      </form>
+    </div>
+  `);
+  document.getElementById("resetForm").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    try {
+      await api("/auth/reset-password", { method:"POST", body:fd, queueOffline:false });
+      toast("Password reset successful, please login");
+      location.hash="#/";
+    } catch(err){ toast(err.message,true); }
+  });
+}
+
+function renderDeactivateAccount() {
+  const role = getUserRole();
+  if (!role) { location.hash="#/"; return; }
+  render(`
+    ${header("Deactivate Account", { back: true })}
+    <div class="section-card">
+      <div class="section-title">⚠️ Deactivate Account</div>
+      <div class="meta" style="margin-bottom:12px">This will soft-delete your account, preserve audit logs, and block future logins. You can contact support to re-activate.</div>
+      <form id="deactForm">
+        <div class="field"><label for="deact_reason">Reason (optional)</label><input id="deact_reason" name="reason" placeholder="Why are you deactivating?" /></div>
+        <div class="field"><label for="deact_confirm">Type <b>deactivate</b> to confirm</label><input id="deact_confirm" name="confirm" required /></div>
+        <button class="btn btn-primary" type="submit" style="background:var(--red)">Deactivate my account</button>
+      </form>
+    </div>
+    ${bottomNav(homeFor(role))}
+  `);
+  document.getElementById("deactForm").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    if ((fd.confirm||"").toLowerCase()!=="deactivate") { toast("Please type deactivate to confirm", true); return; }
+    try {
+      await api("/auth/deactivate", { method:"POST", body:fd });
+      toast("Account deactivated");
+      localStorage.clear(); state.token=null; state.user=null;
+      location.hash="#/";
+    } catch(err){ toast(err.message,true); }
+  });
+}
 
 // ============================================================ DASHBOARDS ==
 route("#/owner/dashboard", () => ownerDashboard(), ["owner"]);
@@ -2266,13 +2483,13 @@ route("#/govt/dashboard", () => govtDashboard(), ["govt"]);
 route("#/lab/dashboard", () => labDashboard(), ["lab"]);
 
 async function ownerDashboard() {
-  render(`${header(ft("home"))}<div class="loading">${ft("loading_dashboard")}</div>`);
+  render(`${header(ft("home"))}<div class="loading" role="status" aria-live="polite" aria-busy="true">${ft("loading_dashboard")}</div>`);
   const ivrInfo = await getIvrInfo();
   render(`
     ${header(ft("home"))}
     <div class="hello-banner owner-hello">
       <div>${ft("welcome_back")}</div>
-      <div class="owner-name">${state.user.full_name} 👋</div>
+      <div class="owner-name">${escapeHtml(state.user.full_name)} 👋</div>
     </div>
     <div class="section-card owner-home-card">
       <div class="section-title">${ft("home_prompt")}</div>
@@ -2295,13 +2512,14 @@ async function ownerDashboard() {
       </div>
     </div>
     ${helplineCard(ivrInfo)}
+    ${accountActionsCard()}
     ${bottomNav("#/owner/dashboard")}
   `);
 }
 
 route("#/owner/livestock", () => ownerLivestockView(), ["owner"]);
 async function ownerLivestockView() {
-  render(`${header(ft("my_livestock"))}<div class="loading">${ft("loading_livestock")}</div>`);
+  render(`${header(ft("my_livestock"))}<div class="loading" role="status" aria-live="polite" aria-busy="true">${ft("loading_livestock")}</div>`);
   try {
     const [animals, herds] = await Promise.all([api("/animals"), api("/herds")]);
     render(`
@@ -2315,23 +2533,23 @@ async function ownerLivestockView() {
       <div class="section-card">
         <div class="section-title">🐄 ${ft("my_animals")} (${animals.length})</div>
         ${animals.length ? animals.map(a => `
-          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${a.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/animals/${a.id}'}">
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${safeId(a.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/animals/${safeId(a.id)}'}">
             <div class="row1">
-              <span class="title">${a.animal_name || a.animal_code}</span>
-              <span class="badge ${a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange"}">${ownerAnimalStatus(a.status)}</span>
+              <span class="title">${escapeHtml(a.animal_name || a.animal_code)}</span>
+              <span class="badge ${escapeHtml(a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange")}">${ownerAnimalStatus(a.status)}</span>
             </div>
-            <div class="meta">${ft("animal_id")}: ${a.animal_code}</div>
-            <div class="meta">${ft("animal_type")}: ${ownerAnimalType(a.animal_type || a.species)} · ${ft("breed")}: ${a.breed || ft("unknown")}</div>
-            <div class="meta">${ft("age")}: ${a.age ?? a.age_years ?? ft("unknown")}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
+            <div class="meta">${ft("animal_id")}: ${escapeHtml(a.animal_code)}</div>
+            <div class="meta">${ft("animal_type")}: ${ownerAnimalType(a.animal_type || a.species)} · ${ft("breed")}: ${escapeHtml(a.breed || ft("unknown"))}</div>
+            <div class="meta">${ft("age")}: ${escapeHtml(a.age ?? a.age_years ?? ft("unknown"))}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
           </div>`).join("") : emptyState(ft("no_animals") + ". " + ft("no_animals_hint"))}
       </div>
       <div class="section-card">
         <div class="section-title">🐑 ${ft("my_herds")} (${herds.length})</div>
         ${herds.length ? herds.map(h => `
-          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/herds/${h.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/herds/${h.id}'}">
-            <div class="row1"><span class="title">${ft("herd_name")} ${h.herd_code}</span><span class="badge badge-blue">${h.animal_count || 0} ${ft("animal_count")}</span></div>
-            <div class="meta">${ft("location")}: ${[h.village, h.block, h.district].filter(Boolean).join(", ") || ft("unknown")}</div>
-            <div class="meta ${h.active_cases ? "farmer-health-warning" : "farmer-health-ok"}">${h.active_cases ? `${ft("active_cases")}: ${h.active_cases}` : ft("no_active_cases")}</div>
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/herds/${safeId(h.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/herds/${safeId(h.id)}'}">
+            <div class="row1"><span class="title">${ft("herd_name")} ${escapeHtml(h.herd_code)}</span><span class="badge badge-blue">${escapeHtml(h.animal_count || 0)} ${ft("animal_count")}</span></div>
+            <div class="meta">${ft("location")}: ${escapeHtml([h.village, h.block, h.district].filter(Boolean).join(", ") || ft("unknown"))}</div>
+            <div class="meta ${escapeHtml(h.active_cases ? "farmer-health-warning" : "farmer-health-ok")}">${h.active_cases ? `${ft("active_cases")}: ${escapeHtml(h.active_cases)}` : ft("no_active_cases")}</div>
           </div>`).join("") : emptyState(ft("no_herds") + ". " + ft("no_herds_hint"))}
       </div>
       ${bottomNav("#/owner/livestock")}
@@ -2342,7 +2560,7 @@ async function ownerLivestockView() {
 }
 
 async function vetDashboard() {
-  render(`${header("Vet Dashboard")}<div class="loading">Loading…</div>`);
+  render(`${header("Vet Dashboard")}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
   const [summary, availabilityRows, ivrStatus] = await Promise.all([
     api("/vet/summary"), api("/vet/availability").catch(() => []),
     api("/ivr/status").catch(() => ({ pstn_connected: false, provider_mode: "MOCK" }))
@@ -2350,7 +2568,7 @@ async function vetDashboard() {
   const availability = availabilityRows[0] || { configured_status: "AVAILABLE", effective_status: "AVAILABLE", supported_languages: ["en"] };
   render(`
     ${header("Vet Dashboard")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Welcome,</div><div style="font-size:19px;font-weight:800">${state.user.full_name} 🩺</div></div>
+    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Welcome,</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🩺</div></div>
     <div class="stat-grid">
       ${statCard(summary.new_cases, "🔴 New Cases")}
       ${statCard(summary.vaccinations_due, "🟠 Vax Due")}
@@ -2360,10 +2578,11 @@ async function vetDashboard() {
       ${statCard("MH", "State: Maharashtra")}
     </div>
     <div class="section-card">
-      <div class="section-title">☎️ Helpline / IVR Routing</div>
-      <div class="meta" style="margin-bottom:10px">This panel is read-only. The canonical availability controls for both web calls and helpline routing are in the <b>Web call availability</b> card below.</div>
-      <div class="meta" style="margin-bottom:6px">Current status: <span class="badge ${availability.effective_status === 'AVAILABLE' ? 'badge-green' : availability.effective_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${availability.effective_status}</span></div>
+      <div class="section-title">☎️ Helpline / IVR Routing (read-only)</div>
+      <div class="meta" style="margin-bottom:10px">This panel is read-only. The canonical availability controls for both web calls and helpline routing are in the <b>Web call availability</b> card below. That card shows live routability which requires Socket.IO connected + presence lease live + AVAILABLE + not busy, and is the only honest indicator for web calls.</div>
+      <div class="meta" style="margin-bottom:6px">Configured: <span class="badge ${availability.configured_status === 'AVAILABLE' ? 'badge-green' : availability.configured_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${escapeHtml(availability.configured_status)}</span> · Effective (hours): <span class="badge ${availability.effective_status === 'AVAILABLE' ? 'badge-green' : availability.effective_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${escapeHtml(availability.effective_status)}</span></div>
       <div class="small-muted">Languages: ${(availability.supported_languages || []).map((code) => ({ en: 'English', te: 'Telugu', hi: 'Hindi', mr: 'Marathi' }[code] || code.toUpperCase())).join(', ') || '—'}</div>
+      <div class="small-muted" style="margin-top:6px">State honesty: 1 availability (your choice) · 2 Socket.IO (signaling) · 3 presence lease (server) · 4 routability (1+2+3+not busy). IVR uses 1 + working hours; web calls use 1+2+3+4.</div>
     </div>
     <div class="section-card">
       <div class="section-title">📞 IVR / Helpline Status</div>
@@ -2393,6 +2612,7 @@ async function vetDashboard() {
         ${iconItem("🔔", "Notifications", "#/vet/notifications")}
       </div>
     </div>
+    ${accountActionsCard()}
     ${bottomNav("#/vet/dashboard")}
   `);
   if (window.PMCall && window.PMCall.mountVetCard) window.PMCall.mountVetCard();
@@ -2403,11 +2623,11 @@ window.saveVetAvailability = async function() {
 };
 
 async function govtDashboard() {
-  render(`${header("Govt Analytics")}<div class="loading">Loading state analytics…</div>`);
+  render(`${header("Govt Analytics")}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading state analytics…</div>`);
   const a = await api("/govt/analytics");
   render(`
     ${header("Govt Analytics")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Maharashtra Animal Disease & Vaccine Dashboard</div><div style="font-size:19px;font-weight:800">${state.user.full_name} 🏛️</div></div>
+    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Maharashtra Animal Disease & Vaccine Dashboard</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🏛️</div></div>
     <div class="stat-grid">
       ${statCard(a.totals.cases, "Total Cases")}
       ${statCard(a.totals.active, "Active Cases")}
@@ -2468,16 +2688,17 @@ async function govtDashboard() {
       <div class="section-title">📥 Export Data</div>
       <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/export'">Export Cases, Animals &amp; Campaigns</button>
     </div>
+    ${accountActionsCard()}
     ${bottomNav("#/govt/dashboard")}
   `);
 }
 
 async function labDashboard() {
-  render(`${header("Laboratory Portal")}<div class="loading">Loading lab workstation…</div>`);
+  render(`${header("Laboratory Portal")}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading lab workstation…</div>`);
   const sum = await api("/lab/summary");
   render(`
     ${header("Laboratory Portal")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Regional Veterinary Diagnostics</div><div style="font-size:19px;font-weight:800">${state.user.full_name} 🔬</div></div>
+    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Regional Veterinary Diagnostics</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🔬</div></div>
     <div class="stat-grid">
       ${statCard(sum.pending_receiving, "📥 Intake Pending")}
       ${statCard(sum.in_testing, "🧪 In Testing")}
@@ -2493,6 +2714,7 @@ async function labDashboard() {
         ${iconItem("🔔", "Notifications", "#/lab/notifications")}
       </div>
     </div>
+    ${accountActionsCard()}
     ${bottomNav("#/lab/dashboard")}
   `);
 }
@@ -2500,34 +2722,47 @@ async function labDashboard() {
 // ======================================================== HELPLINE REPORTS ==
 function helplineReportsView(role) {
   route(`#/${role}/helpline`, async () => {
-    render(`${header("Helpline Reports", { back: true })}<div class="loading">Loading helpline reports…</div>`);
+    const pageKey = `helpline_${role}`;
+    if (!state.pagination[pageKey]) state.pagination[pageKey]=1;
+    const curPage = state.pagination[pageKey];
+    const pageSize = state.pagination.pageSize;
+    render(`${header("Helpline Reports", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading helpline reports…</div>`);
     const [reports, analytics] = await Promise.all([
       api("/ivr/reports"), api("/ivr/analytics")
     ]);
+    const { pageItems, total, page } = pmPaginate(reports, curPage, pageSize);
+    state.pagination[pageKey]=page;
+    const summary = `Helpline analytics: ${analytics.total_calls} total calls, ${analytics.vet_connections} vet connections, ${analytics.survey_completions} surveys, ${analytics.duplicate_reports} duplicates.`;
     render(`
       ${header("Helpline Reports", { back: true })}
-      <div class="section-card">
+      <div class="section-card" role="img" aria-label="${escapeAttr(summary)}">
         <div class="section-title">☎️ Pashu-Shield Call Analytics</div>
+        <p class="sr-only">${escapeHtml(summary)}</p>
         <div class="stat-grid" style="margin:0">
           ${statCard(analytics.total_calls, "Total Calls")}
           ${statCard(analytics.vet_connections, "Vet Connected")}
           ${statCard(analytics.survey_completions, "Surveys Done")}
           ${statCard(analytics.duplicate_reports, "Duplicates")}
         </div>
+        <details class="pm-chart-details"><summary>Accessible summary</summary><p>${escapeHtml(summary)} Chart shows ${analytics.total_calls} total calls broken down by vet connections, survey completions, duplicates.</p></details>
       </div>
-      <div class="section-card">
+      <div class="section-card" id="helplineList">
         <div class="section-title">Structured Helpline Reports</div>
-        ${reports.length === 0 ? emptyState("No helpline reports yet.") : reports.map(r => `
-          <div class="list-card" ${r.case_id ? `onclick="location.hash='#/${role}/cases/${r.case_id}'"` : "style=\"cursor:default\""}>
-            <div class="row1"><span class="title">${r.report_no}</span><span class="badge ${r.status === 'DUPLICATE_FLAGGED' ? 'badge-orange' : r.status === 'PARTIAL' ? 'badge-blue' : 'badge-green'}">${r.status}</span></div>
-            <div class="meta"><b>Farmer:</b> ${r.farmer_name || "Unlinked caller"} · <b>Animal:</b> ${r.animal_code || r.structured_summary.species || "Not Provided"}</div>
-            <div class="meta"><b>Region:</b> ${r.village || ""}${r.village && r.district ? ", " : ""}${r.district || "Unknown"} · ${r.location_source}</div>
-            <div class="meta"><b>Symptoms:</b> ${r.symptoms || "Not Provided"} · <b>Urgency:</b> ${r.urgency || "Not Provided"}</div>
-            <div class="small-muted">Language: ${r.language || "Unknown"} · Source: ${r.source} · ${fmtDate(r.created_at)}</div>
+        <div class="btn-row no-print" style="margin-bottom:8px"><button class="btn btn-outline btn-sm" onclick="pmPrintSection('helplineList')">🖨️ Print</button><button class="btn btn-outline btn-sm" onclick="window.__exportHelpline && window.__exportHelpline()">📥 Export CSV</button></div>
+        ${pageItems.length === 0 ? emptyState("No helpline reports yet.") : pageItems.map(r => `
+          <div class="list-card" ${r.case_id ? `onclick="location.hash='#/${role}/cases/${safeId(r.case_id)}'"` : "style=\"cursor:default\""}>
+            <div class="row1"><span class="title">${escapeHtml(r.report_no)}</span><span class="badge ${escapeHtml(r.status === 'DUPLICATE_FLAGGED' ? 'badge-orange' : r.status === 'PARTIAL' ? 'badge-blue' : 'badge-green')}">${escapeHtml(r.status)}</span></div>
+            <div class="meta"><b>Farmer:</b> ${escapeHtml(r.farmer_name || "Unlinked caller")} · <b>Animal:</b> ${escapeHtml(r.animal_code || r.structured_summary.species || "Not Provided")}</div>
+            <div class="meta"><b>Region:</b> ${escapeHtml(r.village || "")}${escapeHtml(r.village && r.district ? ", " : "")}${escapeHtml(r.district || "Unknown")} · ${escapeHtml(r.location_source)}</div>
+            <div class="meta"><b>Symptoms:</b> ${escapeHtml(r.symptoms || "Not Provided")} · <b>Urgency:</b> ${escapeHtml(r.urgency || "Not Provided")}</div>
+            <div class="small-muted">Language: ${escapeHtml(r.language || "Unknown")} · Source: ${escapeHtml(r.source)} · ${fmtDate(r.created_at)}</div>
           </div>`).join("")}
+        ${pmPaginationHtml(total, page, pageSize, `goHelplinePage_${role}`, {label:"Helpline reports pagination"})}
       </div>
       ${bottomNav(homeFor(role))}
     `);
+    window.__exportHelpline = ()=>{ pmExportCsv('helpline_reports.csv', reports.map(r=>({report_no:r.report_no,status:r.status,farmer:r.farmer_name,animal:r.animal_code,symptoms:r.symptoms,created:r.created_at})), ['report_no','status','farmer','animal','symptoms','created']); };
+    window[`goHelplinePage_${role}`] = (p)=>{ state.pagination[pageKey]=p; location.hash=`#/${role}/helpline`; setTimeout(()=>location.reload(),30); };
   }, [role]);
 }
 helplineReportsView("vet");
@@ -2535,49 +2770,58 @@ helplineReportsView("govt");
 
 // ======================================================== LABORATORY QUEUE & DETAIL ==
 route("#/lab/queue", async () => {
-  render(`${header("Sample Queue", { back: true })}<div class="loading">Loading samples…</div>`);
+  if (!state.pagination.labQueue) state.pagination.labQueue=1;
+  const curPage = state.pagination.labQueue;
+  const pageSize = state.pagination.pageSize;
+  render(`${header("Sample Queue", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading samples…</div>`);
   const queue = await api("/lab/queue");
+  const { pageItems, total, page } = pmPaginate(queue, curPage, pageSize);
+  state.pagination.labQueue=page;
   render(`
     ${header("Diagnostic Intake & Testing", { back: true })}
-    <div class="section-card">
-      <div class="section-title">🧪 Biological Specimens Queue (${queue.length})</div>
-      ${queue.length === 0 ? emptyState("No samples in queue.") : queue.map(s => `
-        <div class="list-card" onclick="location.hash='#/lab/samples/${s.id}'">
+    <div class="section-card" id="labQueueSection">
+      <div class="section-title">🧪 Biological Specimens Queue (${total})</div>
+      <div class="btn-row no-print" style="margin-bottom:8px"><button class="btn btn-outline btn-sm" onclick="pmPrintSection('labQueueSection')">🖨️ Print</button><button class="btn btn-outline btn-sm" onclick="window.__exportLabQueue && window.__exportLabQueue()">📥 Export CSV</button></div>
+      ${pageItems.length === 0 ? emptyState("No samples in queue.") : pageItems.map(s => `
+        <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/lab/samples/${safeId(s.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/lab/samples/${safeId(s.id)}'}">
           <div class="row1">
-            <span class="title">${s.sample_code}</span>
-            <span class="badge ${statusBadgeClass(s.status)}">${s.status}</span>
+            <span class="title">${escapeHtml(s.sample_code)}</span>
+            <span class="badge ${statusBadgeClass(s.status)}">${escapeHtml(s.status)}</span>
           </div>
-          <div class="meta"><b>Animal:</b> ${s.animal_code} (${s.species}) · <b>Type:</b> ${s.sample_type}</div>
-          <div class="meta">Case ${s.case_no} · Collected: ${fmtDate(s.collected_at)} by ${s.collector_name || "Vet"}</div>
+          <div class="meta"><b>Animal:</b> ${escapeHtml(s.animal_code)} (${escapeHtml(s.species)}) · <b>Type:</b> ${escapeHtml(s.sample_type)}</div>
+          <div class="meta">Case ${escapeHtml(s.case_no)} · Collected: ${fmtDate(s.collected_at)} by ${escapeHtml(s.collector_name || "Vet")}</div>
         </div>
       `).join("")}
+      ${pmPaginationHtml(total, page, pageSize, "goLabQueuePage", {label:"Lab queue pagination"})}
     </div>
     ${bottomNav("#/lab/queue")}
   `);
+  window.__exportLabQueue = ()=>{ pmExportCsv('lab_queue.csv', queue.map(s=>({sample_code:s.sample_code,status:s.status,animal:s.animal_code,type:s.sample_type,case_no:s.case_no,collected:s.collected_at})), ['sample_code','status','animal','type','case_no','collected']); };
+  window.goLabQueuePage = (p)=>{ state.pagination.labQueue=p; location.hash="#/lab/queue"; setTimeout(()=>location.reload(),30); };
 }, ["lab", "vet", "govt"]);
 
 async function labSampleDetailView(id) {
-  render(`${header("Sample Detail", { back: true })}<div class="loading">Loading sample…</div>`);
+  render(`${header("Sample Detail", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading sample…</div>`);
   const s = await api(`/samples/${id}`);
   render(`
     ${header("Sample " + s.sample_code, { back: true })}
     <div class="section-card">
       <div class="row1" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-size:18px;font-weight:800">${s.sample_code}</div>
-        <span class="badge ${statusBadgeClass(s.status)}">${s.status}</span>
+        <div style="font-size:18px;font-weight:800">${escapeHtml(s.sample_code)}</div>
+        <span class="badge ${statusBadgeClass(s.status)}">${escapeHtml(s.status)}</span>
       </div>
       <div class="detail-grid">
-        <div><b>Sample Type</b>${s.sample_type}</div>
-        <div><b>Case Number</b><a class="link" onclick="location.hash='#/vet/cases/${s.case_id}'">${s.case_no}</a></div>
-        <div><b>Animal Code</b>${s.animal_code} (${s.species})</div>
-        <div><b>Collection GPS</b>${s.collection_lat ? `${s.collection_lat.toFixed(4)}° N, ${s.collection_lng.toFixed(4)}° E` : "—"} ${s.is_manual_location ? "(Manual)" : "(Device GPS)"}</div>
+        <div><b>Sample Type</b>${escapeHtml(s.sample_type)}</div>
+        <div><b>Case Number</b><a class="link" onclick="location.hash='#/vet/cases/${safeId(s.case_id)}'">${escapeHtml(s.case_no)}</a></div>
+        <div><b>Animal Code</b>${escapeHtml(s.animal_code)} (${escapeHtml(s.species)})</div>
+        <div><b>Collection GPS</b>${s.collection_lat ? `${escapeHtml(s.collection_lat.toFixed(4))}° N, ${escapeHtml(s.collection_lng.toFixed(4))}° E` : "—"} ${escapeHtml(s.is_manual_location ? "(Manual)" : "(Device GPS)")}</div>
         <div><b>Collected On</b>${fmtDate(s.collected_at)}</div>
-        <div><b>Transporter</b>${s.transporter_name || "—"} ${s.transporter_phone ? `(${s.transporter_phone})` : ""}</div>
+        <div><b>Transporter</b>${escapeHtml(s.transporter_name || "—")} ${s.transporter_phone ? `(${escapeHtml(s.transporter_phone)})` : ""}</div>
       </div>
-      ${s.collection_notes ? `<div style="margin-top:10px"><b class="small-muted">Collection Notes:</b><div style="font-size:13px">${s.collection_notes}</div></div>` : ""}
+      ${s.collection_notes ? `<div style="margin-top:10px"><b class="small-muted">Collection Notes:</b><div style="font-size:13px">${escapeHtml(s.collection_notes)}</div></div>` : ""}
       <div style="text-align:center;margin-top:14px">
-        <div class="qr-image-wrap"><img src="${s.qr_image}" alt="Sample QR" /></div>
-        <div class="small-muted">Sample QR Tag (${s.qr_token.slice(0, 16)}…)</div>
+        <div class="qr-image-wrap"><img src="${escapeHtml(s.qr_image)}" alt="Sample QR" /></div>
+        <div class="small-muted">Sample QR Tag (${escapeHtml(s.qr_token.slice(0, 16))}…)</div>
       </div>
     </div>
 
@@ -2586,40 +2830,40 @@ async function labSampleDetailView(id) {
       <div class="section-title">⚙️ Laboratory Processing Workflow</div>
       ${s.status === "COLLECTED" || s.status === "READY_FOR_PICKUP" || s.status === "PICKED_UP" || s.status === "IN_TRANSIT" || s.status === "ARRIVED_AT_LAB" ? `
         <div class="meta" style="margin-bottom:12px">Specimen is awaiting laboratory intake inspection:</div>
-        <button class="btn btn-primary" onclick="labAccept(${s.id})">✅ Accept Specimen (Mark LAB_RECEIVED)</button>
+        <button class="btn btn-primary" onclick="labAccept(${safeId(s.id)})">✅ Accept Specimen (Mark LAB_RECEIVED)</button>
         <div style="margin-top:10px">
           <button class="btn btn-outline" onclick="document.getElementById('rejectBox').style.display='block'">❌ Reject Specimen</button>
         </div>
         <div id="rejectBox" style="display:none;margin-top:10px;background:#fde6e4;padding:12px;border-radius:12px">
-          <div class="field"><label>Rejection Reason</label><input id="rejectReasonInput" placeholder="e.g. Hemolyzed, broken seal, delayed transport" /></div>
-          <button class="btn btn-outline btn-sm" style="background:#fff" onclick="labReject(${s.id})">Confirm Rejection</button>
+          <div class="field"><label for="rejectReasonInput">Rejection Reason</label><input id="rejectReasonInput" placeholder="e.g. Hemolyzed, broken seal, delayed transport" /></div>
+          <button class="btn btn-outline btn-sm" style="background:#fff" onclick="labReject(${safeId(s.id)})">Confirm Rejection</button>
         </div>
       ` : s.status === "LAB_RECEIVED" ? `
         <div class="meta" style="margin-bottom:12px">Specimen accepted in lab intake. Assign to testing bench:</div>
-        <button class="btn btn-primary" onclick="labStartTesting(${s.id})">🧪 Begin Diagnostic Testing (Mark TESTING)</button>
+        <button class="btn btn-primary" onclick="labStartTesting(${safeId(s.id)})">🧪 Begin Diagnostic Testing (Mark TESTING)</button>
       ` : s.status === "TESTING" ? `
         <div class="subheading">🧬 Structured Result Entry</div>
         <form id="labResultForm">
           <div class="form-row">
-            <div class="field"><label>Test Name</label><input name="test_name" placeholder="e.g. HS Culture Test / FMD ELISA" required /></div>
-            <div class="field"><label>Test Type</label><select name="test_type"><option>Serology</option><option>Bacteriology</option><option>Molecular</option><option>Hematology</option></select></div>
+            <div class="field"><label for="pm_test_name">Test Name</label><input id="pm_test_name" name="test_name" placeholder="e.g. HS Culture Test / FMD ELISA" required /></div>
+            <div class="field"><label for="pm_test_type">Test Type</label><select id="pm_test_type" name="test_type"<option>Serology</option><option>Bacteriology</option><option>Molecular</option><option>Hematology</option></select></div>
           </div>
           <div class="form-row">
-            <div class="field"><label>Test Method</label><input name="test_method" placeholder="e.g. ELISA / PCR / Culture" /></div>
-            <div class="field"><label>Qualitative Result</label><select name="result"><option>NEGATIVE</option><option>POSITIVE</option><option>INCONCLUSIVE</option></select></div>
+            <div class="field"><label for="pm_test_method">Test Method</label><input id="pm_test_method" name="test_method" placeholder="e.g. ELISA / PCR / Culture" /></div>
+            <div class="field"><label for="pm_result">Qualitative Result</label><select id="pm_result" name="result"<option>NEGATIVE</option><option>POSITIVE</option><option>INCONCLUSIVE</option></select></div>
           </div>
           <div class="form-row">
-            <div class="field"><label>Quantitative Value</label><input name="quantitative_result" type="number" step="0.01" placeholder="e.g. 0.05" /></div>
-            <div class="field"><label>Units</label><input name="units" placeholder="e.g. OD / g/dL / titer" /></div>
+            <div class="field"><label for="pm_quantitative_result">Quantitative Value</label><input id="pm_quantitative_result" name="quantitative_result" type="number" step="0.01" placeholder="e.g. 0.05" /></div>
+            <div class="field"><label for="pm_units">Units</label><input id="pm_units" name="units" placeholder="e.g. OD / g/dL / titer" /></div>
           </div>
-          <div class="field"><label>Abnormal Flag</label><select name="abnormal_flag"><option>Normal</option><option>Positive</option><option>High</option><option>Low</option><option>Abnormal</option></select></div>
-          <div class="field"><label>Reference Range Note</label><input name="reference_range_text" placeholder="e.g. Cutoff OD &gt; 0.3 is Positive" /></div>
-          <div class="field"><label>Technician Comments</label><textarea name="comments"></textarea></div>
+          <div class="field"><label for="pm_abnormal_flag">Abnormal Flag</label><select id="pm_abnormal_flag" name="abnormal_flag"<option>Normal</option><option>Positive</option><option>High</option><option>Low</option><option>Abnormal</option></select></div>
+          <div class="field"><label for="pm_reference_range_text">Reference Range Note</label><input id="pm_reference_range_text" name="reference_range_text" placeholder="e.g. Cutoff OD &gt; 0.3 is Positive" /></div>
+          <div class="field"><label for="pm_comments">Technician Comments</label><textarea id="pm_comments" name="comments"</textarea></div>
           <button class="btn btn-primary" type="submit">Save Diagnostic Results</button>
         </form>
       ` : s.status === "RESULT_READY" ? `
         <div class="meta" style="margin-bottom:12px">Results entered and ready for official verification:</div>
-        <button class="btn btn-primary" onclick="labVerify(${s.id})">✅ Verify &amp; Release Official Report</button>
+        <button class="btn btn-primary" onclick="labVerify(${safeId(s.id)})">✅ Verify &amp; Release Official Report</button>
       ` : `
         <div class="meta">🟢 Official report verified and published to veterinarian and owner.</div>
       `}
@@ -2633,8 +2877,8 @@ async function labSampleDetailView(id) {
           <div class="timeline-item">
             <div class="timeline-dot"></div>
             <div class="timeline-body">
-              <div class="t-status">${e.status} — ${e.action}</div>
-              <div class="t-note">${e.notes || ""} (${e.actor_name || "System"} · ${e.actor_role || ""})</div>
+              <div class="t-status">${escapeHtml(e.status)} — ${escapeHtml(e.action)}</div>
+              <div class="t-note">${escapeHtml(e.notes || "")} (${escapeHtml(e.actor_name || "System")} · ${escapeHtml(e.actor_role || "")})</div>
               <div class="t-date">${fmtDate(e.timestamp)}</div>
             </div>
           </div>
@@ -2740,13 +2984,13 @@ window.resolveScannedPayload = async function(payload) {
     if (payload.includes("SAMPLE:") || payload.startsWith("SMP-")) {
       const s = await api(`/samples/lookup-qr?payload=${encodeURIComponent(payload)}`);
       if (role === "lab") {
-        location.hash = `#/lab/samples/${s.id}`;
+        location.hash = `#/lab/samples/${safeId(s.id)}`;
       } else {
-        location.hash = `#/${role}/cases/${s.case_id}`;
+        location.hash = `#/${role}/cases/${safeId(s.case_id)}`;
       }
     } else {
       const a = await api(`/animals/lookup-qr?payload=${encodeURIComponent(payload)}`);
-      location.hash = `#/${role}/animals/${a.id}`;
+      location.hash = `#/${role}/animals/${safeId(a.id)}`;
     }
   } catch (e) {
     toast(e.message, true);
@@ -2827,17 +3071,17 @@ window.stopCameraScanner = function() {
 
 // ==================================================== GOVT: ANALYTICS ====
 route("#/govt/analytics", async () => {
-  render(`${header("Analytics & Reports", { back: true })}<div class="loading">Loading analytics…</div>`);
+  render(`${header("Analytics & Reports", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading analytics…</div>`);
   const [a, geo] = await Promise.all([api("/govt/analytics"), api("/govt/geo")]);
   const districtRows = geo.map(d => `
     <tr>
-      <td><b>${d.district}</b></td>
-      <td><span class="badge ${riskBadgeClass(d.risk_level)}">${d.risk_level}</span></td>
-      <td>${d.cases}</td>
-      <td>${d.active}</td>
-      <td>${d.high_severity}</td>
-      <td>${d.affected_animals}</td>
-      <td>${d.animal_population}</td>
+      <td><b>${escapeHtml(d.district)}</b></td>
+      <td><span class="badge ${riskBadgeClass(d.risk_level)}">${escapeHtml(d.risk_level)}</span></td>
+      <td>${escapeHtml(d.cases)}</td>
+      <td>${escapeHtml(d.active)}</td>
+      <td>${escapeHtml(d.high_severity)}</td>
+      <td>${escapeHtml(d.affected_animals)}</td>
+      <td>${escapeHtml(d.animal_population)}</td>
     </tr>`).join("");
   render(`
     ${header("Analytics & Reports", { back: true })}
@@ -2872,7 +3116,7 @@ route("#/govt/analytics", async () => {
       ${Object.keys(a.vaccine_stock).length === 0 ? emptyState("No stock data yet.") :
         Object.entries(a.vaccine_stock).map(([dist, items]) => `
           <div style="margin:8px 0">
-            <b>${dist}</b>: ${items.map(i => `${i.vaccine} (${i.doses} doses)`).join(", ")}
+            <b>${dist}</b>: ${items.map(i => `${escapeHtml(i.vaccine)} (${escapeHtml(i.doses)} doses)`).join(", ")}
           </div>`).join("")}
       <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="location.hash='#/govt/stock'">Manage Vaccine Stock</button>
     </div>
@@ -2884,7 +3128,7 @@ route("#/govt/analytics", async () => {
 let gisState = { geo: [], locations: [], outline: null, disease: "All", risks: ["High Risk", "Moderate Risk", "Low Risk"], map: null, layer: null, showClusters: false, clusters: [] };
 
 route("#/govt/gis", async () => {
-  render(`${header("GIS Risk Map", { back: true })}<div class="loading">Loading map & live district data…</div>`);
+  render(`${header("GIS Risk Map", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading map & live district data…</div>`);
   const [geo, locations, outline, clusterData] = await Promise.all([
     api("/govt/geo"),
     fetch("/maharashtra_locations.json").then(r => r.json()).catch(() => []),
@@ -2900,7 +3144,7 @@ route("#/govt/gis", async () => {
     </div>
     <div class="section-card" style="padding-bottom:8px">
       <div class="gis-controls">
-        <div class="field" style="margin-bottom:8px"><label>Disease filter</label>
+        <div class="field" style="margin-bottom:8px"><label for="gisDisease">Disease filter</label>
           <select id="gisDisease">${diseases.map(d => `<option ${d === gisState.disease ? "selected" : ""}>${d}</option>`).join("")}</select>
         </div>
         <div class="gis-risk-toggles">
@@ -2987,11 +3231,11 @@ function drawGis() {
     if (!loc) return;
     const radius = d.risk_level === "High Risk" ? 20 : d.risk_level === "Moderate Risk" ? 15 : 10;
     L.circleMarker([loc.lat, loc.lng], { radius, color: colorFor(d.risk_level), fillColor: colorFor(d.risk_level), fillOpacity: 0.6 })
-      .bindTooltip(`<div style="font-weight:700">${d.district}</div>
-        <div style="color:${colorFor(d.risk_level)};font-weight:700;font-size:12px">${d.risk_level}</div>
-        <div style="font-size:12px">Cases: ${d.cases} · Active: ${d.active}</div>
-        <div style="font-size:12px">Affected animals: ${d.affected_animals}</div>
-        <div style="font-size:12px">Diseases: ${d.diseases.map(x => x.label).join(", ") || "—"}</div>`)
+      .bindTooltip(`<div style="font-weight:700">${escapeHtml(d.district)}</div>
+        <div style="color:${escapeHtml(colorFor(d.risk_level))};font-weight:700;font-size:12px">${escapeHtml(d.risk_level)}</div>
+        <div style="font-size:12px">Cases: ${escapeHtml(d.cases)} · Active: ${escapeHtml(d.active)}</div>
+        <div style="font-size:12px">Affected animals: ${escapeHtml(d.affected_animals)}</div>
+        <div style="font-size:12px">Diseases: ${escapeHtml(d.diseases.map(x => x.label).join(", ") || "—")}</div>`)
       .addTo(layer);
   });
 
@@ -3006,11 +3250,11 @@ function drawGis() {
         weight: 3,
         dashArray: "4, 4"
       }).bindTooltip(`
-        <div style="font-weight:800;color:#8e24aa">📍 Spatiotemporal Cluster: ${c.cluster_id}</div>
-        <div style="font-size:12px"><b>District:</b> ${c.district}</div>
-        <div style="font-size:12px"><b>Cases:</b> ${c.cases} active</div>
-        <div style="font-size:12px"><b>Diseases:</b> ${c.diseases ? c.diseases.join(", ") : "HS"}</div>
-        <div style="font-size:11px;color:#666">Method: ${c.method || "DBSCAN (haversine)"}</div>
+        <div style="font-weight:800;color:#8e24aa">📍 Spatiotemporal Cluster: ${escapeHtml(c.cluster_id)}</div>
+        <div style="font-size:12px"><b>District:</b> ${escapeHtml(c.district)}</div>
+        <div style="font-size:12px"><b>Cases:</b> ${escapeHtml(c.cases)} active</div>
+        <div style="font-size:12px"><b>Diseases:</b> ${escapeHtml(c.diseases ? c.diseases.join(", ") : "HS")}</div>
+        <div style="font-size:11px;color:#666">Method: ${escapeHtml(c.method || "DBSCAN (haversine)")}</div>
       `).addTo(layer);
     });
   }
@@ -3027,15 +3271,15 @@ function drawGis() {
   const top = [...filtered].sort((a, b) => b.affected_animals - a.affected_animals).slice(0, 5);
   document.getElementById("gisTop").innerHTML = top.length === 0 ? emptyState("No matching districts.") :
     top.map(d => `<div class="list-card" style="cursor:default">
-      <div class="row1"><span class="title">${d.district}</span><span class="badge ${riskBadgeClass(d.risk_level)}">${d.risk_level}</span></div>
-      <div class="meta">${d.affected_animals} affected · ${d.cases} cases · ${d.high_severity} high-severity</div>
+      <div class="row1"><span class="title">${escapeHtml(d.district)}</span><span class="badge ${riskBadgeClass(d.risk_level)}">${escapeHtml(d.risk_level)}</span></div>
+      <div class="meta">${escapeHtml(d.affected_animals)} affected · ${escapeHtml(d.cases)} cases · ${escapeHtml(d.high_severity)} high-severity</div>
     </div>`).join("");
 }
 
 // ================================================ SURVEILLANCE (govt/vet) =
 function surveillanceView(role) {
   route(`#/${role}/surveillance`, async () => {
-    render(`${header("Surveillance", { back: true })}<div class="loading">Loading surveillance cases…</div>`);
+    render(`${header("Surveillance", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading surveillance cases…</div>`);
     const [cases, geo] = await Promise.all([api("/cases"), api("/govt/geo")]);
     render(`
       ${header("Disease Surveillance", { back: true })}
@@ -3049,17 +3293,17 @@ function surveillanceView(role) {
         </div>
         ${geo.map(g => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${g.district}</span><span class="badge ${riskBadgeClass(g.risk_level)}">${g.risk_level}</span></div>
-            <div class="meta">Cases: ${g.cases} (${g.active} active) · Affected: ${g.affected_animals} · High severity: ${g.high_severity}</div>
-            <div class="meta">Top Diseases: ${g.diseases.map(d => `${d.label} (${d.value})`).join(", ") || "—"}</div>
+            <div class="row1"><span class="title">${escapeHtml(g.district)}</span><span class="badge ${riskBadgeClass(g.risk_level)}">${escapeHtml(g.risk_level)}</span></div>
+            <div class="meta">Cases: ${escapeHtml(g.cases)} (${escapeHtml(g.active)} active) · Affected: ${escapeHtml(g.affected_animals)} · High severity: ${escapeHtml(g.high_severity)}</div>
+            <div class="meta">Top Diseases: ${g.diseases.map(d => `${escapeHtml(d.label)} (${escapeHtml(d.value)})`).join(", ") || "—"}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
         <div class="section-title">📋 Recent Incident Reports</div>
         ${cases.slice(0, 10).map(c => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${c.id}'">
-            <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${c.status}</span></div>
-            <div class="meta">${c.animal ? c.animal.animal_code : "—"} · ${c.disease_suspected || c.diagnosis || "Unspecified"} · ${fmtDate(c.created_at)}</div>
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(c.id)}'}">
+            <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
+            <div class="meta">${escapeHtml(c.animal ? c.animal.animal_code : "—")} · ${escapeHtml(c.disease_suspected || c.diagnosis || "Unspecified")} · ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
       </div>
       ${bottomNav(`#/${role}/surveillance`)}
@@ -3071,7 +3315,7 @@ surveillanceView("govt"); surveillanceView("vet");
 // ======================================================== NATIONAL SURVEILLANCE ==
 function nationalSurveillanceView() {
   route("#/govt/national", async () => {
-    render(`${header("National Surveillance", { back: true })}<div class="loading">Loading national data…</div>`);
+    render(`${header("National Surveillance", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading national data…</div>`);
     const data = await api("/national/surveillance");
     render(`
       ${header("National Surveillance", { back: true })}
@@ -3100,11 +3344,11 @@ function nationalSurveillanceView() {
             <tbody>
               ${data.states.map(s => `
                 <tr>
-                  <td><b>${s.state}</b></td>
-                  <td>${s.reporting_status}</td>
-                  <td>${s.animals_registered}</td>
-                  <td>${s.active_cases}</td>
-                  <td><span class="badge ${s.active_cases > 0 ? "badge-orange" : "badge-blue"}">${s.risk_index}</span></td>
+                  <td><b>${escapeHtml(s.state)}</b></td>
+                  <td>${escapeHtml(s.reporting_status)}</td>
+                  <td>${escapeHtml(s.animals_registered)}</td>
+                  <td>${escapeHtml(s.active_cases)}</td>
+                  <td><span class="badge ${escapeHtml(s.active_cases > 0 ? "badge-orange" : "badge-blue")}">${escapeHtml(s.risk_index)}</span></td>
                 </tr>
               `).join("")}
             </tbody>
@@ -3118,12 +3362,12 @@ function nationalSurveillanceView() {
           data.national_alerts.map(a => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${a.title}</span>
-              <span class="badge ${a.severity === 'CRITICAL' ? 'badge-red' : 'badge-orange'}">${a.severity}</span>
+              <span class="title">${escapeHtml(a.title)}</span>
+              <span class="badge ${escapeHtml(a.severity === 'CRITICAL' ? 'badge-red' : 'badge-orange')}">${escapeHtml(a.severity)}</span>
             </div>
-            <div class="meta"><b>Disease:</b> ${a.disease} · <b>State:</b> ${a.state} (${a.district || "Statewide"})</div>
-            <div class="meta">${a.description}</div>
-            <div class="meta" style="color:var(--primary);margin-top:4px"><b>Measures:</b> ${a.recommended_measures}</div>
+            <div class="meta"><b>Disease:</b> ${escapeHtml(a.disease)} · <b>State:</b> ${escapeHtml(a.state)} (${escapeHtml(a.district || "Statewide")})</div>
+            <div class="meta">${escapeHtml(a.description)}</div>
+            <div class="meta" style="color:var(--primary);margin-top:4px"><b>Measures:</b> ${escapeHtml(a.recommended_measures)}</div>
           </div>
         `).join("")}
       </div>
@@ -3131,17 +3375,17 @@ function nationalSurveillanceView() {
       <div class="section-card">
         <div class="subheading">+ Issue National Outbreak Alert</div>
         <form id="nationalAlertForm">
-          <div class="field"><label>Alert Title</label><input name="title" placeholder="e.g. Western Zone FMD Movement Advisory" required /></div>
+          <div class="field"><label for="pm_title">Alert Title</label><input id="pm_title" name="title" placeholder="e.g. Western Zone FMD Movement Advisory" required /></div>
           <div class="form-row">
-            <div class="field"><label>Disease</label><input name="disease" placeholder="e.g. FMD" required /></div>
-            <div class="field"><label>State</label><input name="state" value="Maharashtra" required /></div>
+            <div class="field"><label for="pm_disease">Disease</label><input id="pm_disease" name="disease" placeholder="e.g. FMD" required /></div>
+            <div class="field"><label for="pm_state">State</label><input id="pm_state" name="state" value="Maharashtra" required /></div>
           </div>
           <div class="form-row">
-            <div class="field"><label>Severity</label><select name="severity"><option>HIGH</option><option>CRITICAL</option><option>MODERATE</option></select></div>
-            <div class="field"><label>Affected Count</label><input name="affected_count" type="number" value="1" /></div>
+            <div class="field"><label for="pm_severity">Severity</label><select id="pm_severity" name="severity"<option>HIGH</option><option>CRITICAL</option><option>MODERATE</option></select></div>
+            <div class="field"><label for="pm_affected_count">Affected Count</label><input id="pm_affected_count" name="affected_count" type="number" value="1" /></div>
           </div>
-          <div class="field"><label>Alert Description</label><textarea name="description" placeholder="Summary of outbreak pattern and epicenter coordinates"></textarea></div>
-          <div class="field"><label>Recommended Measures</label><input name="recommended_measures" placeholder="e.g. Quarantine border, ring vaccination" /></div>
+          <div class="field"><label for="pm_description">Alert Description</label><textarea id="pm_description" name="description" placeholder="Summary of outbreak pattern and epicenter coordinates"</textarea></div>
+          <div class="field"><label for="pm_recommended_measures">Recommended Measures</label><input id="pm_recommended_measures" name="recommended_measures" placeholder="e.g. Quarantine border, ring vaccination" /></div>
           <button class="btn btn-primary" type="submit">Publish National Alert</button>
         </form>
       </div>
@@ -3164,7 +3408,7 @@ nationalSurveillanceView();
 // ======================================================== FARM ALERTS VIEW ==
 function farmAlertsView(role) {
   route(`#/${role}/farm-alerts`, async () => {
-    render(`${header("Farm Alerts", { back: true })}<div class="loading">Loading farm alerts…</div>`);
+    render(`${header("Farm Alerts", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading farm alerts…</div>`);
     const alerts = await api("/farm-alerts");
     render(`
       ${header("Herd & Farm Intelligence Alerts", { back: true })}
@@ -3174,18 +3418,18 @@ function farmAlertsView(role) {
         ${alerts.length === 0 ? emptyState("No active farm-level disease alerts.") : alerts.map(a => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${a.herd_code} — ${a.disease}</span>
-              <span class="badge ${riskBadgeClass(a.risk_level)}">${a.risk_level}</span>
+              <span class="title">${escapeHtml(a.herd_code)} — ${escapeHtml(a.disease)}</span>
+              <span class="badge ${riskBadgeClass(a.risk_level)}">${escapeHtml(a.risk_level)}</span>
             </div>
-            <div class="meta"><b>Location:</b> ${a.district} · <b>Trigger:</b> ${a.trigger_reason}</div>
-            <div class="meta"><b>Recommended Action:</b> ${a.recommended_action || "—"}</div>
-            ${a.supporting_evidence ? `<div class="small-muted">Evidence: ${a.supporting_evidence}</div>` : ""}
+            <div class="meta"><b>Location:</b> ${escapeHtml(a.district)} · <b>Trigger:</b> ${escapeHtml(a.trigger_reason)}</div>
+            <div class="meta"><b>Recommended Action:</b> ${escapeHtml(a.recommended_action || "—")}</div>
+            ${a.supporting_evidence ? `<div class="small-muted">Evidence: ${escapeHtml(a.supporting_evidence)}</div>` : ""}
             <div class="row1" style="margin-top:8px">
-              <span class="badge badge-blue">Status: ${a.status}</span>
+              <span class="badge badge-blue">Status: ${escapeHtml(a.status)}</span>
               ${role !== "owner" && a.status === "ACTIVE" ? `
                 <div style="display:flex;gap:6px">
-                  <button class="btn btn-outline btn-sm" onclick="ackFarmAlert(${a.id})">Acknowledge</button>
-                  <button class="btn btn-primary btn-sm" onclick="resolveFarmAlert(${a.id})">Resolve</button>
+                  <button class="btn btn-outline btn-sm" onclick="ackFarmAlert(${safeId(a.id)})">Acknowledge</button>
+                  <button class="btn btn-primary btn-sm" onclick="resolveFarmAlert(${safeId(a.id)})">Resolve</button>
                 </div>
               ` : ""}
             </div>
@@ -3210,7 +3454,7 @@ window.resolveFarmAlert = async function(id) {
 // ==================================================== VAX CAMPAIGNS =====
 function campaignsView(role) {
   route(`#/${role}/campaigns`, async () => {
-    render(`${header("Campaigns", { back: true })}<div class="loading">Loading vaccination campaigns…</div>`);
+    render(`${header("Campaigns", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading vaccination campaigns…</div>`);
     const camps = await api("/campaigns");
     const canManage = role === "govt";
     render(`
@@ -3231,12 +3475,12 @@ function campCard(c, canUpdate) {
   const pct = c.target_animals ? Math.min(100, Math.round((c.doses_administered / c.target_animals) * 100)) : 0;
   return `
     <div class="list-card" style="cursor:default">
-      <div class="row1"><span class="title">${c.name}</span><span class="badge ${campStatusClass(c.status)}">${c.status}</span></div>
-      <div class="meta"><b>${c.vaccine}</b> · ${c.district} · ${c.campaign_code}</div>
+      <div class="row1"><span class="title">${escapeHtml(c.name)}</span><span class="badge ${campStatusClass(c.status)}">${escapeHtml(c.status)}</span></div>
+      <div class="meta"><b>${escapeHtml(c.vaccine)}</b> · ${escapeHtml(c.district)} · ${escapeHtml(c.campaign_code)}</div>
       <div class="meta">Dates: ${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</div>
       <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
-      <div class="row1" style="margin-top:2px"><span class="meta">${c.doses_administered} / ${c.target_animals} doses (${pct}%)</span>
-        ${canUpdate ? `<button class="btn btn-ghost btn-sm btn-edit-camp" data-id="${c.id}">Update</button>` : ""}
+      <div class="row1" style="margin-top:2px"><span class="meta">${escapeHtml(c.doses_administered)} / ${escapeHtml(c.target_animals)} doses (${pct}%)</span>
+        ${canUpdate ? `<button class="btn btn-ghost btn-sm btn-edit-camp" data-id="${safeId(c.id)}">Update</button>` : ""}
       </div>
     </div>`;
 }
@@ -3260,30 +3504,33 @@ function bindCampaignManage(camps, role) {
 function renderCampModal(camp, isGovt) {
   const isEdit = !!camp;
   const wrap = document.getElementById("campModalWrap");
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.setAttribute("aria-label", isEdit ? "Update Campaign" : "Create Campaign");
   wrap.innerHTML = `
     <div class="section-card" style="border:2px solid var(--primary-light)">
       <div class="subheading">${isEdit ? "Update Campaign: " + camp.campaign_code : "Create New Campaign"}</div>
       <form id="campForm">
         ${!isEdit ? `
-          <div class="field"><label>Campaign Name</label><input name="name" required placeholder="e.g. FMD Drive Haveli" /></div>
+          <div class="field"><label for="pm_name">Campaign Name</label><input id="pm_name" name="name" required placeholder="e.g. FMD Drive Haveli" /></div>
           <div class="form-row">
-            <div class="field"><label>District</label><input name="district" required placeholder="e.g. Pune" /></div>
-            <div class="field"><label>Vaccine</label><select name="vaccine"><option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option></select></div>
+            <div class="field"><label for="pm_district_2">District</label><input id="pm_district_2" name="district" required placeholder="e.g. Pune" /></div>
+            <div class="field"><label for="pm_vaccine">Vaccine</label><select id="pm_vaccine" name="vaccine"<option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option></select></div>
           </div>
           <div class="form-row">
-            <div class="field"><label>Target Animals</label><input name="target_animals" type="number" required /></div>
-            <div class="field"><label>Start Date</label><input name="start_date" type="date" required /></div>
+            <div class="field"><label for="pm_target_animals">Target Animals</label><input id="pm_target_animals" name="target_animals" type="number" required /></div>
+            <div class="field"><label for="pm_start_date">Start Date</label><input id="pm_start_date" name="start_date" type="date" required /></div>
           </div>
-          <div class="field"><label>End Date</label><input name="end_date" type="date" required /></div>
+          <div class="field"><label for="pm_end_date">End Date</label><input id="pm_end_date" name="end_date" type="date" required /></div>
         ` : `
           <div class="form-row">
-            <div class="field"><label>Doses Administered</label><input name="doses_administered" type="number" value="${camp.doses_administered}" required /></div>
-            <div class="field"><label>Status</label><select name="status">
+            <div class="field"><label for="pm_doses_administered">Doses Administered</label><input id="pm_doses_administered" name="doses_administered" type="number" value="${escapeAttr(camp.doses_administered)}" required /></div>
+            <div class="field"><label for="pm_status">Status</label><select id="pm_status" name="status"
               ${["PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"].map(s => `<option ${s === camp.status ? "selected" : ""}>${s}</option>`).join("")}
             </select></div>
           </div>
         `}
-        <div class="field"><label>Notes</label><textarea name="notes">${isEdit ? camp.notes || "" : ""}</textarea></div>
+        <div class="field"><label for="pm_notes">Notes</label><textarea id="pm_notes" name="notes"${isEdit ? camp.notes || "" : ""}</textarea></div>
         <div class="btn-row">
           <button class="btn btn-primary btn-sm" type="submit">${isEdit ? "Save Changes" : "Create Campaign"}</button>
           <button class="btn btn-outline btn-sm" type="button" onclick="document.getElementById('campModalWrap').innerHTML=''">Cancel</button>
@@ -3317,7 +3564,7 @@ function renderCampModal(camp, isGovt) {
 
 // ======================================================== VACCINE STOCK ==
 route("#/govt/stock", async () => {
-  render(`${header("Vaccine Stock", { back: true })}<div class="loading">Loading stock…</div>`);
+  render(`${header("Vaccine Stock", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading stock…</div>`);
   const a = await api("/govt/analytics");
   const stock = a.vaccine_stock || {};
   render(`
@@ -3329,7 +3576,7 @@ route("#/govt/stock", async () => {
           <div class="list-card" style="cursor:default">
             <div class="row1"><span class="title">${dist}</span></div>
             <div class="tag-row">
-              ${items.map(i => `<span class="badge badge-blue">${i.vaccine}: ${i.doses} doses</span>`).join("")}
+              ${items.map(i => `<span class="badge badge-blue">${escapeHtml(i.vaccine)}: ${escapeHtml(i.doses)} doses</span>`).join("")}
             </div>
           </div>`).join("")}
     </div>
@@ -3337,10 +3584,10 @@ route("#/govt/stock", async () => {
       <div class="subheading">+ Add or Update Stock</div>
       <form id="stockForm">
         <div class="form-row">
-          <div class="field"><label>District</label><input name="district" required placeholder="e.g. Pune" /></div>
-          <div class="field"><label>Vaccine</label><select name="vaccine"><option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option></select></div>
+          <div class="field"><label for="pm_district_3">District</label><input id="pm_district_3" name="district" required placeholder="e.g. Pune" /></div>
+          <div class="field"><label for="pm_vaccine_2">Vaccine</label><select id="pm_vaccine_2" name="vaccine"<option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option></select></div>
         </div>
-        <div class="field"><label>Doses Available</label><input name="doses" type="number" required placeholder="e.g. 1500" /></div>
+        <div class="field"><label for="pm_doses">Doses Available</label><input id="pm_doses" name="doses" type="number" required placeholder="e.g. 1500" /></div>
         <button class="btn btn-primary" type="submit">Update Stock</button>
       </form>
     </div>
@@ -3360,7 +3607,7 @@ route("#/govt/stock", async () => {
 const AI_DISEASES = ["HS", "FMD", "BQ", "LSD", "Brucellosis", "PPR"];
 
 route("#/govt/ai", async () => {
-  render(`${header("AI Early Warning", { back: true })}<div class="loading">Loading AI system…</div>`);
+  render(`${header("AI Early Warning", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading AI system…</div>`);
   const [districts, modelStatus] = await Promise.all([
     api("/govt/ai/districts"),
     api("/govt/ai/status").catch(() => ({ online: false })),
@@ -3378,13 +3625,13 @@ route("#/govt/ai", async () => {
       </div>
       <form id="aiForm">
         <div class="form-row">
-          <div class="field"><label>District</label>
-            <select name="district" required>
+          <div class="field"><label for="pm_district">District</label>
+            <select id="pm_district" name="district" required
               ${districts.length ? districts.map(d => `<option>${d}</option>`).join("") : `<option value="">No districts yet</option>`}
             </select>
           </div>
-          <div class="field"><label>Disease</label>
-            <select name="disease" required>${AI_DISEASES.map(d => `<option>${d}</option>`).join("")}</select>
+          <div class="field"><label for="pm_disease">Disease</label>
+            <select id="pm_disease" name="disease" required${AI_DISEASES.map(d => `<option>${d}</option>`).join("")}</select>
           </div>
         </div>
         <button class="btn btn-primary" type="submit" ${modelStatus.online ? "" : "disabled"}>Predict Risk</button>
@@ -3398,17 +3645,17 @@ route("#/govt/ai", async () => {
     const f = Object.fromEntries(new FormData(e.target));
     if (!f.district) return toast("No district data available yet", true);
     const box = document.getElementById("aiResults");
-    box.innerHTML = `<div class="loading">Running AI prediction on live district & weather data…</div>`;
+    box.innerHTML = `<div class="loading" role="status" aria-live="polite" aria-busy="true">Running AI prediction on live district & weather data…</div>`;
     try {
       const qs = `district=${encodeURIComponent(f.district)}&disease=${encodeURIComponent(f.disease)}`;
       const [pred, outbreak] = await Promise.all([api(`/govt/ai/predict?${qs}`), api(`/govt/ai/outbreak?${qs.split("&")[0]}`).catch(() => null)]);
       const feat = pred.features_used || {};
       box.innerHTML = `
         <div class="section-card">
-          <div class="section-title">📈 ${f.disease} — ${f.district}</div>
+          <div class="section-title">📈 ${escapeHtml(f.disease)} — ${escapeHtml(f.district)}</div>
           <div class="stat-grid">
             ${statCard(pred.risk_score + "%", "Risk Score")}
-            <div class="stat-card"><div class="num" style="font-size:18px"><span class="badge ${riskBadgeClass(pred.risk_level)}">${pred.risk_level}</span></div><div class="lbl">Risk Level</div></div>
+            <div class="stat-card"><div class="num" style="font-size:18px"><span class="badge ${riskBadgeClass(pred.risk_level)}">${escapeHtml(pred.risk_level)}</span></div><div class="lbl">Risk Level</div></div>
             ${statCard(pred.trend, "Trend")}
             ${statCard(pred.predicted_cases, "Predicted Cases (14d)")}
           </div>
@@ -3437,7 +3684,7 @@ route("#/govt/ai", async () => {
           <div class="meta small-muted">Weather Source: ${feat.weather_source || "Open-Meteo API"}</div>
         </div>`;
     } catch (err) {
-      box.innerHTML = `<div class="section-card"><div class="meta">⚠️ ${err.message}</div></div>`;
+      box.innerHTML = `<div class="section-card"><div class="meta">⚠️ ${escapeHtml(err.message)}</div></div>`;
     }
   });
 }, ["govt"]);
@@ -3445,7 +3692,7 @@ route("#/govt/ai", async () => {
 // ------------------------------------------------------- disease library --
 function diseasesView(role) {
   route(`#/${role}/diseases`, async () => {
-    render(`${header("Disease Info", { back: true })}<div class="loading">Loading disease library…</div>`);
+    render(`${header("Disease Info", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading disease library…</div>`);
     const diseases = await api("/diseases");
     render(`
       ${header("Disease Information", { back: true })}
@@ -3462,12 +3709,12 @@ function diseasesView(role) {
       if (!items.length) { list.innerHTML = emptyState("No matching diseases."); return; }
       list.innerHTML = items.map(d => `
         <div class="list-card" style="cursor:default">
-          <div class="row1"><span class="title">${d.name_en} <span style="font-weight:400;color:var(--muted)">(${d.name_mr})</span></span>
-            <span class="badge ${d.species.includes("Cattle") ? "badge-blue" : "badge-orange"}">${d.species.join(", ")}</span>
+          <div class="row1"><span class="title">${escapeHtml(d.name_en)} <span style="font-weight:400;color:var(--muted)">(${escapeHtml(d.name_mr)})</span></span>
+            <span class="badge ${escapeHtml(d.species.includes("Cattle") ? "badge-blue" : "badge-orange")}">${escapeHtml(d.species.join(", "))}</span>
           </div>
-          <div class="meta" style="color:var(--text);margin-top:4px"><b>${t("nav.reporting")} / Symptoms:</b> ${d.symptoms_en.join(", ")}</div>
-          <div class="meta" style="font-style:italic">${d.symptoms_mr.join(", ")}</div>
-          <div class="meta" style="margin-top:4px"><b>Prevention:</b> ${d.prevention_en.join("; ")}</div>
+          <div class="meta" style="color:var(--text);margin-top:4px"><b>${t("nav.reporting")} / Symptoms:</b> ${escapeHtml(d.symptoms_en.join(", "))}</div>
+          <div class="meta" style="font-style:italic">${escapeHtml(d.symptoms_mr.join(", "))}</div>
+          <div class="meta" style="margin-top:4px"><b>Prevention:</b> ${escapeHtml(d.prevention_en.join("; "))}</div>
         </div>`).join("");
     }
     renderList(diseases);
@@ -3495,15 +3742,15 @@ function profileView(role) {
         <div class="section-card">
           <div style="text-align:center;margin-bottom:16px">
             <div style="font-size:52px">${ROLE_META[role].emoji}</div>
-            <div style="font-size:18px;font-weight:800">${u.full_name || ft("user")}</div>
+            <div style="font-size:18px;font-weight:800">${escapeHtml(u.full_name || ft("user"))}</div>
             <div class="badge badge-blue" style="margin-top:4px">${t(ROLE_META[role].label)}</div>
           </div>
           <div class="detail-grid farmer-detail-grid">
-            <div><b>${ft("mobile_label")}</b>${u.mobile || "—"}</div>
-            <div><b>${ft("email")}</b>${u.email || "—"}</div>
-            <div><b>${ft("village")}</b>${u.village || "—"}</div>
-            <div><b>${ft("block")}</b>${u.block || "—"}</div>
-            <div><b>${ft("district")}</b>${u.district || "—"}</div>
+            <div><b>${ft("mobile_label")}</b>${escapeHtml(u.mobile || "—")}</div>
+            <div><b>${ft("email")}</b>${escapeHtml(u.email || "—")}</div>
+            <div><b>${ft("village")}</b>${escapeHtml(u.village || "—")}</div>
+            <div><b>${ft("block")}</b>${escapeHtml(u.block || "—")}</div>
+            <div><b>${ft("district")}</b>${escapeHtml(u.district || "—")}</div>
             <div><b>${ft("current_language")}</b>${({ en: "English", mr: "मराठी", hi: "हिन्दी", te: "తెలుగు" })[state.lang]}</div>
           </div>
         </div>
@@ -3517,16 +3764,16 @@ function profileView(role) {
       <div class="section-card">
         <div style="text-align:center;margin-bottom:16px">
           <div style="font-size:52px">${ROLE_META[role].emoji}</div>
-          <div style="font-size:18px;font-weight:800">${u.full_name || "User"}</div>
+          <div style="font-size:18px;font-weight:800">${escapeHtml(u.full_name || "User")}</div>
           <div class="badge badge-blue" style="margin-top:4px">${t(ROLE_META[role].label)}</div>
         </div>
         <div class="detail-grid">
-          <div><b>Mobile</b>${u.mobile || "—"}</div>
-          <div><b>Email</b>${u.email || "—"}</div>
-          <div><b>Village</b>${u.village || "—"}</div>
-          <div><b>Block</b>${u.block || "—"}</div>
-          <div><b>District</b>${u.district || "—"}</div>
-          <div><b>Specialization</b>${u.specialization || "General"}</div>
+          <div><b>Mobile</b>${escapeHtml(u.mobile || "—")}</div>
+          <div><b>Email</b>${escapeHtml(u.email || "—")}</div>
+          <div><b>Village</b>${escapeHtml(u.village || "—")}</div>
+          <div><b>Block</b>${escapeHtml(u.block || "—")}</div>
+          <div><b>District</b>${escapeHtml(u.district || "—")}</div>
+          <div><b>Specialization</b>${escapeHtml(u.specialization || "General")}</div>
         </div>
       </div>
       <div class="section-card">
@@ -3543,27 +3790,27 @@ route("#/owner/herds", () => { location.hash = "#/owner/livestock"; }, ["owner"]
 
 async function herdDetailView(role, id) {
   const farmer = role === "owner";
-  render(`${header(farmer ? ft("herd_information") : "Herd Intelligence", { back: true })}<div class="loading">${farmer ? ft("loading_herd") : "Loading herd telemetry…"}</div>`);
+  render(`${header(farmer ? ft("herd_information") : "Herd Intelligence", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_herd") : "Loading herd telemetry…"}</div>`);
   const hi = await api(`/herds/${id}/intelligence`);
   if (farmer) {
     const animals = (await api("/animals")).filter(a => Number(a.herd_id) === Number(id));
     render(`
       ${header(ft("herd_information"), { back: true })}
       <div class="section-card">
-        <div class="owner-herd-name">🐑 ${hi.herd_code}</div>
+        <div class="owner-herd-name">🐑 ${escapeHtml(hi.herd_code)}</div>
         <div class="detail-grid farmer-detail-grid">
-          <div><b>${ft("animal_count")}</b>${hi.total_animals}</div>
+          <div><b>${ft("animal_count")}</b>${escapeHtml(hi.total_animals)}</div>
           <div><b>${ft("health_status")}</b><span class="badge ${riskBadgeClass(hi.risk_level)}">${ownerRiskLabel(hi.risk_level)}</span></div>
-          <div><b>${ft("active_cases")}</b>${hi.active_cases}</div>
-          <div><b>${ft("location")}</b>${[hi.village, hi.district].filter(Boolean).join(", ") || ft("unknown")}</div>
+          <div><b>${ft("active_cases")}</b>${escapeHtml(hi.active_cases)}</div>
+          <div><b>${ft("location")}</b>${escapeHtml([hi.village, hi.district].filter(Boolean).join(", ") || ft("unknown"))}</div>
         </div>
       </div>
       <div class="section-card">
         <div class="section-title">🐄 ${ft("herd_animals")} (${animals.length})</div>
         ${animals.length ? animals.map(a => `
-          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${a.id}'">
-            <div class="row1"><span class="title">${a.animal_name || a.animal_code}</span><span class="badge ${a.status === "Healthy" ? "badge-green" : "badge-orange"}">${ownerAnimalStatus(a.status)}</span></div>
-            <div class="meta">${ownerAnimalType(a.animal_type || a.species)} · ${ft("age")}: ${a.age ?? a.age_years ?? ft("unknown")}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${safeId(a.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/animals/${safeId(a.id)}'}">
+            <div class="row1"><span class="title">${escapeHtml(a.animal_name || a.animal_code)}</span><span class="badge ${escapeHtml(a.status === "Healthy" ? "badge-green" : "badge-orange")}">${ownerAnimalStatus(a.status)}</span></div>
+            <div class="meta">${ownerAnimalType(a.animal_type || a.species)} · ${ft("age")}: ${escapeHtml(a.age ?? a.age_years ?? ft("unknown"))}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
           </div>`).join("") : emptyState(ft("no_herd_animals"))}
         <button class="btn btn-ghost" style="margin-top:8px" onclick="location.hash='#/owner/livestock'">${ft("back_to_livestock")}</button>
       </div>
@@ -3575,13 +3822,13 @@ async function herdDetailView(role, id) {
     ${header("Herd " + hi.herd_code, { back: true })}
     <div class="section-card">
       <div class="row1" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span class="title" style="font-size:18px">${hi.herd_code}</span>
-        <span class="badge ${riskBadgeClass(hi.risk_level)}">${hi.risk_level}</span>
+        <span class="title" style="font-size:18px">${escapeHtml(hi.herd_code)}</span>
+        <span class="badge ${riskBadgeClass(hi.risk_level)}">${escapeHtml(hi.risk_level)}</span>
       </div>
       <div class="detail-grid">
-        <div><b>Location</b>${hi.village}, ${hi.district}</div>
-        <div><b>Total Animals</b>${hi.total_animals}</div>
-        <div><b>Active Cases</b>${hi.active_cases}</div>
+        <div><b>Location</b>${escapeHtml(hi.village)}, ${escapeHtml(hi.district)}</div>
+        <div><b>Total Animals</b>${escapeHtml(hi.total_animals)}</div>
+        <div><b>Active Cases</b>${escapeHtml(hi.active_cases)}</div>
         <div><b>Vaccination Coverage</b>${Math.round(hi.vaccination_coverage * 100)}%</div>
       </div>
     </div>
@@ -3589,9 +3836,9 @@ async function herdDetailView(role, id) {
       <div class="subheading">🚨 Herd Alerts (${hi.alerts.length})</div>
       ${hi.alerts.length === 0 ? emptyState("No active alerts for this herd.") : hi.alerts.map(a => `
         <div class="list-card" style="cursor:default">
-          <div class="row1"><span class="title">${a.disease}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${a.risk_level}</span></div>
-          <div class="meta">${a.trigger_reason}</div>
-          <div class="meta">Action: ${a.recommended_action}</div>
+          <div class="row1"><span class="title">${escapeHtml(a.disease)}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${escapeHtml(a.risk_level)}</span></div>
+          <div class="meta">${escapeHtml(a.trigger_reason)}</div>
+          <div class="meta">Action: ${escapeHtml(a.recommended_action)}</div>
         </div>
       `).join("")}
     </div>
@@ -3606,10 +3853,10 @@ route("#/owner/herds/new", () => {
     <div class="section-card">
       <form id="herdForm">
         <div class="form-row">
-          <div class="field"><label>${ft("village")}</label><input name="village" value="${state.user.village || ""}" autocomplete="address-level3" /></div>
-          <div class="field"><label>${ft("block")}</label><input name="block" value="${state.user.block || ""}" /></div>
+          <div class="field"><label for="pm_village_2">${ft("village")}</label><input id="pm_village_2" name="village" value="${escapeHtml(state.user.village || "")}" autocomplete="address-level3" /></div>
+          <div class="field"><label for="pm_block_2">${ft("block")}</label><input id="pm_block_2" name="block" value="${escapeAttr(state.user.block || "")}" /></div>
         </div>
-        <div class="field"><label>${ft("district")}</label><input name="district" value="${state.user.district || ""}" /></div>
+        <div class="field"><label for="pm_district_4">${ft("district")}</label><input id="pm_district_4" name="district" value="${escapeHtml(state.user.district || "")}" /></div>
         <button class="btn btn-primary" type="submit">${ft("create_herd")}</button>
       </form>
     </div>
@@ -3629,7 +3876,7 @@ route("#/owner/herds/new", () => {
 function animalsListView(role) {
   route(`#/${role}/animals`, async () => {
     if (role === "owner") { location.hash = "#/owner/livestock"; return; }
-    render(`${header("Animals", { back: true })}<div class="loading">Loading…</div>`);
+    render(`${header("Animals", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
     const animals = await api("/animals");
     render(`
       ${header(role === "owner" ? "My Animals" : "Animals", { back: true })}
@@ -3637,12 +3884,12 @@ function animalsListView(role) {
         ${role === "owner" ? `<button class="btn btn-primary" style="margin-bottom:14px" onclick="location.hash='#/owner/animals/new'">+ Add Animal</button>` : ""}
         ${animals.length === 0 ? emptyState("No animals registered yet.") :
           animals.map(a => `
-          <div class="list-card" onclick="location.hash='#/${role}/animals/${a.id}'">
-            <div class="row1"><span class="title">${a.animal_code}</span><span class="badge ${a.status === 'Healthy' ? 'badge-green' : 'badge-orange'}">${a.status}</span></div>
-            <div class="meta">${a.animal_name || "—"} · ${a.animal_type || a.species || "—"} · ${a.breed || "—"} · ${(a.gender || a.sex || "—")} · ${(a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—"}</div>
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/animals/${safeId(a.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/animals/${safeId(a.id)}'}">
+            <div class="row1"><span class="title">${escapeHtml(a.animal_code)}</span><span class="badge ${escapeHtml(a.status === 'Healthy' ? 'badge-green' : 'badge-orange')}">${escapeHtml(a.status)}</span></div>
+            <div class="meta">${escapeHtml(a.animal_name || "—")} · ${escapeHtml(a.animal_type || a.species || "—")} · ${escapeHtml(a.breed || "—")} · ${escapeHtml((a.gender || a.sex || "—"))} · ${escapeHtml((a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—")}</div>
             ${role === "owner" ? `<div style="margin-top:8px;display:flex;gap:8px">
-              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();location.hash='#/owner/report?animal=${a.id}'">Report Issue</button>
-              <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();deleteAnimal(${a.id},'${a.animal_code}')"> Delete</button>
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();location.hash='#/owner/report?animal=${safeId(a.id)}'">Report Issue</button>
+              <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();deleteAnimal(${safeId(a.id)},'${escapeJsStr(a.animal_code)}')"> Delete</button>
             </div>` : ""}
           </div>`).join("")}
       </div>
@@ -3658,25 +3905,25 @@ route("#/owner/animals/new", async () => {
     ${header(ft("add_animal"), { back: true })}
     <div class="section-card">
       <form id="animalForm">
-        <div class="field"><label>${ft("animal_name")}</label><input name="animal_name" autocomplete="off" required /></div>
-        <div class="field"><label>${ft("animal_type")}</label>
-          <select name="animal_type" required><option value="">${ft("select")}</option>
+        <div class="field"><label for="pm_animal_name">${ft("animal_name")}</label><input id="pm_animal_name" name="animal_name" autocomplete="off" required /></div>
+        <div class="field"><label for="pm_animal_type">${ft("animal_type")}</label>
+          <select id="pm_animal_type" name="animal_type" required<option value="">${ft("select")}</option>
             <option value="Cattle">${ft("cattle")}</option><option value="Buffalo">${ft("buffalo")}</option>
             <option value="Goat">${ft("goat")}</option><option value="Sheep">${ft("sheep")}</option><option value="Other">${ft("other")}</option></select>
         </div>
         <div class="form-row">
-          <div class="field"><label>${ft("breed")}</label><input name="breed" placeholder="${ft("breed_placeholder")}" /></div>
-          <div class="field"><label>${ft("gender")}</label><select name="gender"><option value="Female">${ft("female")}</option><option value="Male">${ft("male")}</option></select></div>
+          <div class="field"><label for="pm_breed">${ft("breed")}</label><input id="pm_breed" name="breed" placeholder="${ft("breed_placeholder")}" /></div>
+          <div class="field"><label for="pm_gender">${ft("gender")}</label><select id="pm_gender" name="gender"<option value="Female">${ft("female")}</option><option value="Male">${ft("male")}</option></select></div>
         </div>
-        <div class="field"><label>${ft("age")}</label><input name="age" type="number" step="0.5" min="0" inputmode="decimal" placeholder="${ft("age_placeholder")}" /></div>
-        <div class="field"><label>${ft("herd")} (${ft("optional")})</label>
-          <select name="herd_id"><option value="">${ft("no_herd")}</option>${herds.map(h => `<option value="${h.id}">${ft("herd_name")} ${h.herd_code}</option>`).join("")}</select>
+        <div class="field"><label for="pm_age">${ft("age")}</label><input id="pm_age" name="age" type="number" step="0.5" min="0" inputmode="decimal" placeholder="${ft("age_placeholder")}" /></div>
+        <div class="field"><label for="pm_herd_id">${ft("herd")} (${ft("optional")})</label>
+          <select id="pm_herd_id" name="herd_id"<option value="">${ft("no_herd")}</option>${herds.map(h => `<option value="${safeId(h.id)}">${ft("herd_name")} ${escapeHtml(h.herd_code)}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>${ft("full_name")}</label><input name="owner_name" value="${state.user.full_name || ""}" autocomplete="name" required /></div>
-        <div class="field"><label>${ft("mobile")}</label><input name="mobile" value="${state.user.mobile || ""}" inputmode="tel" autocomplete="tel" required /></div>
+        <div class="field"><label for="pm_owner_name">${ft("full_name")}</label><input id="pm_owner_name" name="owner_name" value="${escapeHtml(state.user.full_name || "")}" autocomplete="name" required /></div>
+        <div class="field"><label for="pm_mobile_2">${ft("mobile")}</label><input id="pm_mobile_2" name="mobile" value="${escapeAttr(state.user.mobile || "")}" inputmode="tel" autocomplete="tel" required /></div>
         <div class="form-row">
-          <div class="field"><label>${ft("village")}</label><input name="village" value="${state.user.village || ""}" autocomplete="address-level3" /></div>
-          <div class="field"><label>${ft("district")}</label><input name="district" value="${state.user.district || ""}" /></div>
+          <div class="field"><label for="pm_village_3">${ft("village")}</label><input id="pm_village_3" name="village" value="${escapeHtml(state.user.village || "")}" autocomplete="address-level3" /></div>
+          <div class="field"><label for="pm_district_5">${ft("district")}</label><input id="pm_district_5" name="district" value="${escapeHtml(state.user.district || "")}" /></div>
         </div>
         <button class="btn btn-primary" type="submit">${ft("register_animal")}</button>
       </form>
@@ -3703,44 +3950,44 @@ function ownerAnimalRecord(a) {
     ${header(ft("animal_information"), { back: true })}
     <div class="section-card">
       <div class="row1 farmer-animal-heading">
-        <div><div class="owner-animal-name">${a.animal_name || a.animal_code}</div><div class="small-muted">${ft("animal_id")}: ${a.animal_code}</div></div>
-        <span class="badge ${a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange"}">${ownerAnimalStatus(a.status)}</span>
+        <div><div class="owner-animal-name">${escapeHtml(a.animal_name || a.animal_code)}</div><div class="small-muted">${ft("animal_id")}: ${escapeHtml(a.animal_code)}</div></div>
+        <span class="badge ${escapeHtml(a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange")}">${ownerAnimalStatus(a.status)}</span>
       </div>
       <div class="detail-grid farmer-detail-grid" style="margin-top:14px">
         <div><b>${ft("animal_type")}</b>${ownerAnimalType(a.animal_type || a.species)}</div>
-        <div><b>${ft("breed")}</b>${a.breed || ft("unknown")}</div>
+        <div><b>${ft("breed")}</b>${escapeHtml(a.breed || ft("unknown"))}</div>
         <div><b>${ft("age")}</b>${age !== null && age !== undefined && age !== "" ? `${age} ${ft("years")}` : ft("unknown")}</div>
-        <div><b>${ft("gender")}</b>${a.gender === "Female" || a.sex === "Female" ? ft("female") : a.gender === "Male" || a.sex === "Male" ? ft("male") : ft("unknown")}</div>
-        <div><b>${ft("herd")}</b>${a.herd ? a.herd.herd_code : ft("no_herd")}</div>
-        <div><b>${ft("location")}</b>${[a.village, a.district].filter(Boolean).join(", ") || ft("unknown")}</div>
+        <div><b>${ft("gender")}</b>${escapeHtml(a.gender === "Female" || a.sex === "Female" ? ft("female") : a.gender === "Male" || a.sex === "Male" ? ft("male") : ft("unknown"))}</div>
+        <div><b>${ft("herd")}</b>${escapeHtml(a.herd ? a.herd.herd_code : ft("no_herd"))}</div>
+        <div><b>${ft("location")}</b>${escapeHtml([a.village, a.district].filter(Boolean).join(", ") || ft("unknown"))}</div>
       </div>
       <div class="owner-detail-actions">
-        <button class="btn btn-primary" onclick="location.hash='#/owner/report?animal=${a.id}'">📋 ${ft("report_problem")}</button>
-        <button class="btn btn-ghost" onclick="showQrModal(${a.id})">🏷️ ${ft("qr_tag")}</button>
-        ${a.status !== "Deceased" ? `<button class="btn btn-outline" onclick="markDeceased(${a.id},'${a.animal_code}')">${ft("mark_deceased")}</button>` : ""}
-        <button class="btn btn-outline owner-danger-button" onclick="deleteAnimal(${a.id},'${a.animal_code}')">${ft("delete_animal")}</button>
+        <button class="btn btn-primary" onclick="location.hash='#/owner/report?animal=${safeId(a.id)}'">📋 ${ft("report_problem")}</button>
+        <button class="btn btn-ghost" onclick="showQrModal(${safeId(a.id)})">🏷️ ${ft("qr_tag")}</button>
+        ${a.status !== "Deceased" ? `<button class="btn btn-outline" onclick="markDeceased(${safeId(a.id)},'${escapeJsStr(a.animal_code)}')">${ft("mark_deceased")}</button>` : ""}
+        <button class="btn btn-outline owner-danger-button" onclick="deleteAnimal(${safeId(a.id)},'${escapeJsStr(a.animal_code)}')">${ft("delete_animal")}</button>
       </div>
     </div>
     <div class="section-card">
       <div class="section-title">💊 ${ft("health_and_treatment")}</div>
       ${cases.length ? cases.slice(0, 4).map(c => `
-        <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${c.id}'">
-          <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
-          <div class="meta">${c.symptoms || ft("case_detail")} · ${fmtDate(c.created_at)}</div>
+        <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${safeId(c.id)}'}">
+          <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
+          <div class="meta">${escapeHtml(c.symptoms || ft("case_detail"))} · ${fmtDate(c.created_at)}</div>
         </div>`).join("") : `<div class="meta">${ft("healthy_message")}</div>`}
       ${prescriptions.length ? `
         <div class="subheading">${ft("treatment_history")}</div>
         ${prescriptions.slice(0, 4).map(p => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.dosage || ""}</span></div>
-            <div class="meta">${p.frequency || ""}${p.duration ? ` · ${p.duration}` : ""}</div>
-            <div class="meta">${ft("prescribed_by")}: ${p.vet_name || ft("unknown")} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
-            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${p.instructions}</div>` : ""}
+            <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.dosage || "")}</span></div>
+            <div class="meta">${escapeHtml(p.frequency || "")}${p.duration ? ` · ${escapeHtml(p.duration)}` : ""}</div>
+            <div class="meta">${ft("prescribed_by")}: ${escapeHtml(p.vet_name || ft("unknown"))} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
+            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${escapeHtml(p.instructions)}</div>` : ""}
           </div>`).join("")}
       ` : `<div class="subheading">${ft("treatment_history")}</div>${emptyState(ft("no_treatments"))}`}
       ${vaccinations.length ? `
         <div class="subheading">${ft("vaccination_history")}</div>
-        ${vaccinations.slice(0, 3).map(v => `<div class="list-card" style="cursor:default"><div class="row1"><span class="title">${v.vaccine}</span><span class="badge badge-blue">${ft("given_on")}: ${fmtDate(v.date_given)}</span></div></div>`).join("")}
+        ${vaccinations.slice(0, 3).map(v => `<div class="list-card" style="cursor:default"><div class="row1"><span class="title">${escapeHtml(v.vaccine)}</span><span class="badge badge-blue">${ft("given_on")}: ${fmtDate(v.date_given)}</span></div></div>`).join("")}
       ` : ""}
       ${labReports.length ? `
         <button class="btn btn-ghost" style="margin-top:8px" onclick="location.hash='#/owner/lab-reports'">🧪 ${ft("test_results")}</button>
@@ -3754,7 +4001,7 @@ function ownerAnimalRecord(a) {
 function animalRecordView(role) {
   route(`#/${role}/animals/:id`, async ({ id }) => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("animal_information") : "Animal Record", { back: true })}<div class="loading">${farmer ? ft("loading_animal") : "Loading health passport…"}</div>`);
+    render(`${header(farmer ? ft("animal_information") : "Animal Record", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_animal") : "Loading health passport…"}</div>`);
     const a = await api(`/animals/${id}`);
     if (farmer) { ownerAnimalRecord(a); return; }
     const isVet = role === "vet";
@@ -3767,23 +4014,23 @@ function animalRecordView(role) {
       ${header("Digital Health Record", { back: true })}
       <div class="section-card">
         <div class="row1" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-size:18px;font-weight:800">${a.animal_code}</div>
-          <span class="badge ${a.status === 'Healthy' ? 'badge-green' : 'badge-orange'}">${a.status}</span>
+          <div style="font-size:18px;font-weight:800">${escapeHtml(a.animal_code)}</div>
+          <span class="badge ${escapeHtml(a.status === 'Healthy' ? 'badge-green' : 'badge-orange')}">${escapeHtml(a.status)}</span>
         </div>
         <div class="detail-grid">
-          <div><b>Animal Name</b>${a.animal_name || "—"}</div>
-          <div><b>Animal Type</b>${a.animal_type || a.species || "—"}</div>
-          <div><b>Breed</b>${a.breed || "—"}</div>
-          <div><b>Gender</b>${a.gender || a.sex || "—"}</div>
-          <div><b>Age</b>${(a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—"}</div>
-          <div><b>Owner Name</b>${a.owner_name || "—"}</div>
-          <div><b>Mobile</b>${a.mobile || "—"}</div>
-          <div><b>Herd</b>${a.herd ? a.herd.herd_code : "—"}</div>
-          <div><b>Location</b>${a.village || "—"}, ${a.district || "—"}</div>
+          <div><b>Animal Name</b>${escapeHtml(a.animal_name || "—")}</div>
+          <div><b>Animal Type</b>${escapeHtml(a.animal_type || a.species || "—")}</div>
+          <div><b>Breed</b>${escapeHtml(a.breed || "—")}</div>
+          <div><b>Gender</b>${escapeHtml(a.gender || a.sex || "—")}</div>
+          <div><b>Age</b>${escapeHtml((a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—")}</div>
+          <div><b>Owner Name</b>${escapeHtml(a.owner_name || "—")}</div>
+          <div><b>Mobile</b>${escapeHtml(a.mobile || "—")}</div>
+          <div><b>Herd</b>${escapeHtml(a.herd ? a.herd.herd_code : "—")}</div>
+          <div><b>Location</b>${escapeHtml(a.village || "—")}, ${escapeHtml(a.district || "—")}</div>
         </div>
         <div style="margin-top:14px">
-          <button class="btn btn-ghost btn-sm" onclick="showQrModal(${a.id})">🏷️ Digital QR Passport &amp; Printable Tag</button>
-          ${a.status !== "Deceased" && (role === "owner" || role === "vet") ? `<button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);margin-left:8px" onclick="markDeceased(${a.id},'${a.animal_code}')">☠️ Mark Deceased</button>` : ""}
+          <button class="btn btn-ghost btn-sm" onclick="showQrModal(${safeId(a.id)})">🏷️ Digital QR Passport &amp; Printable Tag</button>
+          ${a.status !== "Deceased" && (role === "owner" || role === "vet") ? `<button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);margin-left:8px" onclick="markDeceased(${safeId(a.id)},'${escapeJsStr(a.animal_code)}')">☠️ Mark Deceased</button>` : ""}
         </div>
       </div>
 
@@ -3791,7 +4038,7 @@ function animalRecordView(role) {
       <div class="section-card">
         <div class="subheading" style="justify-content:space-between">
           <span>🩺 Reproductive Health &amp; Gestation</span>
-          <span class="badge badge-blue">${reproLatest ? reproLatest.pregnancy_status : "Not Pregnant"}</span>
+          <span class="badge badge-blue">${escapeHtml(reproLatest ? reproLatest.pregnancy_status : "Not Pregnant")}</span>
         </div>
         <div class="detail-grid" style="margin-top:8px">
           <div><b>Breeding Date</b>${reproLatest && reproLatest.breeding_date ? fmtDate(reproLatest.breeding_date) : "—"}</div>
@@ -3799,20 +4046,20 @@ function animalRecordView(role) {
           <div><b>Prior Pregnancies</b>${reproLatest ? reproLatest.previous_pregnancies : 0}</div>
           <div><b>Total Offspring</b>${reproLatest ? reproLatest.offspring_count : 0}</div>
         </div>
-        ${reproLatest && reproLatest.breeding_notes ? `<div class="small-muted" style="margin-top:6px"><b>Notes:</b> ${reproLatest.breeding_notes}</div>` : ""}
+        ${reproLatest && reproLatest.breeding_notes ? `<div class="small-muted" style="margin-top:6px"><b>Notes:</b> ${escapeHtml(reproLatest.breeding_notes)}</div>` : ""}
         ${canEdit ? `
           <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="document.getElementById('reproFormWrap').style.display='block'">+ Record Reproductive Event</button>
           <div id="reproFormWrap" style="display:none;margin-top:12px;background:#f8f9fe;padding:12px;border-radius:12px">
             <form id="reproForm">
               <div class="form-row">
-                <div class="field"><label>Event</label><select name="event_type"><option>Pregnancy Check</option><option>AI</option><option>Natural Service</option><option>Calving</option><option>Abortion</option></select></div>
-                <div class="field"><label>Pregnancy Status</label><select name="pregnancy_status"><option>Confirmed Pregnant</option><option>Suspected</option><option>Not Pregnant</option><option>Lactating</option><option>Dry</option><option>Miscarried/Aborted</option></select></div>
+                <div class="field"><label for="pm_event_type">Event</label><select id="pm_event_type" name="event_type"<option>Pregnancy Check</option><option>AI</option><option>Natural Service</option><option>Calving</option><option>Abortion</option></select></div>
+                <div class="field"><label for="pm_pregnancy_status">Pregnancy Status</label><select id="pm_pregnancy_status" name="pregnancy_status"<option>Confirmed Pregnant</option><option>Suspected</option><option>Not Pregnant</option><option>Lactating</option><option>Dry</option><option>Miscarried/Aborted</option></select></div>
               </div>
               <div class="form-row">
-                <div class="field"><label>Breeding / Mating Date</label><input name="breeding_date" type="date" value="${new Date().toISOString().slice(0, 10)}" /></div>
-                <div class="field"><label>Expected Delivery</label><input name="expected_delivery_date" type="date" placeholder="Auto-calculated if blank" /></div>
+                <div class="field"><label for="pm_breeding_date">Breeding / Mating Date</label><input id="pm_breeding_date" name="breeding_date" type="date" value="${new Date().toISOString().slice(0, 10)}" /></div>
+                <div class="field"><label for="pm_expected_delivery_date">Expected Delivery</label><input id="pm_expected_delivery_date" name="expected_delivery_date" type="date" placeholder="Auto-calculated if blank" /></div>
               </div>
-              <div class="field"><label>Notes</label><input name="breeding_notes" placeholder="e.g. AI straw batch #, rectal palpation findings" /></div>
+              <div class="field"><label for="pm_breeding_notes">Notes</label><input id="pm_breeding_notes" name="breeding_notes" placeholder="e.g. AI straw batch #, rectal palpation findings" /></div>
               <button class="btn btn-primary btn-sm" type="submit">Save Reproductive Record</button>
             </form>
           </div>
@@ -3827,9 +4074,9 @@ function animalRecordView(role) {
           ${(!a.allergies || a.allergies.length === 0) ? `<div class="small-muted" style="margin:4px 0">No known drug allergies on record.</div>` :
             a.allergies.map(al => `
               <div class="conflict-box" style="margin:6px 0;padding:8px 12px">
-                <b>⚠️ ${al.allergen} (${al.allergy_severity} Allergy)</b>
-                <div>Reaction: ${al.reaction} · Recorded: ${fmtDate(al.date_recorded)}</div>
-                ${al.notes ? `<div class="small-muted">${al.notes}</div>` : ""}
+                <b>⚠️ ${escapeHtml(al.allergen)} (${escapeHtml(al.allergy_severity)} Allergy)</b>
+                <div>Reaction: ${escapeHtml(al.reaction)} · Recorded: ${fmtDate(al.date_recorded)}</div>
+                ${al.notes ? `<div class="small-muted">${escapeHtml(al.notes)}</div>` : ""}
               </div>
             `).join("")}
         </div>
@@ -3838,11 +4085,11 @@ function animalRecordView(role) {
           <div id="allergyFormWrap" style="display:none;margin-top:12px;background:#f8f9fe;padding:12px;border-radius:12px">
             <form id="allergyForm">
               <div class="form-row">
-                <div class="field"><label>Allergen Name</label><input name="allergen" placeholder="e.g. Penicillin, NSAID, Sulfa" required /></div>
-                <div class="field"><label>Severity</label><select name="allergy_severity"><option>Moderate</option><option>Severe</option><option>Life-Threatening</option><option>Mild</option></select></div>
+                <div class="field"><label for="pm_allergen">Allergen Name</label><input id="pm_allergen" name="allergen" placeholder="e.g. Penicillin, NSAID, Sulfa" required /></div>
+                <div class="field"><label for="pm_allergy_severity">Severity</label><select id="pm_allergy_severity" name="allergy_severity"<option>Moderate</option><option>Severe</option><option>Life-Threatening</option><option>Mild</option></select></div>
               </div>
-              <div class="field"><label>Observed Reaction</label><input name="reaction" placeholder="e.g. Anaphylaxis, facial edema, urticaria" required /></div>
-              <div class="field"><label>Clinical Notes</label><input name="notes" placeholder="Contraindications or cross-reactivity notes" /></div>
+              <div class="field"><label for="pm_reaction">Observed Reaction</label><input id="pm_reaction" name="reaction" placeholder="e.g. Anaphylaxis, facial edema, urticaria" required /></div>
+              <div class="field"><label for="pm_notes_2">Clinical Notes</label><input id="pm_notes_2" name="notes" placeholder="Contraindications or cross-reactivity notes" /></div>
               <button class="btn btn-primary btn-sm" type="submit">Save Allergy Profile</button>
             </form>
           </div>
@@ -3880,33 +4127,33 @@ function animalRecordView(role) {
       <div class="section-card">
         <div class="subheading">🩺 Previous Cases</div>
         ${a.cases.length === 0 ? emptyState("No cases recorded.") : a.cases.map(c => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${c.id}'">
-            <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${c.status}</span></div>
-            <div class="meta">${c.symptoms || ""} · ${fmtDate(c.created_at)}</div>
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(c.id)}'}">
+            <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
+            <div class="meta">${escapeHtml(c.symptoms || "")} · ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
         <div class="subheading">💉 Vaccination History</div>
         ${a.vaccinations.length === 0 ? emptyState("No vaccinations recorded.") : a.vaccinations.map(v => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${v.vaccine}</span><span class="badge badge-blue">Next: ${fmtDate(v.next_due_date)}</span></div>
-            <div class="meta">Given: ${fmtDate(v.date_given)} · By ${v.vet_name || "—"}</div>
+            <div class="row1"><span class="title">${escapeHtml(v.vaccine)}</span><span class="badge badge-blue">Next: ${fmtDate(v.next_due_date)}</span></div>
+            <div class="meta">Given: ${fmtDate(v.date_given)} · By ${escapeHtml(v.vet_name || "—")}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
         <div class="subheading">🧪 Laboratory Reports</div>
         ${a.lab_reports.length === 0 ? emptyState("No lab reports yet.") : a.lab_reports.map(l => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${l.report_no}</span><span class="badge ${l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red'}">${l.result || "Pending"}</span></div>
-            <div class="meta">${l.test_name || ""} · Sample: ${l.sample || "—"} · ${fmtDate(l.test_date)}</div>
+            <div class="row1"><span class="title">${escapeHtml(l.report_no)}</span><span class="badge ${escapeHtml(l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red')}">${escapeHtml(l.result || "Pending")}</span></div>
+            <div class="meta">${escapeHtml(l.test_name || "")} · Sample: ${escapeHtml(l.sample || "—")} · ${fmtDate(l.test_date)}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
         <div class="subheading">💊 Prescriptions</div>
         ${a.prescriptions.length === 0 ? emptyState("No prescriptions yet.") : a.prescriptions.map(p => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.dosage || ""}</span></div>
-            <div class="meta">${p.frequency || ""} · ${p.duration || ""} · By ${p.vet_name || "—"}</div>
+            <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.dosage || "")}</span></div>
+            <div class="meta">${escapeHtml(p.frequency || "")} · ${escapeHtml(p.duration || "")} · By ${escapeHtml(p.vet_name || "—")}</div>
           </div>`).join("")}
       </div>
       ${bottomNav(role === "owner" ? "#/owner/animals" : `#/${role}/dashboard`)}
@@ -3949,25 +4196,29 @@ window.showQrModal = async function(id) {
     const div = document.createElement("div");
     div.id = "qrModal";
     div.className = "qr-modal";
+    div.setAttribute("role", "dialog");
+    div.setAttribute("aria-modal", "true");
+    div.setAttribute("aria-label", "Animal QR Code");
     div.innerHTML = `
       <div class="qr-modal-content">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <b>🏷️ ${farmer ? ft("qr_tag") : "Digital Animal Health Tag"}</b>
-          <button aria-label="${farmer ? ft("close") : "Close"}" style="border:none;background:none;font-size:20px;cursor:pointer" onclick="document.getElementById('qrModal').remove()">✕</button>
+          <button aria-label="${farmer ? ft("close") : "Close"}" data-close-modal style="border:none;background:none;font-size:20px;cursor:pointer" onclick="document.getElementById('qrModal').remove()">✕</button>
         </div>
-        <div style="font-size:17px;font-weight:800;color:var(--primary)">${data.animal_code}</div>
-        <div class="small-muted">${farmer ? ownerAnimalType(data.species) : data.species}${farmer ? "" : ` · Token: ${data.qr_token.slice(0, 16)}…`}</div>
+        <div style="font-size:17px;font-weight:800;color:var(--primary)">${escapeHtml(data.animal_code)}</div>
+        <div class="small-muted">${escapeHtml(farmer ? ownerAnimalType(data.species) : data.species)}${farmer ? "" : ` · Token: ${escapeHtml(data.qr_token.slice(0, 16))}…`}</div>
         <div class="qr-image-wrap">
-          <img src="${data.qr_image}" alt="${farmer ? ft("qr_tag") : "Animal Health Passport QR"}" />
+          <img src="${escapeAttr(data.qr_image)}" alt="${escapeAttr(farmer ? ft("qr_tag") : "Animal Health Passport QR")}" />
         </div>
         <div class="btn-row" style="margin-top:12px">
-          <a class="btn btn-ghost btn-sm" href="${data.qr_image}" download="${data.animal_code}_QR.png" style="flex:1;text-decoration:none">⬇️ ${farmer ? ft("download") : "Download"}</a>
+          <a class="btn btn-ghost btn-sm" href="${escapeAttr(data.qr_image)}" download="${escapeAttr(data.animal_code)}_QR.png" style="flex:1;text-decoration:none">⬇️ ${farmer ? ft("download") : "Download"}</a>
           <button class="btn btn-primary btn-sm" style="flex:1" onclick="window.print()">🖨️ ${farmer ? ft("print") : "Print Card"}</button>
         </div>
-        ${!farmer ? `<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%" onclick="regenAnimalQr(${id})">🔄 Regenerate QR Identity</button>` : ""}
+        ${!farmer ? `<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%" onclick="regenAnimalQr(${safeId(id)})">🔄 Regenerate QR Identity</button>` : ""}
       </div>
     `;
     document.body.appendChild(div);
+    if (window.PMA11y) { window.PMA11y.showAccessibleDialog(div, {labelledBy: null, announce: "QR code dialog opened", onClose: () => { try { div.remove(); } catch(_){} }}); }
   } catch (e) { toast(e.message, true); }
 };
 
@@ -3983,7 +4234,7 @@ window.regenAnimalQr = async function(id) {
 
 // =========================================================== REPORT =====
 route("#/owner/report", async ({ animal, voice }) => {
-  render(`${header(ft("report_title"), { back: true })}<div class="loading">${ft("loading")}</div>`);
+  render(`${header(ft("report_title"), { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${ft("loading")}</div>`);
   const animals = await api("/animals");
   const defaultAnimal = animal ? animals.find(a => a.id === Number(animal)) : null;
   if (!animals.length) {
@@ -4010,20 +4261,20 @@ route("#/owner/report", async ({ animal, voice }) => {
         <div id="voiceTranscriptText"></div>
       </div>` : ""}
       <form id="caseForm">
-        <div class="field"><label>${ft("animal")}</label>
-          <select name="animal_id" required>
+        <div class="field"><label for="pm_animal_id">${ft("animal")}</label>
+          <select id="pm_animal_id" name="animal_id" required
             <option value="">${ft("choose_animal")}</option>
-            ${animals.map(a => `<option value="${a.id}" ${defaultAnimal && defaultAnimal.id === a.id ? "selected" : ""}>${a.animal_name || a.animal_code} · ${ownerAnimalType(a.animal_type || a.species)}</option>`).join("")}
+            ${animals.map(a => `<option value="${safeId(a.id)}" ${escapeHtml(defaultAnimal && defaultAnimal.id === a.id ? "selected" : "")}>${escapeHtml(a.animal_name || a.animal_code)} · ${ownerAnimalType(a.animal_type || a.species)}</option>`).join("")}
           </select>
         </div>
-        <div class="field"><label>${ft("symptoms")}</label>
-          <input name="symptoms" id="symptomsInput" placeholder="${ft("symptoms_placeholder")}" required />
+        <div class="field"><label for="symptomsInput">${ft("symptoms")}</label>
+          <input name="symptoms" id="symptomsInput" placeholder="${ft("symptoms_placeholder")}" required /
         </div>
-        <div class="field"><label>${ft("severity")}</label>
-          <select name="severity"><option value="Low">${ft("severity_low")}</option><option value="Medium" selected>${ft("severity_medium")}</option><option value="High">${ft("severity_high")}</option><option value="Critical">${ft("severity_critical")}</option></select>
+        <div class="field"><label for="pm_severity">${ft("severity")}</label>
+          <select id="pm_severity" name="severity"<option value="Low">${ft("severity_low")}</option><option value="Medium" selected>${ft("severity_medium")}</option><option value="High">${ft("severity_high")}</option><option value="Critical">${ft("severity_critical")}</option></select>
         </div>
-        <div class="field"><label>${ft("additional_details")}</label>
-          <textarea name="description" id="descInput" placeholder="${ft("details_placeholder")}"></textarea>
+        <div class="field"><label for="descInput">${ft("additional_details")}</label>
+          <textarea name="description" id="descInput" placeholder="${ft("details_placeholder")}"</textarea>
         </div>
         <button class="btn btn-primary" type="submit">📋 ${ft("submit_report")}</button>
       </form>
@@ -4039,7 +4290,7 @@ route("#/owner/report", async ({ animal, voice }) => {
       if (voice) body.reported_through = "Voice App";
       const c = await api("/cases", { method: "POST", body });
       toast(ft("report_sent", { code: c.case_no }));
-      location.hash = `#/owner/cases/${c.id}`;
+      location.hash = `#/owner/cases/${safeId(c.id)}`;
     } catch (err) { toast(err.message, true); }
   });
 }, ["owner"]);
@@ -4108,54 +4359,69 @@ function setupVoiceReport() {
 function casesListView(role) {
   route(`#/${role}/cases`, async () => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("cases") : "Cases", { back: true })}<div class="loading">${farmer ? ft("loading_cases") : "Loading cases…"}</div>`);
+    const pageKey = `cases_${role}`;
+    if (!state.pagination[pageKey]) state.pagination[pageKey]=1;
+    const curPage = state.pagination[pageKey];
+    const pageSize = state.pagination.pageSize;
+    render(`${header(farmer ? ft("cases") : "Cases", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_cases") : "Loading cases…"}</div>`);
     const cases = await api("/cases");
+    const { pageItems, total, totalPages, page } = pmPaginate(cases, curPage, pageSize);
+    state.pagination[pageKey]=page;
     if (farmer) {
       render(`
         ${header(ft("my_cases"), { back: true })}
-        <div class="section-card">
+        <div class="section-card" id="casesListSection">
           <button class="btn btn-primary farmer-primary-action" style="margin-bottom:14px" onclick="location.hash='#/owner/report'">＋ ${ft("report_problem")}</button>
-          ${cases.length ? cases.map(c => `
-            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${c.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${c.id}'}">
-              <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
-              <div class="meta">${ft("animal_id")}: ${c.animal ? c.animal.animal_code : "—"}</div>
-              <div class="meta">${c.symptoms || "—"}</div>
+          <div class="btn-row no-print" style="margin-bottom:8px"><button class="btn btn-outline btn-sm" onclick="pmPrintSection('casesListSection')">🖨️ Print</button><button class="btn btn-outline btn-sm" onclick="pmExportCsv('cases.csv', ${JSON.stringify([]).replace(/"/g,'&quot;')}, ['case_no','status'])">Export placeholder</button></div>
+          ${pageItems.length ? pageItems.map(c => `
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${safeId(c.id)}'}">
+              <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
+              <div class="meta">${ft("animal_id")}: ${escapeHtml(c.animal ? c.animal.animal_code : "—")}</div>
+              <div class="meta">${escapeHtml(c.symptoms || "—")}</div>
               <div class="meta">${ft("reported")}: ${fmtDate(c.created_at)}</div>
             </div>`).join("") : emptyState(ft("no_cases_home"))}
+          ${pmPaginationHtml(total, page, pageSize, `goCasesPage_${role}`)}
+          <div class="btn-row no-print" style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="pmPrintSection('casesListSection')">🖨️ Print list</button><button class="btn btn-ghost btn-sm" onclick="window.__exportCases && window.__exportCases()">📥 Export CSV</button></div>
         </div>
         ${bottomNav("#/owner/cases")}
       `);
+      window.__exportCases = () => { pmExportCsv('cases.csv', cases.map(c=>({case_no:c.case_no,status:c.status,symptoms:c.symptoms,created:c.created_at})), ['case_no','status','symptoms','created']); };
+      window[`goCasesPage_${role}`] = (p)=>{ state.pagination[pageKey]=p; location.hash=`#/${role}/cases`; setTimeout(()=>location.reload(), 30); };
       return;
     }
     render(`
       ${header("Active Case Tracking", { back: true })}
-      <div class="section-card">
-        ${cases.length === 0 ? emptyState("No active cases.") : cases.map(c => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${c.id}'">
-            <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${c.status}</span></div>
-            <div class="meta"><b>Animal:</b> ${c.animal ? c.animal.animal_code : "—"} · ${c.symptoms || "—"}</div>
-            <div class="meta">Owner: ${c.owner ? c.owner.full_name : "—"} · Reported: ${fmtDate(c.created_at)}</div>
+      <div class="section-card" id="casesListSection">
+        <div class="btn-row no-print" style="margin-bottom:10px"><button class="btn btn-outline btn-sm" onclick="pmPrintSection('casesListSection')">🖨️ Print</button><button class="btn btn-outline btn-sm" onclick="window.__exportCases && window.__exportCases()">📥 Export CSV</button><button class="btn btn-outline btn-sm" onclick="doExport('cases','xlsx')">📊 Excel</button><button class="btn btn-outline btn-sm" onclick="doExport('cases','pdf')">📄 PDF</button></div>
+        ${pageItems.length === 0 ? emptyState("No active cases.") : pageItems.map(c => `
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(c.id)}'}">
+            <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
+            <div class="meta"><b>Animal:</b> ${escapeHtml(c.animal ? c.animal.animal_code : "—")} · ${escapeHtml(c.symptoms || "—")}</div>
+            <div class="meta">Owner: ${escapeHtml(c.owner ? c.owner.full_name : "—")} · Reported: ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
+        ${pmPaginationHtml(total, page, pageSize, `goCasesPage_${role}`)}
       </div>
       ${bottomNav(`#/${role}/dashboard`)}
     `);
+    window.__exportCases = () => { pmExportCsv('cases.csv', cases.map(c=>({case_no:c.case_no,status:c.status,animal:c.animal?.animal_code,owner:c.owner?.full_name,created:c.created_at})), ['case_no','status','animal','owner','created']); };
+    window[`goCasesPage_${role}`] = (p)=>{ state.pagination[pageKey]=p; location.hash=`#/${role}/cases`; setTimeout(()=>location.reload(), 30); };
   }, [role]);
 }
 casesListView("owner"); casesListView("vet"); casesListView("govt");
 
 route("#/vet/reports", async () => {
-  render(`${header("Incoming Reports", { back: true })}<div class="loading">Loading…</div>`);
+  render(`${header("Incoming Reports", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
   const reports = await api("/vet/reports");
   render(`
     ${header("Incoming Reports", { back: true })}
     <div class="section-card">
       <div class="section-title">Farmer Reported Incidents</div>
       ${reports.length === 0 ? emptyState("No reports yet.") : reports.map(r => `
-        <div class="list-card" onclick="location.hash='#/vet/cases/${r.id}'">
-          <div class="row1"><span class="title">${r.case_no}</span><span class="badge ${severityBadgeClass(r.severity)}">${r.severity} severity</span></div>
-          <div class="meta"><b>Symptoms:</b> ${r.symptoms || "—"}</div>
-          <div class="meta">Owner: ${r.owner ? r.owner.full_name + " (" + (r.owner.mobile || "") + ")" : "—"}</div>
-          <div class="meta">Reported: ${fmtDate(r.created_at)} · Status: <span class="badge ${statusBadgeClass(r.status)}">${r.status}</span></div>
+        <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/vet/cases/${safeId(r.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/vet/cases/${safeId(r.id)}'}">
+          <div class="row1"><span class="title">${escapeHtml(r.case_no)}</span><span class="badge ${severityBadgeClass(r.severity)}">${escapeHtml(r.severity)} severity</span></div>
+          <div class="meta"><b>Symptoms:</b> ${escapeHtml(r.symptoms || "—")}</div>
+          <div class="meta">Owner: ${escapeHtml(r.owner ? r.owner.full_name + " (" + (r.owner.mobile || "") + ")" : "—")}</div>
+          <div class="meta">Reported: ${fmtDate(r.created_at)} · Status: <span class="badge ${statusBadgeClass(r.status)}">${escapeHtml(r.status)}</span></div>
         </div>`).join("")}
     </div>
     ${bottomNav("#/vet/reports")}
@@ -4176,19 +4442,19 @@ function ownerCaseDetail(c) {
     ${header(ft("case_detail"), { back: true })}
     <div class="section-card">
       <div class="row1 farmer-case-heading">
-        <span class="owner-case-number">${c.case_no}</span>
+        <span class="owner-case-number">${escapeHtml(c.case_no)}</span>
         <span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span>
       </div>
       <div class="detail-grid farmer-detail-grid" style="margin-top:12px">
-        <div><b>${ft("animal")}</b><a class="link" onclick="location.hash='#/owner/animals/${c.animal?.id}'">${c.animal?.animal_name || c.animal?.animal_code || "—"}</a></div>
+        <div><b>${ft("animal")}</b><a class="link" onclick="location.hash='#/owner/animals/${safeId(c.animal?.id)}'">${escapeHtml(c.animal?.animal_name || c.animal?.animal_code || "—")}</a></div>
         <div><b>${ft("report_date")}</b>${fmtDate(c.created_at)}</div>
         <div><b>${ft("severity")}</b>${ownerSeverityLabel(c.severity)}</div>
-        ${c.vet_name ? `<div><b>${ft("vet")}</b>${c.vet_name}</div>` : ""}
+        ${c.vet_name ? `<div><b>${ft("vet")}</b>${escapeHtml(c.vet_name)}</div>` : ""}
       </div>
-      <div class="owner-case-copy"><b>${ft("symptoms")}</b><p>${c.symptoms || "—"}</p></div>
-      ${c.description ? `<div class="owner-case-copy"><b>${ft("additional_details")}</b><p>${c.description}</p></div>` : ""}
-      ${c.diagnosis ? `<div class="owner-case-copy"><b>${ft("diagnosis")}</b><p>${c.diagnosis}</p></div>` : ""}
-      ${c.treatment ? `<div class="owner-case-copy"><b>${ft("instructions")}</b><p>${c.treatment}</p></div>` : ""}
+      <div class="owner-case-copy"><b>${ft("symptoms")}</b><p>${escapeHtml(c.symptoms || "—")}</p></div>
+      ${c.description ? `<div class="owner-case-copy"><b>${ft("additional_details")}</b><p>${escapeHtml(c.description)}</p></div>` : ""}
+      ${c.diagnosis ? `<div class="owner-case-copy"><b>${ft("diagnosis")}</b><p>${escapeHtml(c.diagnosis)}</p></div>` : ""}
+      ${c.treatment ? `<div class="owner-case-copy"><b>${ft("instructions")}</b><p>${escapeHtml(c.treatment)}</p></div>` : ""}
     </div>
     <div id="trackWrap"></div>
     ${prescriptions.length ? `
@@ -4196,9 +4462,9 @@ function ownerCaseDetail(c) {
         <div class="section-title">💊 ${ft("health_and_treatment")}</div>
         ${prescriptions.map(p => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.dosage || ""}</span></div>
-            <div class="meta">${p.frequency || ""}${p.duration ? ` · ${p.duration}` : ""}</div>
-            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${p.instructions}</div>` : ""}
+            <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.dosage || "")}</span></div>
+            <div class="meta">${escapeHtml(p.frequency || "")}${p.duration ? ` · ${escapeHtml(p.duration)}` : ""}</div>
+            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${escapeHtml(p.instructions)}</div>` : ""}
             <div class="meta">${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
           </div>`).join("")}
       </div>` : ""}
@@ -4209,7 +4475,7 @@ function ownerCaseDetail(c) {
           <div class="list-card" style="cursor:default">
             <div class="row1"><span class="title">${ownerResponseLabel(update.response)}</span><span class="small-muted">${fmtDate(update.response_date)}</span></div>
             ${update.objective_observations ? `<div class="meta">${update.objective_observations}</div>` : ""}
-            ${update.notes ? `<div class="meta">${update.notes}</div>` : ""}
+            ${update.notes ? `<div class="meta">${escapeHtml(update.notes)}</div>` : ""}
           </div>`).join("")}
       </div>` : ""}
     ${labReports.length ? `
@@ -4227,7 +4493,7 @@ function ownerCaseDetail(c) {
         <div class="timeline">${c.updates.map(update => `
           <div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-body">
             <div class="t-status">${ownerCaseStatus(update.status)}</div>
-            ${update.note ? `<div class="t-note">${update.note}</div>` : ""}
+            ${update.note ? `<div class="t-note">${escapeHtml(update.note)}</div>` : ""}
             <div class="t-date">${fmtDate(update.created_at)}</div>
           </div></div>`).join("")}</div>
       </div>` : ""}
@@ -4240,7 +4506,7 @@ function ownerCaseDetail(c) {
 function caseDetailView(role) {
   route(`#/${role}/cases/:id`, async ({ id }) => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("case_detail") : "Case Detail", { back: true })}<div class="loading">${farmer ? ft("loading_cases") : "Loading…"}</div>`);
+    render(`${header(farmer ? ft("case_detail") : "Case Detail", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_cases") : "Loading…"}</div>`);
     const c = await api(`/cases/${id}`);
     const isVet = role === "vet";
     const samples = c.samples || [];
@@ -4253,7 +4519,7 @@ function caseDetailView(role) {
       if (feedbackForm) feedbackForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         try {
-          await api(`/cases/${c.id}/farmer-feedback`, { method: "POST", body: Object.fromEntries(new FormData(e.target)) });
+          await api(`/cases/${safeId(c.id)}/farmer-feedback`, { method: "POST", body: Object.fromEntries(new FormData(e.target)) });
           toast(ft("feedback_thanks"));
           router();
         } catch (err) { toast(err.message, true); }
@@ -4265,35 +4531,35 @@ function caseDetailView(role) {
       ${header(c.case_no, { back: true })}
       <div class="section-card">
         <div class="row1" style="justify-content:space-between;display:flex;align-items:center;margin-bottom:8px">
-          <span class="badge ${statusBadgeClass(c.status)}">${c.status}</span>
-          <span class="badge ${severityBadgeClass(c.severity)}">${c.severity} severity</span>
+          <span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span>
+          <span class="badge ${severityBadgeClass(c.severity)}">${escapeHtml(c.severity)} severity</span>
           ${autoEscalatedBadge(c)}
         </div>
         <div class="detail-grid">
-          <div><b>Animal</b><a class="link" onclick="location.hash='#/${role}/animals/${c.animal.id}'">${c.animal.animal_code}</a></div>
-          <div><b>Herd</b>${c.herd ? c.herd.herd_code : "—"}</div>
-          <div><b>Owner</b>${c.owner.full_name} (${c.owner.mobile || ""})</div>
-          <div><b>Reported via</b>${c.reported_through || "Mobile App"}</div>
-          <div><b>Symptoms</b>${c.symptoms || "—"}</div>
-          <div><b>Disease Suspected</b>${c.disease_suspected || "—"}</div>
-          <div><b>Diagnosis</b>${c.diagnosis || "—"}</div>
-          <div><b>Treatment</b>${c.treatment || "—"}</div>
-          <div><b>Vet Assigned</b>${c.vet_name || "Unassigned"}</div>
+          <div><b>Animal</b><a class="link" onclick="location.hash='#/${role}/animals/${safeId(c.animal.id)}'">${escapeHtml(c.animal.animal_code)}</a></div>
+          <div><b>Herd</b>${escapeHtml(c.herd ? c.herd.herd_code : "—")}</div>
+          <div><b>Owner</b>${escapeHtml(c.owner.full_name)} (${escapeHtml(c.owner.mobile || "")})</div>
+          <div><b>Reported via</b>${escapeHtml(c.reported_through || "Mobile App")}</div>
+          <div><b>Symptoms</b>${escapeHtml(c.symptoms || "—")}</div>
+          <div><b>Disease Suspected</b>${escapeHtml(c.disease_suspected || "—")}</div>
+          <div><b>Diagnosis</b>${escapeHtml(c.diagnosis || "—")}</div>
+          <div><b>Treatment</b>${escapeHtml(c.treatment || "—")}</div>
+          <div><b>Vet Assigned</b>${escapeHtml(c.vet_name || "Unassigned")}</div>
           <div><b>Reported On</b>${fmtDate(c.created_at)}</div>
         </div>
-        ${c.description ? `<div style="margin-top:10px"><b class="small-muted">Description:</b><div style="font-size:13.5px">${c.description}</div></div>` : ""}
+        ${c.description ? `<div style="margin-top:10px"><b class="small-muted">Description:</b><div style="font-size:13.5px">${escapeHtml(c.description)}</div></div>` : ""}
       </div>
 
       ${c.helpline_report ? `
         <div class="section-card">
-          <div class="section-title">☎️ Helpline Report ${c.helpline_report.report_no}</div>
+          <div class="section-title">☎️ Helpline Report ${escapeHtml(c.helpline_report.report_no)}</div>
           <div class="detail-grid">
-            <div><b>Source</b>${c.helpline_report.source}</div>
-            <div><b>Report Status</b>${c.helpline_report.status}</div>
-            <div><b>Language</b>${c.helpline_report.language || "Unknown"}</div>
-            <div><b>Location Source</b>${c.helpline_report.location_source}</div>
-            <div><b>Region</b>${c.helpline_report.village || ""}${c.helpline_report.village && c.helpline_report.district ? ", " : ""}${c.helpline_report.district || "Unknown"}</div>
-            <div><b>Urgency</b>${c.helpline_report.urgency || "Not Provided"}</div>
+            <div><b>Source</b>${escapeHtml(c.helpline_report.source)}</div>
+            <div><b>Report Status</b>${escapeHtml(c.helpline_report.status)}</div>
+            <div><b>Language</b>${escapeHtml(c.helpline_report.language || "Unknown")}</div>
+            <div><b>Location Source</b>${escapeHtml(c.helpline_report.location_source)}</div>
+            <div><b>Region</b>${escapeHtml(c.helpline_report.village || "")}${escapeHtml(c.helpline_report.village && c.helpline_report.district ? ", " : "")}${escapeHtml(c.helpline_report.district || "Unknown")}</div>
+            <div><b>Urgency</b>${escapeHtml(c.helpline_report.urgency || "Not Provided")}</div>
           </div>
         </div>` : ""}
 
@@ -4302,7 +4568,7 @@ function caseDetailView(role) {
         <div class="section-card" style="padding:12px">
           <div class="conflict-box" style="margin:0">
             <b>⚠️ Patient Drug Allergy Alert:</b>
-            ${allergies.map(a => `${a.allergen} (${a.allergy_severity}: ${a.reaction})`).join(", ")}
+            ${allergies.map(a => `${escapeHtml(a.allergen)} (${escapeHtml(a.allergy_severity)}: ${escapeHtml(a.reaction)})`).join(", ")}
           </div>
         </div>
       ` : ""}
@@ -4322,11 +4588,11 @@ function caseDetailView(role) {
           <div id="sampleCollectWrap" style="display:none;margin-top:12px;background:#f8f9fe;padding:12px;border-radius:12px">
             <form id="sampleCollectForm">
               <div class="form-row">
-                <div class="field"><label>Sample Type</label><select name="sample_type"><option>Blood Sample</option><option>Nasal Swab</option><option>Tissue Biopsy</option><option>Milk Sample</option><option>Fecal Sample</option></select></div>
-                <div class="field"><label>Collection Notes</label><input name="collection_notes" placeholder="e.g. Sterile EDTA tube" /></div>
+                <div class="field"><label for="pm_sample_type">Sample Type</label><select id="pm_sample_type" name="sample_type"<option>Blood Sample</option><option>Nasal Swab</option><option>Tissue Biopsy</option><option>Milk Sample</option><option>Fecal Sample</option></select></div>
+                <div class="field"><label for="pm_collection_notes">Collection Notes</label><input id="pm_collection_notes" name="collection_notes" placeholder="e.g. Sterile EDTA tube" /></div>
               </div>
               <div class="field">
-                <label>Geolocation (GPS)</label>
+                <label id="geoLabel">Geolocation (GPS)</label>
                 <div class="btn-row">
                   <button class="btn btn-outline btn-sm" type="button" onclick="captureSampleGps()">📍 Capture Device GPS</button>
                   <span id="gpsStatusTxt" class="small-muted" style="align-self:center">GPS idle</span>
@@ -4343,14 +4609,14 @@ function caseDetailView(role) {
           samples.map(s => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${s.sample_code} (${s.sample_type})</span>
-              <span class="badge ${statusBadgeClass(s.status)}">${s.status}</span>
+              <span class="title">${escapeHtml(s.sample_code)} (${escapeHtml(s.sample_type)})</span>
+              <span class="badge ${statusBadgeClass(s.status)}">${escapeHtml(s.status)}</span>
             </div>
-            <div class="meta">Collected: ${fmtDate(s.collected_at)} ${s.collection_lat ? `· Lat: ${s.collection_lat.toFixed(4)}, Lng: ${s.collection_lng.toFixed(4)}` : ""}</div>
+            <div class="meta">Collected: ${fmtDate(s.collected_at)} ${s.collection_lat ? `· Lat: ${escapeHtml(s.collection_lat.toFixed(4))}, Lng: ${escapeHtml(s.collection_lng.toFixed(4))}` : ""}</div>
             <div class="row1" style="margin-top:6px">
-              <button class="btn btn-ghost btn-sm" onclick="showSampleQrModal(${s.id})">🔍 QR &amp; Chain of Custody</button>
+              <button class="btn btn-ghost btn-sm" onclick="showSampleQrModal(${safeId(s.id)})">🔍 QR &amp; Chain of Custody</button>
               ${isVet && ["COLLECTED", "READY_FOR_PICKUP"].includes(s.status) ? `
-                <button class="btn btn-outline btn-sm" onclick="advanceTransport(${s.id})">Mark In Transit</button>
+                <button class="btn btn-outline btn-sm" onclick="advanceTransport(${safeId(s.id)})">Mark In Transit</button>
               ` : ""}
             </div>
           </div>
@@ -4366,8 +4632,8 @@ function caseDetailView(role) {
         ${isVet ? `
           <div id="trFormWrap" style="display:none;margin-top:12px;background:#f8f9fe;padding:12px;border-radius:12px">
             <form id="trForm">
-              <div class="field"><label>Patient Response</label>
-                <select name="response">
+              <div class="field"><label for="pm_response">Patient Response</label>
+                <select id="pm_response" name="response"
                   <option value="improved">Improved</option>
                   <option value="unchanged">Unchanged</option>
                   <option value="worsened">Worsened</option>
@@ -4377,9 +4643,9 @@ function caseDetailView(role) {
                   <option value="follow_up_required">Follow-up Required</option>
                 </select>
               </div>
-              <div class="field"><label>Objective Clinical Observations</label><textarea name="objective_observations" placeholder="e.g. Temp 101.3°F, normal rumination, appetite restored"></textarea></div>
-              <div class="field"><label>Clinical Notes</label><input name="notes" placeholder="e.g. Complete 3-day course" /></div>
-              <div class="field"><label>Productivity Impact</label><input name="productivity_notes" placeholder="e.g. Milk yield dropped 40%" /></div>
+              <div class="field"><label for="pm_objective_observations">Objective Clinical Observations</label><textarea id="pm_objective_observations" name="objective_observations" placeholder="e.g. Temp 101.3°F, normal rumination, appetite restored"</textarea></div>
+              <div class="field"><label for="pm_notes_3">Clinical Notes</label><input id="pm_notes_3" name="notes" placeholder="e.g. Complete 3-day course" /></div>
+              <div class="field"><label for="pm_productivity_notes">Productivity Impact</label><input id="pm_productivity_notes" name="productivity_notes" placeholder="e.g. Milk yield dropped 40%" /></div>
               <button class="btn btn-primary btn-sm" type="submit">Save Treatment Evaluation</button>
             </form>
           </div>
@@ -4400,10 +4666,10 @@ function caseDetailView(role) {
         ${c.lab_reports.length === 0 ? emptyState("No verified laboratory reports released yet.") :
           c.lab_reports.map(l => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${l.report_no} — ${l.test_name}</span><span class="badge ${l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red'}">${l.result}</span></div>
-            <div class="meta"><b>Method:</b> ${l.test_method || "Standard"} · <b>Status:</b> ${l.verification_status || "VERIFIED"}</div>
-            ${l.quantitative_result !== null ? `<div class="meta"><b>Value:</b> ${l.quantitative_result} ${l.units || ""} (Ref: ${l.reference_range_text || "Normal"})</div>` : ""}
-            ${l.notes || l.comments ? `<div class="small-muted">${l.notes || l.comments}</div>` : ""}
+            <div class="row1"><span class="title">${escapeHtml(l.report_no)} — ${escapeHtml(l.test_name)}</span><span class="badge ${escapeHtml(l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red')}">${escapeHtml(l.result)}</span></div>
+            <div class="meta"><b>Method:</b> ${escapeHtml(l.test_method || "Standard")} · <b>Status:</b> ${escapeHtml(l.verification_status || "VERIFIED")}</div>
+            ${l.quantitative_result !== null ? `<div class="meta"><b>Value:</b> ${escapeHtml(l.quantitative_result)} ${escapeHtml(l.units || "")} (Ref: ${escapeHtml(l.reference_range_text || "Normal")})</div>` : ""}
+            ${l.notes || l.comments ? `<div class="small-muted">${escapeHtml(l.notes || l.comments)}</div>` : ""}
           </div>
         `).join("")}
       </div>
@@ -4414,12 +4680,12 @@ function caseDetailView(role) {
         ${c.prescriptions.length === 0 ? emptyState("No prescriptions issued yet.") : c.prescriptions.map(p => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${p.medicine}</span>
-              <span class="badge badge-blue">${p.dosage || ""}</span>
+              <span class="title">${escapeHtml(p.medicine)}</span>
+              <span class="badge badge-blue">${escapeHtml(p.dosage || "")}</span>
             </div>
-            <div class="meta">${p.frequency || ""} for ${p.duration || ""} · Follow-up: ${fmtDate(p.follow_up_date)}</div>
-            ${p.allergy_override ? `<div class="conflict-box" style="margin:4px 0;padding:6px"><b>⚠️ Allergy Override Granted:</b> ${p.override_reason}</div>` : ""}
-            ${p.instructions ? `<div class="meta">${p.instructions}</div>` : ""}
+            <div class="meta">${escapeHtml(p.frequency || "")} for ${escapeHtml(p.duration || "")} · Follow-up: ${fmtDate(p.follow_up_date)}</div>
+            ${p.allergy_override ? `<div class="conflict-box" style="margin:4px 0;padding:6px"><b>⚠️ Allergy Override Granted:</b> ${escapeHtml(p.override_reason)}</div>` : ""}
+            ${p.instructions ? `<div class="meta">${escapeHtml(p.instructions)}</div>` : ""}
           </div>`).join("")}
       </div>
 
@@ -4431,8 +4697,8 @@ function caseDetailView(role) {
             <div class="timeline-item">
               <div class="timeline-dot"></div>
               <div class="timeline-body">
-                <div class="t-status">${u.status}</div>
-                <div class="t-note">${u.note || ""} — ${u.updated_by || ""}</div>
+                <div class="t-status">${escapeHtml(u.status)}</div>
+                <div class="t-note">${escapeHtml(u.note || "")} — ${escapeHtml(u.updated_by || "")}</div>
                 <div class="t-date">${fmtDate(u.created_at)}</div>
               </div>
             </div>`).join("")}
@@ -4443,7 +4709,7 @@ function caseDetailView(role) {
       <div class="section-card">
         <div class="subheading">🗑 Case Solved — Close-out</div>
         <div class="small-muted" style="margin-bottom:10px">This case is solved. You can remove the report permanently.</div>
-        <button class="btn btn-outline" onclick="deleteCase(${c.id},'${c.case_no}')">Delete Report</button>
+        <button class="btn btn-outline" onclick="deleteCase(${safeId(c.id)},'${escapeJsStr(c.case_no)}')">Delete Report</button>
       </div>` : ""}
 
       <!-- REQ 18: FARMER FEEDBACK SECTION -->
@@ -4465,7 +4731,7 @@ function caseDetailView(role) {
         e.preventDefault();
         try {
           const body = Object.fromEntries(new FormData(e.target));
-          await api(`/cases/${c.id}/farmer-feedback`, { method: "POST", body });
+          await api(`/cases/${safeId(c.id)}/farmer-feedback`, { method: "POST", body });
           toast("Feedback submitted! Thank you.");
           router();
         } catch (err) { toast(err.message, true); }
@@ -4489,20 +4755,21 @@ window.showSampleQrModal = async function(sid) {
           <b>🧪 Digital Biological Sample Tag</b>
           <button style="border:none;background:none;font-size:20px;cursor:pointer" onclick="document.getElementById('sampleQrModal').remove()">✕</button>
         </div>
-        <div style="font-size:16px;font-weight:800;color:var(--primary)">${s.sample_code}</div>
-        <div class="small-muted">${s.sample_type} · Animal: ${s.animal_code}</div>
+        <div style="font-size:16px;font-weight:800;color:var(--primary)">${escapeHtml(s.sample_code)}</div>
+        <div class="small-muted">${escapeHtml(s.sample_type)} · Animal: ${escapeHtml(s.animal_code)}</div>
         <div class="qr-image-wrap">
-          <img src="${s.qr_image}" alt="Sample QR" />
+          <img src="${escapeHtml(s.qr_image)}" alt="Sample QR" />
         </div>
-        <div class="small-muted" style="margin-bottom:8px">Token: ${s.qr_token.slice(0, 16)}…</div>
+        <div class="small-muted" style="margin-bottom:8px">Token: ${escapeHtml(s.qr_token.slice(0, 16))}…</div>
         <div style="text-align:left;max-height:140px;overflow-y:auto;border-top:1px solid #eee;padding-top:6px">
           <b>Chain of Custody:</b>
-          ${(s.custody_events || []).map(e => `<div style="font-size:11px;margin:3px 0">• <b>${e.status}:</b> ${e.action} (${e.actor_name})</div>`).join("")}
+          ${(s.custody_events || []).map(e => `<div style="font-size:11px;margin:3px 0">• <b>${escapeHtml(e.status)}:</b> ${escapeHtml(e.action)} (${escapeHtml(e.actor_name)})</div>`).join("")}
         </div>
         <button class="btn btn-outline btn-sm" style="margin-top:12px;width:100%" onclick="window.print()">🖨️ Print Specimen Label</button>
       </div>
     `;
     document.body.appendChild(div);
+    if (window.PMA11y) { window.PMA11y.showAccessibleDialog(div, {labelledBy: null, announce: "QR code dialog opened", onClose: () => { try { div.remove(); } catch(_){} }}); }
   } catch (e) { toast(e.message, true); }
 };
 
@@ -4571,7 +4838,7 @@ function trackingCardHTML(t, c, role) {
       ${v ? `
         <div class="row1 tracking-meta" style="margin-top:10px;font-size:13px">
           <div><b>${localized ? ft("eta") : "ETA"}:</b> ${v.status === "ON_THE_WAY" ? `${Math.ceil(t.eta_seconds / 60)} ${localized ? ft("minutes") : "mins"}` : v.status === "ARRIVED" ? (localized ? ft("tracking_arrived") : "Arrived") : (localized ? ft("tracking_visit_done") : "Completed")}</div>
-          <div><b>${localized ? ft("vet") : "Veterinarian"}:</b> ${t.vet ? t.vet.full_name : (localized ? ft("assigned") : "Assigned")}</div>
+          <div><b>${localized ? ft("vet") : "Veterinarian"}:</b> ${escapeHtml(t.vet ? t.vet.full_name : (localized ? ft("assigned") : "Assigned"))}</div>
         </div>
       ` : ""}
       ${role === "vet" ? visitControlButtons(v) : ""}
@@ -4609,7 +4876,7 @@ async function loadTracking(c, role) {
   const wrap = document.getElementById("trackWrap");
   if (!wrap) return;
   try {
-    const t = await api(`/cases/${c.id}/track`);
+    const t = await api(`/cases/${safeId(c.id)}/track`);
     wrap.innerHTML = trackingCardHTML(t, c, role);
     if (t.destination) initTrackMap(t, role);
     bindVisitControls(c, role);
@@ -4617,7 +4884,7 @@ async function loadTracking(c, role) {
     if (t.visit && t.visit.status === "ON_THE_WAY") {
       trackTimer = setInterval(async () => {
         try {
-          const fresh = await api(`/cases/${c.id}/track`);
+          const fresh = await api(`/cases/${safeId(c.id)}/track`);
           updateTrackMap(fresh);
           if (fresh.visit && fresh.visit.status !== "ON_THE_WAY") clearInterval(trackTimer);
         } catch (e) {}
@@ -4630,17 +4897,17 @@ function bindVisitControls(c, role) {
   if (role !== "vet") return;
   const startBtn = document.getElementById("btnStartTrip");
   if (startBtn) startBtn.addEventListener("click", async () => {
-    try { await api(`/cases/${c.id}/visit`, { method: "POST" }); toast("Visit started!"); loadTracking(c, role); }
+    try { await api(`/cases/${safeId(c.id)}/visit`, { method: "POST" }); toast("Visit started!"); loadTracking(c, role); }
     catch (err) { toast(err.message, true); }
   });
   const arrBtn = document.getElementById("btnArrived");
   if (arrBtn) arrBtn.addEventListener("click", async () => {
-    try { await api(`/cases/${c.id}/visit`, { method: "PUT", body: { status: "ARRIVED" } }); toast("Arrived at farm!"); loadTracking(c, role); }
+    try { await api(`/cases/${safeId(c.id)}/visit`, { method: "PUT", body: { status: "ARRIVED" } }); toast("Arrived at farm!"); loadTracking(c, role); }
     catch (err) { toast(err.message, true); }
   });
   const compBtn = document.getElementById("btnCompleteTrip");
   if (compBtn) compBtn.addEventListener("click", async () => {
-    try { await api(`/cases/${c.id}/visit`, { method: "PUT", body: { status: "COMPLETED" } }); toast("Visit marked completed!"); loadTracking(c, role); }
+    try { await api(`/cases/${safeId(c.id)}/visit`, { method: "PUT", body: { status: "COMPLETED" } }); toast("Visit marked completed!"); loadTracking(c, role); }
     catch (err) { toast(err.message, true); }
   });
 }
@@ -4651,27 +4918,27 @@ function vetCaseActions(c, allergies = []) {
     <div class="section-card">
       <div class="subheading">✏️ Case Actions &amp; Diagnosis</div>
       <form id="statusForm">
-        <div class="field"><label>Status</label><select name="status">${statuses.map(s => `<option ${s === c.status ? "selected" : ""}>${s}</option>`).join("")}</select></div>
-        <div class="field"><label>Diagnosis</label><input name="diagnosis" value="${c.diagnosis || ""}" /></div>
-        <div class="field"><label>Treatment Notes</label><textarea name="treatment">${c.treatment || ""}</textarea></div>
-        <div class="field"><label>Update Note</label><input name="note" placeholder="What changed?" /></div>
+        <div class="field"><label for="pm_status_2">Status</label><select id="pm_status_2" name="status"${statuses.map(s => `<option ${escapeHtml(s === c.status ? "selected" : "")}>${s}</option>`).join("")}</select></div>
+        <div class="field"><label for="pm_diagnosis">Diagnosis</label><input id="pm_diagnosis" name="diagnosis" value="${escapeHtml(c.diagnosis || "")}" /></div>
+        <div class="field"><label for="pm_treatment">Treatment Notes</label><textarea id="pm_treatment" name="treatment"${escapeHtml(c.treatment || "")}</textarea></div>
+        <div class="field"><label for="pm_note">Update Note</label><input id="pm_note" name="note" placeholder="What changed?" /></div>
         <button class="btn btn-primary" type="submit">Save Case Update</button>
       </form>
     </div>
     <div class="section-card">
       <div class="subheading">💊 Create E-Prescription</div>
       <form id="rxForm">
-        <div class="field"><label>Diagnosis</label><input name="diagnosis" value="${c.diagnosis || ""}" /></div>
+        <div class="field"><label for="pm_diagnosis_2">Diagnosis</label><input id="pm_diagnosis_2" name="diagnosis" value="${escapeHtml(c.diagnosis || "")}" /></div>
         <div class="form-row">
-          <div class="field"><label>Medicine</label><input name="medicine" id="rxMedicineInput" required /></div>
-          <div class="field"><label>Dosage</label><input name="dosage" placeholder="e.g. 0.5 mg/kg" /></div>
+          <div class="field"><label for="rxMedicineInput">Medicine</label><input name="medicine" id="rxMedicineInput" required /></div>
+          <div class="field"><label for="pm_dosage">Dosage</label><input id="pm_dosage" name="dosage" placeholder="e.g. 0.5 mg/kg" /></div>
         </div>
         <div class="form-row">
-          <div class="field"><label>Frequency</label><input name="frequency" placeholder="e.g. Once daily" /></div>
-          <div class="field"><label>Duration</label><input name="duration" placeholder="e.g. 5 days" /></div>
+          <div class="field"><label for="pm_frequency">Frequency</label><input id="pm_frequency" name="frequency" placeholder="e.g. Once daily" /></div>
+          <div class="field"><label for="pm_duration">Duration</label><input id="pm_duration" name="duration" placeholder="e.g. 5 days" /></div>
         </div>
-        <div class="field"><label>Instructions</label><textarea name="instructions"></textarea></div>
-        <div class="field"><label>Follow-up Date</label><input name="follow_up_date" type="date" /></div>
+        <div class="field"><label for="pm_instructions">Instructions</label><textarea id="pm_instructions" name="instructions"</textarea></div>
+        <div class="field"><label for="pm_follow_up_date">Follow-up Date</label><input id="pm_follow_up_date" name="follow_up_date" type="date" /></div>
         <div id="rxConflictPrompt" style="display:none;margin-bottom:12px"></div>
         <button class="btn btn-primary" id="btnIssueRx" type="submit">Issue Prescription</button>
       </form>
@@ -4683,7 +4950,7 @@ function bindVetCaseActions(c, allergies = []) {
   if (sf) {
     sf.addEventListener("submit", async (e) => {
       e.preventDefault();
-      try { await api(`/cases/${c.id}`, { method: "PUT", body: Object.fromEntries(new FormData(e.target)) }); toast("Case updated successfully"); router(); }
+      try { await api(`/cases/${safeId(c.id)}`, { method: "PUT", body: Object.fromEntries(new FormData(e.target)) }); toast("Case updated successfully"); router(); }
       catch (err) { toast(err.message, true); }
     });
   }
@@ -4708,7 +4975,7 @@ function bindVetCaseActions(c, allergies = []) {
       e.preventDefault();
       try {
         const body = Object.fromEntries(new FormData(e.target));
-        await api(`/cases/${c.id}/treatment-responses`, { method: "POST", body });
+        await api(`/cases/${safeId(c.id)}/treatment-responses`, { method: "POST", body });
         toast("Treatment response saved!");
         router();
       } catch (err) { toast(err.message, true); }
@@ -4761,7 +5028,7 @@ route("#/vet/search", () => {
   render(`
     ${header("Search Herds & Animals", { back: true })}
     <div class="section-card">
-      <div class="field"><label>Search by Tag, Mobile or Owner</label>
+      <div class="field"><label for="searchInput">Search by Tag, Mobile or Owner</label>
         <input id="searchInput" placeholder="e.g. MH-PUN-000123 or 9800000001" />
       </div>
       <div id="searchResults"></div>
@@ -4776,12 +5043,12 @@ route("#/vet/search", () => {
       document.getElementById("searchResults").innerHTML = `
         <div class="subheading">Animals (${res.animals.length})</div>
         ${res.animals.map(a => `
-          <div class="list-card" onclick="location.hash='#/vet/animals/${a.id}'">
-            <div class="row1"><span class="title">${a.animal_code}</span><span class="badge ${a.status === 'Healthy' ? 'badge-green' : 'badge-orange'}">${a.status}</span></div>
-            <div class="meta">${a.animal_name || a.species} · Owner: ${a.owner_name} (${a.mobile})</div>
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/vet/animals/${safeId(a.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/vet/animals/${safeId(a.id)}'}">
+            <div class="row1"><span class="title">${escapeHtml(a.animal_code)}</span><span class="badge ${escapeHtml(a.status === 'Healthy' ? 'badge-green' : 'badge-orange')}">${escapeHtml(a.status)}</span></div>
+            <div class="meta">${escapeHtml(a.animal_name || a.species)} · Owner: ${escapeHtml(a.owner_name)} (${escapeHtml(a.mobile)})</div>
           </div>`).join("")}
         <div class="subheading" style="margin-top:14px">Herds (${res.herds.length})</div>
-        ${res.herds.map(h => `<div class="list-card" style="cursor:default"><div class="row1"><span class="title">${h.herd_code}</span></div><div class="meta">${h.village}, ${h.district}</div></div>`).join("")}
+        ${res.herds.map(h => `<div class="list-card" style="cursor:default"><div class="row1"><span class="title">${escapeHtml(h.herd_code)}</span></div><div class="meta">${escapeHtml(h.village)}, ${escapeHtml(h.district)}</div></div>`).join("")}
       `;
     } catch (err) {}
   });
@@ -4792,11 +5059,11 @@ route("#/vet/vaccination/new", () => {
     ${header("Update Vaccination", { back: true })}
     <div class="section-card">
       <form id="vacForm">
-        <div class="field"><label>Animal ID</label><input name="animal_id" placeholder="e.g. MH-PUN-000123" required /></div>
-        <div class="field"><label>Vaccine</label><select name="vaccine"><option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option><option>Other</option></select></div>
+        <div class="field"><label for="pm_animal_id">Animal ID</label><input id="pm_animal_id" name="animal_id" placeholder="e.g. MH-PUN-000123" required /></div>
+        <div class="field"><label for="pm_vaccine_3">Vaccine</label><select id="pm_vaccine_3" name="vaccine"<option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option><option>Other</option></select></div>
         <div class="form-row">
-          <div class="field"><label>Date Given</label><input name="date_given" type="date" value="${new Date().toISOString().slice(0, 10)}" /></div>
-          <div class="field"><label>Next Due Date</label><input name="next_due_date" type="date" /></div>
+          <div class="field"><label for="pm_date_given">Date Given</label><input id="pm_date_given" name="date_given" type="date" value="${new Date().toISOString().slice(0, 10)}" /></div>
+          <div class="field"><label for="pm_next_due_date">Next Due Date</label><input id="pm_next_due_date" name="next_due_date" type="date" /></div>
         </div>
         <button class="btn btn-primary" type="submit">Save Vaccination</button>
       </form>
@@ -4814,18 +5081,18 @@ route("#/vet/vaccination/new", () => {
 function prescriptionsView(role) {
   route(`#/${role}/prescriptions`, async () => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("health_treatment") : "Prescriptions", { back: true })}<div class="loading">${farmer ? ft("loading_treatment") : "Loading…"}</div>`);
+    render(`${header(farmer ? ft("health_treatment") : "Prescriptions", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_treatment") : "Loading…"}</div>`);
     const rx = await api("/prescriptions");
     if (farmer) {
       render(`
         ${header(ft("health_treatment"), { back: true })}
         <div class="section-card">
           ${rx.length === 0 ? emptyState(ft("no_prescriptions")) : rx.map(p => `
-            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${p.case_id}'">
-              <div class="row1"><span class="title">💊 ${p.medicine}</span><span class="badge badge-blue">${p.case_no}</span></div>
-              <div class="meta">${ft("animal_id")}: ${p.animal_code}</div>
-              <div class="meta">${ft("dosage")}: ${p.dosage || ft("unknown")} · ${ft("frequency")}: ${p.frequency || ft("unknown")}</div>
-              <div class="meta">${ft("prescribed_by")}: ${p.vet_name || ft("unknown")} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(p.case_id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${safeId(p.case_id)}'}">
+              <div class="row1"><span class="title">💊 ${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.case_no)}</span></div>
+              <div class="meta">${ft("animal_id")}: ${escapeHtml(p.animal_code)}</div>
+              <div class="meta">${ft("dosage")}: ${escapeHtml(p.dosage || ft("unknown"))} · ${ft("frequency")}: ${escapeHtml(p.frequency || ft("unknown"))}</div>
+              <div class="meta">${ft("prescribed_by")}: ${escapeHtml(p.vet_name || ft("unknown"))} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
             </div>`).join("")}
         </div>
         ${bottomNav("#/owner/prescriptions")}
@@ -4836,10 +5103,10 @@ function prescriptionsView(role) {
       ${header("Prescriptions", { back: true })}
       <div class="section-card">
         ${rx.length === 0 ? emptyState("No prescriptions yet.") : rx.map(p => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${p.case_id}'">
-            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.case_no}</span></div>
-            <div class="meta">${p.animal_code} · ${p.dosage || ""} · ${p.frequency || ""}</div>
-            <div class="meta">By ${p.vet_name || "—"} · Follow-up: ${fmtDate(p.follow_up_date)}</div>
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(p.case_id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(p.case_id)}'}">
+            <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.case_no)}</span></div>
+            <div class="meta">${escapeHtml(p.animal_code)} · ${escapeHtml(p.dosage || "")} · ${escapeHtml(p.frequency || "")}</div>
+            <div class="meta">By ${escapeHtml(p.vet_name || "—")} · Follow-up: ${fmtDate(p.follow_up_date)}</div>
           </div>`).join("")}
       </div>
       ${bottomNav(role === "owner" ? "#/owner/prescriptions" : `#/${role}/dashboard`)}
@@ -4852,14 +5119,14 @@ prescriptionsView("owner"); prescriptionsView("vet"); prescriptionsView("lab");
 function labReportsView(role) {
   route(`#/${role}/lab-reports`, async () => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("test_results") : "Lab Reports", { back: true })}<div class="loading">${farmer ? ft("loading") : "Loading…"}</div>`);
+    render(`${header(farmer ? ft("test_results") : "Lab Reports", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading") : "Loading…"}</div>`);
     const reps = await api("/lab/reports");
     if (farmer) {
       render(`
         ${header(ft("test_results"), { back: true })}
         <div class="section-card">
           ${reps.length ? reps.map(report => `
-            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${report.case_id}'">
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(report.case_id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${safeId(report.case_id)}'}">
               <div class="row1"><span class="title">${report.test_name || report.report_no}</span><span class="badge ${report.result === "NEGATIVE" ? "badge-green" : "badge-blue"}">${ownerResultLabel(report.result)}</span></div>
               <div class="meta">${ft("animal_id")}: ${report.animal_code}${report.animal_name ? ` · ${report.animal_name}` : ""}</div>
               <div class="meta">${ft("case_number")}: ${report.case_no} · ${fmtDate(report.test_date)}</div>
@@ -4873,11 +5140,11 @@ function labReportsView(role) {
       ${header("Lab Reports", { back: true })}
       <div class="section-card">
         ${reps.length === 0 ? emptyState("No lab reports yet.") : reps.map(l => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${l.case_id}'">
-            <div class="row1"><span class="title">${l.report_no}</span><span class="badge ${l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red'}">${l.result || "Pending"}</span></div>
-            <div class="meta">${l.animal_code}${l.animal_name ? " · " + l.animal_name : ""} · ${l.test_name || ""}</div>
-            <div class="meta">Case ${l.case_no} · Sample: ${l.sample || "—"} · ${fmtDate(l.test_date)}</div>
-            ${l.notes ? `<div class="meta">${l.notes}</div>` : ""}
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(l.case_id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(l.case_id)}'}">
+            <div class="row1"><span class="title">${escapeHtml(l.report_no)}</span><span class="badge ${escapeHtml(l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red')}">${escapeHtml(l.result || "Pending")}</span></div>
+            <div class="meta">${escapeHtml(l.animal_code)}${escapeHtml(l.animal_name ? " · " + l.animal_name : "")} · ${escapeHtml(l.test_name || "")}</div>
+            <div class="meta">Case ${escapeHtml(l.case_no)} · Sample: ${escapeHtml(l.sample || "—")} · ${fmtDate(l.test_date)}</div>
+            ${l.notes ? `<div class="meta">${escapeHtml(l.notes)}</div>` : ""}
           </div>`).join("")}
       </div>
       ${bottomNav(role === "owner" ? "#/owner/lab-reports" : role === "lab" ? "#/lab/lab-reports" : `#/${role}/dashboard`)}
@@ -4937,16 +5204,16 @@ function ownerNotificationType(type) {
 function notificationsView(role) {
   route(`#/${role}/notifications`, async () => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("notifications") : "Notifications", { back: true })}<div class="loading">${farmer ? ft("loading_notifications") : "Loading…"}</div>`);
+    render(`${header(farmer ? ft("notifications") : "Notifications", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_notifications") : "Loading…"}</div>`);
     const notes = await api("/notifications");
     if (farmer) {
       render(`
         ${header(ft("notifications"), { back: true })}
         <div class="section-card">
           ${notes.length === 0 ? emptyState(ft("no_notifications")) : notes.map(n => `
-            <div class="list-card" style="${n.is_read ? "opacity:0.6" : ""}" onclick="markRead(${n.id})">
-              <div class="row1"><span class="title">${iconForType(n.type)} ${ownerNotificationType(n.type)}</span>${n.is_read ? "" : `<span class="badge badge-red">${ft("new")}</span>`}</div>
-              <div class="meta">${ownerNotificationMessage(n.message)}</div>
+            <div class="list-card" role="button" tabindex="0" style="${escapeHtml(n.is_read ? "opacity:0.6" : "")}" onclick="markRead(${safeId(n.id)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();markRead(${safeId(n.id)})}">
+              <div class="row1"><span class="title">${iconForType(n.type)} ${escapeHtml(ownerNotificationType(n.type))}</span>${n.is_read ? "" : `<span class="badge badge-red">${ft("new")}</span>`}</div>
+              <div class="meta">${escapeHtml(ownerNotificationMessage(n.message))}</div>
               <div class="meta">${fmtDate(n.created_at)}</div>
             </div>`).join("")}
         </div>
@@ -4958,9 +5225,9 @@ function notificationsView(role) {
       ${header("Notifications", { back: true })}
       <div class="section-card">
         ${notes.length === 0 ? emptyState("You're all caught up!") : notes.map(n => `
-          <div class="list-card" style="${n.is_read ? "opacity:0.6" : ""}" onclick="markRead(${n.id})">
-            <div class="row1"><span class="title">${iconForType(n.type)} ${n.type.toUpperCase()}</span>${n.is_read ? "" : '<span class="badge badge-red">NEW</span>'}</div>
-            <div class="meta">${n.message}</div>
+          <div class="list-card" role="button" tabindex="0" style="${escapeHtml(n.is_read ? "opacity:0.6" : "")}" onclick="markRead(${safeId(n.id)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();markRead(${safeId(n.id)})}">
+            <div class="row1"><span class="title">${iconForType(n.type)} ${escapeHtml(n.type.toUpperCase())}</span>${n.is_read ? "" : '<span class="badge badge-red">NEW</span>'}</div>
+            <div class="meta">${escapeHtml(n.message)}</div>
             <div class="meta">${fmtDate(n.created_at)}</div>
           </div>`).join("")}
       </div>
@@ -5010,7 +5277,7 @@ window.markDeceased = async function (id, code) {
 // REQ 5: GOVT TREND CHARTS
 // ==========================================================================
 route("#/govt/trends", async () => {
-  render(`${header("Disease Trends", { back: true })}<div class="loading">Loading trends…</div>`);
+  render(`${header("Disease Trends", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading trends…</div>`);
   const data = await api("/govt/trends?period=monthly");
   render(`
     ${header("Disease Trends", { back: true })}
@@ -5047,9 +5314,9 @@ function trendBarChart(trends) {
     ${trends.map(t => {
       const pct = Math.round((t.total / max) * 100);
       return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
-        <div style="font-size:10px;font-weight:700">${t.total}</div>
+        <div style="font-size:10px;font-weight:700">${escapeHtml(t.total)}</div>
         <div style="width:100%;height:${Math.max(pct, 4)}%;background:var(--primary);border-radius:4px 4px 0 0;min-height:4px"></div>
-        <div style="font-size:9px;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap">${t.period_label}</div>
+        <div style="font-size:9px;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap">${escapeHtml(t.period_label)}</div>
       </div>`;
     }).join("")}
   </div>`;
@@ -5090,7 +5357,7 @@ function autoEscalatedBadge(c) {
 // REQ 10: BLOCK-LEVEL ANALYTICS VIEW
 // ==========================================================================
 route("#/govt/blocks", async () => {
-  render(`${header("Block-Level Analytics", { back: true })}<div class="loading">Loading…</div>`);
+  render(`${header("Block-Level Analytics", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
   const a = await api("/govt/analytics");
   render(`
     ${header("Block-Level Analytics", { back: true })}
@@ -5103,10 +5370,10 @@ route("#/govt/blocks", async () => {
             <tbody>
               ${a.cases_by_block.map(b => `
                 <tr>
-                  <td>${b.district}</td>
-                  <td><b>${b.block}</b></td>
-                  <td>${b.cases}</td>
-                  <td>${b.active}</td>
+                  <td>${escapeHtml(b.district)}</td>
+                  <td><b>${escapeHtml(b.block)}</b></td>
+                  <td>${escapeHtml(b.cases)}</td>
+                  <td>${escapeHtml(b.active)}</td>
                 </tr>
               `).join("")}
             </tbody>
@@ -5122,7 +5389,7 @@ route("#/govt/blocks", async () => {
 // REQ 11: FARMER ADVISORIES
 // ==========================================================================
 route("#/vet/advisories", async () => {
-  render(`${header("Local Advisories", { back: true })}<div class="loading">Loading advisories…</div>`);
+  render(`${header("Local Advisories", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading advisories…</div>`);
   try {
     const adv = await api("/advisories");
     render(`
@@ -5146,9 +5413,9 @@ route("#/vet/advisories", async () => {
           <div class="section-title">🚨 Active Alerts in Your Area</div>
           ${adv.alerts.map(a => `
             <div class="list-card" style="cursor:default">
-              <div class="row1"><span class="title">${a.disease}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${a.risk_level}</span></div>
-              <div class="meta">${a.trigger_reason}</div>
-              <div class="meta" style="color:var(--primary)">Action: ${a.recommended_action || "—"}</div>
+              <div class="row1"><span class="title">${escapeHtml(a.disease)}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${escapeHtml(a.risk_level)}</span></div>
+              <div class="meta">${escapeHtml(a.trigger_reason)}</div>
+              <div class="meta" style="color:var(--primary)">Action: ${escapeHtml(a.recommended_action || "—")}</div>
             </div>
           `).join("")}
         </div>
@@ -5158,8 +5425,8 @@ route("#/vet/advisories", async () => {
           <div class="section-title">💉 Vaccination Campaigns</div>
           ${adv.campaigns.map(c => `
             <div class="list-card" style="cursor:default">
-              <div class="row1"><span class="title">${c.name}</span><span class="badge ${campStatusClass(c.status)}">${c.status}</span></div>
-              <div class="meta">${c.vaccine} · ${c.district}</div>
+              <div class="row1"><span class="title">${escapeHtml(c.name)}</span><span class="badge ${campStatusClass(c.status)}">${escapeHtml(c.status)}</span></div>
+              <div class="meta">${escapeHtml(c.vaccine)} · ${escapeHtml(c.district)}</div>
               <div class="meta">Dates: ${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</div>
             </div>
           `).join("")}
@@ -5168,7 +5435,7 @@ route("#/vet/advisories", async () => {
       ${bottomNav("#/vet/dashboard")}
     `);
   } catch (err) {
-    render(`${header("Local Advisories", { back: true })}<div class="loading">⚠️ ${err.message}</div>${bottomNav("#/vet/dashboard")}`);
+    render(`${header("Local Advisories", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">⚠️ ${escapeHtml(err.message)}</div>${bottomNav("#/vet/dashboard")}`);
   }
 }, ["vet"]);
 
@@ -5176,26 +5443,55 @@ route("#/vet/advisories", async () => {
 // REQ 12: DATA EXPORT
 // ==========================================================================
 route("#/govt/export", async () => {
+  state.pagination.govtExport = state.pagination.govtExport || 1;
+  const page = state.pagination.govtExport;
+  const pageSize = state.pagination.pageSize;
+  let previewData = null;
+  try {
+    previewData = await api(`/govt/export?type=cases&format=json&paginated=1&page=${page}&page_size=${pageSize}`);
+  } catch(e) { previewData = { items: [], total: 0 }; }
+  const pag = pmPaginate(new Array(previewData.total||0).fill(0), page, pageSize);
+  const items = previewData.items || [];
   render(`
     ${header("Export Data", { back: true })}
-    <div class="section-card">
+    <div class="section-card" id="exportControls">
       <div class="section-title">📊 Export Government Data</div>
-      <div class="meta" style="margin-bottom:14px">Download cases, animals, or vaccination campaigns as CSV or JSON.</div>
-      <div class="field"><label>Date From</label><input type="date" id="exportFrom" /></div>
-      <div class="field"><label>Date To</label><input type="date" id="exportTo" /></div>
+      <div class="meta" style="margin-bottom:14px">Download cases, animals, or vaccination campaigns as CSV, JSON, Excel, or PDF. Reports include pagination, print, and accessible text summaries for charts.</div>
+      <div class="field"><label for="exportFrom">Date From</label><input type="date" id="exportFrom" /></div>
+      <div class="field"><label for="exportTo">Date To</label><input type="date" id="exportTo" /></div>
       <div class="btn-row" style="margin-top:12px">
         <button class="btn btn-primary btn-sm" onclick="doExport('cases','csv')">📥 Cases CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="doExport('animals','csv')">📥 Animals CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="doExport('campaigns','csv')">📥 Campaigns CSV</button>
       </div>
       <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-outline btn-sm" onclick="doExport('cases','xlsx')">📊 Cases Excel</button>
+        <button class="btn btn-outline btn-sm" onclick="doExport('animals','xlsx')">📊 Animals Excel</button>
+        <button class="btn btn-outline btn-sm" onclick="doExport('cases','pdf')">📄 Cases PDF</button>
+        <button class="btn btn-outline btn-sm" onclick="doExport('animals','pdf')">📄 Animals PDF</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
         <button class="btn btn-outline btn-sm" onclick="doExport('cases','json')">JSON Cases</button>
         <button class="btn btn-outline btn-sm" onclick="doExport('animals','json')">JSON Animals</button>
+        <button class="btn btn-ghost btn-sm" onclick="pmPrintSection('exportPreview')">🖨️ Print Preview</button>
       </div>
+    </div>
+    <div class="section-card" id="exportPreview">
+      <div class="section-title">Preview — Cases (Page ${page})</div>
+      <div class="meta">Total ${previewData.total||0} records. Showing ${items.length} on this page. Use pagination to browse.</div>
+      ${items.length ? `<div class="pm-table-scroll" tabindex="0" role="region" aria-label="Cases preview table"><table><thead><tr><th>ID</th><th>Animal</th><th>Status</th><th>District</th><th>Created</th></tr></thead><tbody>${items.map(r=>`<tr><td>${escapeHtml(r.id)}</td><td>${escapeHtml(r.animal_code||"")}</td><td>${escapeHtml(r.status||"")}</td><td>${escapeHtml(r.animal_district||"")}</td><td>${escapeHtml(r.created_at||"")}</td></tr>`).join("")}</tbody></table></div>` : emptyState("No cases to preview.")}
+      ${pmPaginationHtml(previewData.total||0, page, pageSize, "goGovtExportPage", {label:"Cases preview pagination"})}
     </div>
     ${bottomNav("#/govt/dashboard")}
   `);
 }, ["govt"]);
+
+window.goGovtExportPage = function(p) {
+  state.pagination.govtExport = Math.max(1, p);
+  location.hash = "#/govt/export";
+  // Re-trigger route by re-navigating
+  setTimeout(()=>{ if(location.hash==="#/govt/export") location.reload(); }, 50);
+};
 
 window.doExport = function (type, format) {
   const from = document.getElementById("exportFrom")?.value || "";
@@ -5203,19 +5499,21 @@ window.doExport = function (type, format) {
   let url = `/api/govt/export?type=${type}&format=${format}`;
   if (from) url += `&from=${from}`;
   if (to) url += `&to=${to}`;
-  // Trigger download
   const a = document.createElement("a");
   a.href = url;
   a.download = `pashumitra_${type}.${format}`;
   a.target = "_blank";
-  // Need auth token for download
   fetch(url, { headers: { "Authorization": "Bearer " + state.token } })
-    .then(r => r.blob())
+    .then(async r => {
+      if (!r.ok) { const txt = await r.text(); throw new Error(txt); }
+      return r.blob();
+    })
     .then(blob => {
       const blobUrl = URL.createObjectURL(blob);
       a.href = blobUrl;
       a.click();
-      URL.revokeObjectURL(blobUrl);
+      setTimeout(()=>URL.revokeObjectURL(blobUrl), 2000);
+      toast(`Exported ${type} as ${format.toUpperCase()}`);
     })
     .catch(e => toast("Export failed: " + e.message, true));
 };
@@ -5305,14 +5603,14 @@ function farmerFeedbackSection(c) {
       <div class="subheading">📝 ${localized ? ft("how_is_animal") : "How is your animal?"}</div>
       <div class="meta" style="margin-bottom:10px">${localized ? ft("notes_placeholder") : "Let your veterinarian know the recovery progress."}</div>
       <form id="farmerFeedbackForm">
-        <div class="field"><label>${localized ? ft("recovery_status") : "Recovery Status"}</label>
-          <select name="recovery_status">
+        <div class="field"><label for="pm_recovery_status">${localized ? ft("recovery_status") : "Recovery Status"}</label>
+          <select id="pm_recovery_status" name="recovery_status"
             <option value="improving">✅ ${localized ? ft("improving") : "Improving"}</option>
             <option value="same">↔️ ${localized ? ft("same") : "Same"}</option>
             <option value="worse">⚠️ ${localized ? ft("worse") : "Getting Worse"}</option>
           </select>
         </div>
-        <div class="field"><label>${localized ? ft("notes") : "Notes (optional)"}</label><textarea name="notes" placeholder="${localized ? ft("notes_placeholder") : "Any observations about the animal's condition"}"></textarea></div>
+        <div class="field"><label for="pm_notes_4">${localized ? ft("notes") : "Notes (optional)"}</label><textarea id="pm_notes_4" name="notes" placeholder="${localized ? ft("notes_placeholder") : "Any observations about the animal's condition"}"</textarea></div>
         <button class="btn btn-primary" type="submit">${localized ? ft("submit_feedback") : "Submit Feedback"}</button>
       </form>
     </div>`;
@@ -5322,7 +5620,7 @@ function farmerFeedbackSection(c) {
 // REQ 20: ZOONOTIC RISK VIEW
 // ==========================================================================
 route("#/govt/zoonotic", async () => {
-  render(`${header("Zoonotic Risk", { back: true })}<div class="loading">Loading…</div>`);
+  render(`${header("Zoonotic Risk", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
   try {
     const data = await api("/govt/zoonotic");
     render(`
@@ -5338,10 +5636,10 @@ route("#/govt/zoonotic", async () => {
         ${data.zoonotic_diseases.map(d => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${d.name} (${d.name_mr})</span>
-              <span class="badge ${riskBadgeClass(d.risk_level)}">${d.risk_level}</span>
+              <span class="title">${escapeHtml(d.name)} (${escapeHtml(d.name_mr)})</span>
+              <span class="badge ${riskBadgeClass(d.risk_level)}">${escapeHtml(d.risk_level)}</span>
             </div>
-            <div class="meta">Category: ${d.category}</div>
+            <div class="meta">Category: ${escapeHtml(d.category)}</div>
           </div>
         `).join("")}
       </div>
@@ -5358,6 +5656,6 @@ route("#/govt/zoonotic", async () => {
       ${bottomNav("#/govt/dashboard")}
     `);
   } catch (err) {
-    render(`${header("Zoonotic Risk", { back: true })}<div class="loading">⚠️ ${err.message}</div>${bottomNav("#/govt/dashboard")}`);
+    render(`${header("Zoonotic Risk", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">⚠️ ${escapeHtml(err.message)}</div>${bottomNav("#/govt/dashboard")}`);
   }
 }, ["govt", "vet"]);

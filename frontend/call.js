@@ -564,6 +564,8 @@
 
   WebCallSession.prototype.wirePeerConnection = function wirePeerConnection() {
     const self = this;
+    this.pc._outboundPackets = 0;
+    this.pc._inboundPackets = 0;
     this.pc.onicecandidate = (event) => {
       if (event.candidate) self.sendSignal("ice", { candidate: event.candidate.toJSON() });
     };
@@ -579,15 +581,36 @@
       self.audioEl.srcObject = stream;
       const play = self.audioEl.play();
       if (play && play.catch) play.catch(() => self.showSpeakerHint());
+      self.renderPanel();
     };
     this.pc.onconnectionstatechange = () => {
       const connectionState = self.pc && self.pc.connectionState;
+      logCall("pc connectionState", connectionState, "| ice", self.pc && self.pc.iceConnectionState);
       updateOverlayStatus();
+      self.renderPanel();
       if (connectionState === "connected") self.onMediaConnected();
       if (connectionState === "failed") self.onConnectionFailed();
-      if (connectionState === "disconnected") self.renderPanel();  // transient; ICE may recover
+      if (connectionState === "disconnected") {
+        // Transient: ICE may recover, but announce honestly
+        const warn = document.getElementById("pmCallWarn");
+        if (warn) warn.textContent = t("webcall.ice_disconnected", "Connection unstable — reconnecting…");
+        self.renderPanel();
+      }
     };
-    this.pc.oniceconnectionstatechange = () => { updateOverlayStatus(); };
+    this.pc.oniceconnectionstatechange = () => {
+      const iceState = self.pc && self.pc.iceConnectionState;
+      logCall("iceConnectionState", iceState, "| pc", self.pc && self.pc.connectionState);
+      updateOverlayStatus();
+      self.renderPanel();
+      const warn = document.getElementById("pmCallWarn");
+      if (iceState === "failed" && warn) {
+        warn.textContent = t("webcall.ice_failed", "Connection failed — retrying…");
+      } else if (iceState === "disconnected" && warn) {
+        warn.textContent = t("webcall.ice_disconnected", "Connection unstable — reconnecting…");
+      } else if ((iceState === "connected" || iceState === "completed") && warn) {
+        if (warn.textContent && /unstable|failed|retrying/i.test(warn.textContent)) warn.textContent = "";
+      }
+    };
   };
 
   WebCallSession.prototype.onMediaConnected = async function onMediaConnected() {
@@ -667,7 +690,7 @@
     if (el && this.connectedAt) el.textContent = mmss((Date.now() - this.connectedAt) / 1000);
   };
 
-  /** Confirm actual media flow, not just signaling: count inbound audio RTP. */
+  /** Confirm actual media flow, not just signaling: count inbound audio RTP and outbound. */
   WebCallSession.prototype.startStatsWatch = function startStatsWatch() {
     const self = this;
     this.statsTimerStart = Date.now();
@@ -676,28 +699,39 @@
       if (!self.pc || self.ended) return;
       try {
         let outboundAudio = 0;
+        let inboundAudio = 0;
         const stats = await self.pc.getStats();
         stats.forEach((report) => {
           if (report.type === "outbound-rtp" && report.kind === "audio") outboundAudio += report.packetsSent || 0;
+          if (report.type === "inbound-rtp" && report.kind === "audio") inboundAudio += report.packetsReceived || 0;
         });
+        self.pc._outboundPackets = outboundAudio;
+        self.pc._inboundPackets = inboundAudio;
         const wasConfirmed = self.mediaConfirmed;
         await self.sampleInboundAudio();
         if (self.mediaConfirmed) {
           if (!wasConfirmed) {
             updateOverlayStatus();
+            self.renderPanel();
             await self.reportConnected();   // correct the earlier honest "not yet"
           }
           clearInterval(self.statsTimer);
           self.statsTimer = null;
         } else if (Date.now() - self.statsTimerStart > MEDIA_CONFIRM_TIMEOUT_MS) {
           updateOverlayStatus();
+          self.renderPanel();
           clearInterval(self.statsTimer);
           self.statsTimer = null;
         }
+        const warn = document.getElementById("pmCallWarn");
         if (outboundAudio === 0 && Date.now() - self.statsTimerStart > 4000) {
-          const warn = document.getElementById("pmCallWarn");
           if (warn) warn.textContent = t("webcall.no_sent_audio", "No audio is leaving your device — check your microphone.");
+        } else if (inboundAudio === 0 && outboundAudio > 20 && Date.now() - self.statsTimerStart > 6000) {
+          if (warn && !warn.textContent) warn.textContent = t("webcall.poor_connection", "Poor connection — audio may be interrupted.");
         }
+        updateOverlayStatus();
+        const diag = document.getElementById("pmCallDiagnostics");
+        if (diag) diag.textContent = detailedCallStateText(self);
       } catch (e) { /* getStats can fail while tearing down */ }
     }, STATS_CHECK_MS);
   };
@@ -985,26 +1019,51 @@
   function updateOverlayStatus() {
     const status = signalingStatus();
     const channel = signalingState();
+    const lease = presenceLeaseState();
+    // Vet card signaling badge (separate from routability)
     const badge = document.getElementById("pmCallLinkBadge");
     if (badge) {
       badge.textContent = channel === "connected" ? t("webcall.online", "Web calls online")
         : channel === "connecting" ? t("webcall.connecting_badge", "Web calls connecting…")
         : channel === "error" ? t("webcall.error_badge", "Web calls error")
+        : channel === "reconnecting" ? t("webcall.reconnecting_badge", "Web calls reconnecting…")
         : t("webcall.offline", "Web calls offline");
       badge.className = "badge " + (channel === "connected" ? "badge-green"
         : channel === "error" ? "badge-red" : "badge-orange");
+      badge.setAttribute("aria-label", `Signaling: ${channel}`);
+    }
+    const availabilityBadge = document.getElementById("pmVetAvailabilityBadge");
+    if (availabilityBadge) {
+      const avail = availabilityState();
+      availabilityBadge.textContent = `Avail: ${avail.status}`;
+    }
+    const presenceBadge = document.getElementById("pmVetPresenceBadge");
+    if (presenceBadge) {
+      presenceBadge.textContent = `Lease: ${lease.presence} (${lease.leaseLabel})`;
+      presenceBadge.className = "badge " + (lease.online ? "badge-green" : "badge-orange");
+      presenceBadge.setAttribute("aria-label", `Presence lease: ${lease.presence}, ${lease.leaseLabel}`);
+    }
+    const presenceDetail = document.getElementById("pmVetPresenceDetail");
+    if (presenceDetail) {
+      presenceDetail.textContent = `Presence: ${lease.presence} · ${lease.leaseLabel}${lease.lease_expires_at ? ` · expires ${lease.lease_expires_at}` : ""}`;
     }
     const farmerNotice = document.getElementById("pmCallSignalStatus");
     if (farmerNotice) {
+      farmerNotice.setAttribute("role", "status");
+      farmerNotice.setAttribute("aria-live", "polite");
       farmerNotice.textContent = channel === "error" && state.signalingError
         ? t("webcall.signal_error", "Web calling is unavailable: ") + signalingErrorText()
         : status.offlineLong
           ? t("webcall.signal_offline_farmer", "Web calling connection is offline. Please check your connection or try again.")
             + (state.signalingError ? " (" + signalingErrorText() + ")" : "")
-          : "";
+          : channel === "reconnecting"
+            ? t("webcall.signal_reconnecting_farmer", "Web calling is reconnecting… Please wait.")
+            : "";
     }
     const vetNotice = document.getElementById("pmVetSignalStatus");
     if (vetNotice) {
+      vetNotice.setAttribute("role", "status");
+      vetNotice.setAttribute("aria-live", "polite");
       // The vet sees the real channel state immediately — never "AVAILABLE"
       // next to a stale or hidden failure.
       vetNotice.textContent = channel === "connected"
@@ -1015,6 +1074,24 @@
             ? t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting...")
               + (state.signalingError ? " (" + signalingErrorText() + ")" : "")
             : t("webcall.signal_connecting_vet", "Connecting to call signaling…");
+    }
+    // Active call diagnostics (WebRTC PC, ICE, media)
+    const session = state.activeSession;
+    if (session) {
+      const pcState = webrtcConnectionState(session);
+      const iceState = iceConnectionState(session);
+      const media = mediaConnectionState(session);
+      const diagEl = document.getElementById("pmCallDiagnostics");
+      if (diagEl) {
+        diagEl.textContent = `Signaling: ${channel} · WebRTC: ${pcState} · ICE: ${iceState} · Media: ${media.label}`;
+        diagEl.setAttribute("aria-label", `Signaling ${channel}, WebRTC ${pcState}, ICE ${iceState}, Media ${media.label}`);
+      }
+      // Update status text live region
+      const statusEl = document.getElementById("pmCallStatus");
+      if (statusEl) {
+        statusEl.setAttribute("role", "status");
+        statusEl.setAttribute("aria-live", "polite");
+      }
     }
     scheduleSignalingStatusRefresh();
   }
@@ -1036,54 +1113,104 @@
 
   function inCallStatusText(session) {
     const call = session.call;
+    const pcState = webrtcConnectionState(session);
+    const iceState = iceConnectionState(session);
+    const media = mediaConnectionState(session);
+    // Honest state machine: never claim connected until WebRTC PC is connected/completed AND media flows
     if (call.status === "ringing") {
       return session.mode === "caller"
         ? t("webcall.ringing_vet", "Ringing {name}…").replace("{name}", session.peerLabel)
         : t("webcall.incoming", "Incoming call");
     }
-    if (call.status === "accepted") return t("webcall.accepted", "Answered — connecting audio…");
-    if (call.status === "connecting") return t("webcall.connecting", "Connecting audio…");
+    if (call.status === "accepted") {
+      if (iceState === "failed") return t("webcall.ice_failed", "Connection failed — retrying…");
+      if (iceState === "disconnected") return t("webcall.ice_disconnected", "Connection unstable — reconnecting…");
+      return t("webcall.accepted", "Answered — connecting audio…");
+    }
+    if (call.status === "connecting") {
+      if (iceState === "failed") return t("webcall.ice_failed", "Connection failed — retrying…");
+      if (iceState === "disconnected") return t("webcall.ice_disconnected", "Connection unstable — reconnecting…");
+      if (pcState === "connecting") return t("webcall.connecting", "Connecting audio…");
+      return t("webcall.connecting", "Connecting audio…");
+    }
     if (call.status === "connected") {
-      return session.remoteDescriptionSet
-        ? (session.mediaConfirmed ? t("webcall.connected", "Connected") : t("webcall.connected_no_audio", "Connected — verifying audio…"))
-        : t("webcall.connecting", "Connecting audio…");
+      // Server says connected only after client reported RTCPeerConnection connected,
+      // but we still verify media flow honestly.
+      if (!session.remoteDescriptionSet) return t("webcall.connecting", "Connecting audio…");
+      if (pcState === "failed") return t("webcall.failed", "The call could not connect.");
+      if (iceState === "failed") return t("webcall.ice_failed", "Connection failed — retrying…");
+      if (iceState === "disconnected") return t("webcall.ice_disconnected", "Connection unstable — reconnecting…");
+      if (media.confirmed) return t("webcall.connected", "Connected");
+      // Honest: server says connected, but inbound RTP not yet observed
+      return t("webcall.connected_no_audio", "Connected — verifying audio…");
     }
     return t("webcall.connecting", "Connecting audio…");
+  }
+
+  function detailedCallStateText(session) {
+    const pcState = webrtcConnectionState(session);
+    const iceState = iceConnectionState(session);
+    const media = mediaConnectionState(session);
+    const sig = signalingState();
+    return `Signaling: ${sig} · WebRTC: ${pcState} · ICE: ${iceState} · Media: ${media.label}`;
   }
 
   function renderInCallOverlay(session) {
     const call = session.call;
     const root = overlayRoot();
     const isRingingForMe = session.mode === "callee" && call.status === "ringing";
+    const pcState = webrtcConnectionState(session);
+    const iceState = iceConnectionState(session);
+    const media = mediaConnectionState(session);
+    const sigState = signalingState();
     const buttons = isRingingForMe
-      ? `<button class="pm-call-btn pm-call-accept" id="pmCallAnswer">📞 ${esc(t("webcall.answer", "Answer"))}</button>
-         <button class="pm-call-btn pm-call-decline" id="pmCallReject">✕ ${esc(t("webcall.reject", "Decline"))}</button>`
-      : `<button class="pm-call-btn ${session.muted ? "is-muted" : ""}" id="pmCallMute" aria-pressed="${session.muted}">
+      ? `<button class="pm-call-btn pm-call-accept" id="pmCallAnswer" aria-label="${esc(t("webcall.answer", "Answer"))}">📞 ${esc(t("webcall.answer", "Answer"))}</button>
+         <button class="pm-call-btn pm-call-decline" id="pmCallReject" aria-label="${esc(t("webcall.reject", "Decline"))}">✕ ${esc(t("webcall.reject", "Decline"))}</button>`
+      : `<button class="pm-call-btn ${session.muted ? "is-muted" : ""}" id="pmCallMute" aria-pressed="${session.muted}" aria-label="${esc(session.muted ? t("webcall.unmute", "Unmute") : t("webcall.mute", "Mute"))}">
            ${session.muted ? "🔇" : "🎙️"} ${esc(session.muted ? t("webcall.unmute", "Unmute") : t("webcall.mute", "Mute"))}
          </button>
-         <button class="pm-call-btn pm-call-decline" id="pmCallHangup">📵 ${esc(t("webcall.end", "End call"))}</button>`;
+         <button class="pm-call-btn pm-call-decline" id="pmCallHangup" aria-label="${esc(t("webcall.end", "End call"))}">📵 ${esc(t("webcall.end", "End call"))}</button>`;
+
+    // Accessible state list for screen readers (W04)
+    const accessibleStates = [
+      call.status === "ringing" ? (isRingingForMe ? "Ringing" : "Calling") : null,
+      call.status === "accepted" ? "Connecting call" : null,
+      call.status === "connecting" ? "Connecting call" : null,
+      call.status === "connected" && media.confirmed ? "Connected" : null,
+      call.status === "connected" && !media.confirmed ? "Connected - verifying audio" : null,
+      session.muted ? "Mic muted" : null,
+      session.peerMuted ? "Peer muted" : null,
+      sigState === "reconnecting" ? "Reconnecting" : null,
+      iceState === "failed" ? "Poor connection" : null,
+      iceState === "disconnected" ? "Reconnecting" : null,
+    ].filter(Boolean).join(" · ");
 
     root.innerHTML = `
-      <div class="pm-call-card" role="document">
+      <div class="pm-call-card" role="document" aria-live="polite">
         <div class="pm-call-header">
-          <span class="pm-call-icon">${isRingingForMe ? "📞" : "🎙️"}</span>
+          <span class="pm-call-icon" aria-hidden="true">${isRingingForMe ? "📞" : "🎙️"}</span>
           <div>
             <div class="pm-call-title">${esc(isRingingForMe ? t("webcall.incoming", "Incoming call") : session.peerLabel)}</div>
             <div class="pm-call-sub" id="pmCallSub">${esc(callerContextHtml(call))}</div>
           </div>
-          ${call.status === "connected" ? `<div class="pm-call-timer" id="pmCallTimer">${esc(mmss(0))}</div>` : ""}
+          ${call.status === "connected" ? `<div class="pm-call-timer" id="pmCallTimer" aria-live="off">${esc(mmss(0))}</div>` : ""}
         </div>
-        <div class="pm-call-status" id="pmCallStatus">${esc(inCallStatusText(session))}</div>
-        ${isRingingForMe ? '<div class="pm-call-rings" id="pmCallRingElapsed"></div>' : ""}
+        <div class="pm-call-status" id="pmCallStatus" role="status" aria-live="polite">${esc(inCallStatusText(session))}</div>
+        <div class="small-muted" id="pmCallDiagnostics" role="status" aria-live="polite" style="margin-bottom:6px;font-size:11px">${esc(detailedCallStateText(session))}</div>
+        <div class="small-muted" id="pmCallAccessibleStates" aria-live="polite" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">${esc(accessibleStates)}</div>
+        ${isRingingForMe ? '<div class="pm-call-rings" id="pmCallRingElapsed" aria-live="polite"></div>' : ""}
         <div class="pm-call-meta">
           <span class="badge badge-blue">${esc(t("webcall.web_call", "Internet call (WebRTC)"))}</span>
           ${call.language ? `<span class="badge badge-blue">${esc(call.language.toUpperCase())}</span>` : ""}
           ${call.reason ? `<span class="badge badge-blue">${esc(reasonLabel(call.reason))}</span>` : ""}
           ${session.peerMuted ? `<span class="badge badge-orange" id="pmCallPeerMute">🔇 ${esc(t("webcall.peer_muted", "Muted"))}</span>` : ""}
+          <span class="badge ${pcState === "connected" ? "badge-green" : pcState === "failed" ? "badge-red" : "badge-orange"}" id="pmCallPcState">WebRTC: ${esc(pcState)}</span>
+          <span class="badge ${iceState === "connected" || iceState === "completed" ? "badge-green" : iceState === "failed" ? "badge-red" : "badge-orange"}" id="pmCallIceState">ICE: ${esc(iceState)}</span>
+          <span class="badge ${media.confirmed ? "badge-green" : "badge-orange"}" id="pmCallMediaState">Media: ${esc(media.label)}</span>
         </div>
         ${call.reason_note ? `<div class="pm-call-note">${esc(call.reason_note)}</div>` : ""}
-        <div class="pm-call-hint" id="pmCallHint"></div>
-        <div class="pm-call-warn" id="pmCallWarn"></div>
+        <div class="pm-call-hint" id="pmCallHint" role="status" aria-live="polite"></div>
+        <div class="pm-call-warn" id="pmCallWarn" role="alert" aria-live="assertive"></div>
         <div class="pm-call-actions">${buttons}</div>
         <div class="pm-call-foot">${esc(t("webcall.media_note",
           "Audio travels directly between the two browsers — it is not recorded by the platform."))}</div>
@@ -1099,6 +1226,7 @@
     if (hangup) hangup.addEventListener("click", () => session.hangUp());
     session.refreshTimerText();
     if (isRingingForMe) session.startRingClock();
+    updateOverlayStatus();
   }
 
   function reasonLabel(reason) {
@@ -1340,12 +1468,73 @@
   }
 
   // ------------------------------------------------------------- vet card ---
+  // 7-state honesty model (never conflated):
+  //   1 availability  -> vet_availability.status (AVAILABLE/BUSY/OFFLINE/OUTSIDE_HOURS)
+  //   2 Socket.IO     -> signalingState() (idle/connecting/connected/reconnecting/error)
+  //   3 presence lease-> presence.online + lease_expires_at + presence presence (ONLINE/STALE/OFFLINE)
+  //   4 routability   -> vetRoutabilityState() = AVAILABLE + online + socketOnline + not busy
+  //   5 WebRTC PC     -> pc.connectionState (new/connecting/connected/disconnected/failed/closed)
+  //   6 ICE           -> pc.iceConnectionState (new/checking/connected/completed/failed/disconnected/closed)
+  //   7 media         -> inbound RTP observed (mediaConfirmed) + outbound check
   function currentVetAvailability() {
     return (state.config && state.config.availability) || { status: "OFFLINE", supported_languages: ["en"] };
   }
 
   function currentPresenceState() {
     return state.presence || (state.config && state.config.presence) || { online: false, presence: "OFFLINE" };
+  }
+
+  function availabilityState() {
+    const a = currentVetAvailability();
+    return { status: a.status || "OFFLINE", languages: a.supported_languages || ["en"] };
+  }
+
+  function presenceLeaseState() {
+    const p = currentPresenceState();
+    const lease = p.lease_expires_at || null;
+    const last = p.last_heartbeat_at || null;
+    let leaseLabel = "no lease";
+    if (lease) {
+      try {
+        const exp = new Date(lease.replace(" ", "T") + "Z");
+        const now = Date.now();
+        const diff = Math.floor((exp.getTime() - now) / 1000);
+        if (diff > 0) leaseLabel = `lease valid for ${diff}s`;
+        else leaseLabel = `lease expired ${Math.abs(diff)}s ago`;
+      } catch (e) { leaseLabel = String(lease); }
+    }
+    return {
+      online: !!p.online,
+      presence: p.presence || (p.online ? "ONLINE" : "OFFLINE"),
+      lease_expires_at: lease,
+      last_heartbeat_at: last,
+      leaseLabel,
+      routable: !!p.routable,
+      active_call_id: p.active_call_id || (p.active_call && p.active_call.call_id) || null,
+      active_call_status: p.active_call_status || (p.active_call && p.active_call.status) || null,
+    };
+  }
+
+  function webrtcConnectionState(session) {
+    if (!session || !session.pc) return "no pc";
+    return session.pc.connectionState || "unknown";
+  }
+
+  function iceConnectionState(session) {
+    if (!session || !session.pc) return "no pc";
+    return session.pc.iceConnectionState || "unknown";
+  }
+
+  function mediaConnectionState(session) {
+    if (!session) return { inbound: false, outbound: false, confirmed: false, label: "no session" };
+    const inbound = !!session.mediaConfirmed;
+    const outbound = session.pc ? (session.pc._outboundPackets || 0) > 0 : false;
+    // outboundPackets tracked in stats watcher
+    let label = "no media yet";
+    if (inbound) label = "receiving audio";
+    else if (session.connectedAt) label = "verifying audio";
+    else label = "no media yet";
+    return { inbound, outbound, confirmed: inbound, label };
   }
 
   /**
@@ -1357,35 +1546,57 @@
    *   * no call is already in progress.
    * Anything else is rendered as explicitly NOT receiving calls, so the UI can
    * never show "AVAILABLE" next to a hidden signaling failure.
+   *
+   * This function also exposes the 7-state breakdown for honest UI rendering.
    */
   function vetRoutabilityState() {
     const availability = currentVetAvailability();
     const presence = currentPresenceState();
+    const lease = presenceLeaseState();
     const channel = signalingState();
     const socketOnline = channel === "connected";
     const activeCall = !!(presence.active_call || presence.active_call_id ||
-      presence.active_call_status === "connected" || presence.active_call_status === "ringing");
+      presence.active_call_status === "connected" || presence.active_call_status === "ringing" ||
+      lease.active_call_id);
     const available = availability.status === "AVAILABLE";
+    const presenceOnline = !!presence.online;
+    const presencePresence = lease.presence || (presenceOnline ? "ONLINE" : "OFFLINE");
+
+    // Base breakdown for UI (7 states)
+    const breakdown = {
+      availability: availability.status || "OFFLINE",
+      socket: channel,
+      socketOnline,
+      presenceLease: presencePresence,
+      presenceOnline,
+      leaseLabel: lease.leaseLabel,
+      lease_expires_at: lease.lease_expires_at,
+      routable: false,
+      activeCall,
+    };
 
     if (available && activeCall) {
       return {
         badgeClass: "badge-red",
         label: "BUSY · On a call",
         detail: "You are in a call right now, so farmers are not routed to you.",
+        breakdown: { ...breakdown, routable: false },
       };
     }
-    if (available && socketOnline && presence.online) {
+    if (available && socketOnline && presenceOnline) {
       return {
         badgeClass: "badge-green",
         label: "CONNECTED · AVAILABLE — receiving calls",
         detail: "Signaling is live and the server holds your presence lease: farmers can reach you now.",
+        breakdown: { ...breakdown, routable: true },
       };
     }
-    if (available && socketOnline && !presence.online) {
+    if (available && socketOnline && !presenceOnline) {
       return {
         badgeClass: "badge-orange",
         label: "CONNECTED · AVAILABLE — registering…",
         detail: "Signaling is live, but the server has not confirmed your presence lease yet. This should clear within a few seconds.",
+        breakdown: { ...breakdown, routable: false },
       };
     }
     if (available && !socketOnline) {
@@ -1397,6 +1608,7 @@
           ? t("webcall.signal_connecting_vet", "Connecting to call signaling…")
           : t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting..."))
           + (reason ? " (" + reason + ")" : ""),
+        breakdown: { ...breakdown, routable: false },
       };
     }
     if (availability.status === "BUSY") {
@@ -1404,12 +1616,22 @@
         badgeClass: "badge-red",
         label: "BUSY · Not routable",
         detail: "You are marked busy, so farmers will not be routed to you right now.",
+        breakdown: { ...breakdown, routable: false },
+      };
+    }
+    if (availability.status === "OUTSIDE_HOURS") {
+      return {
+        badgeClass: "badge-orange",
+        label: "OUTSIDE_HOURS · Not routable",
+        detail: "You are outside working hours, so farmers are not routed to you right now.",
+        breakdown: { ...breakdown, routable: false },
       };
     }
     return {
       badgeClass: "badge-red",
       label: (availability.status || "OFFLINE") + " · Not routable",
       detail: "You are not receiving web calls. Switch to AVAILABLE and keep this portal connected.",
+      breakdown: { ...breakdown, routable: false },
     };
   }
 
@@ -1417,26 +1639,34 @@
     const availability = currentVetAvailability();
     const languages = ["en", "hi", "mr", "te"];
     const routability = vetRoutabilityState();
+    const breakdown = routability.breakdown || {};
+    const leaseInfo = breakdown.leaseLabel ? esc(breakdown.leaseLabel) : "no lease";
+    const presenceLabel = esc(breakdown.presenceLease || "OFFLINE");
+    const socketLabel = esc(breakdown.socket || "idle");
+    const availabilityLabel = esc(breakdown.availability || availability.status || "OFFLINE");
     return `
       <div class="section-card" id="pmVetCallCard">
         <div class="section-title">📞 ${esc(t("webcall.vet_card_title", "Web call availability"))}</div>
         <div class="meta" style="margin-bottom:8px">
           ${esc(t("webcall.vet_card_help", "Farmers can call you directly in the browser while this portal stays open."))}
         </div>
-        <div class="pm-vet-card-live" style="margin-bottom:8px">
-          <span class="badge badge-orange" id="pmCallLinkBadge">…</span>
-          <span class="badge ${routability.badgeClass}" id="pmVetRoutableBadge">${esc(routability.label)}</span>
+        <div class="pm-vet-card-live" style="margin-bottom:8px" aria-live="polite">
+          <span class="badge badge-blue" id="pmVetAvailabilityBadge" title="Configured availability from vet_availability">Avail: ${availabilityLabel}</span>
+          <span class="badge badge-orange" id="pmCallLinkBadge" title="Socket.IO connection state">Socket: ${socketLabel}</span>
+          <span class="badge ${breakdown.presenceOnline ? "badge-green" : "badge-orange"}" id="pmVetPresenceBadge" title="Presence lease from vet_presence">Lease: ${presenceLabel} (${leaseInfo})</span>
+          <span class="badge ${routability.badgeClass}" id="pmVetRoutableBadge" title="Routability = AVAILABLE + socket connected + lease live + not busy">${esc(routability.label)}</span>
         </div>
-        <div class="small-muted" id="pmVetRoutableStatus" style="margin-bottom:8px">${esc(routability.detail)}</div>
-        <div class="small-muted" id="pmVetSignalStatus" style="margin-bottom:8px"></div>
+        <div class="small-muted" id="pmVetRoutableStatus" style="margin-bottom:4px" role="status" aria-live="polite">${esc(routability.detail)}</div>
+        <div class="small-muted" id="pmVetPresenceDetail" style="margin-bottom:4px" role="status" aria-live="polite">${esc(`Presence: ${presenceLabel} · ${leaseInfo}${breakdown.lease_expires_at ? ` · expires ${breakdown.lease_expires_at}` : ""}`)}</div>
+        <div class="small-muted" id="pmVetSignalStatus" style="margin-bottom:8px" role="status" aria-live="polite"></div>
         <div class="form-row">
-          <div class="field"><label>${esc(t("webcall.receive_calls", "Receive web calls"))}</label>
-            <select id="pmVetAvailability">
+          <div class="field"><label for="pmVetAvailability">${esc(t("webcall.receive_calls", "Receive web calls"))}</label>
+            <select id="pmVetAvailability" aria-label="${esc(t("webcall.receive_calls", "Receive web calls"))}">
               ${["AVAILABLE", "BUSY", "OFFLINE"].map((s) => `<option value="${s}" ${availability.status === s ? "selected" : ""}>${s}</option>`).join("")}
             </select>
           </div>
-          <div class="field"><label>${esc(t("webcall.languages", "Languages you can take calls in"))}</label>
-            <select id="pmVetLanguages" multiple size="4">
+          <div class="field"><label for="pmVetLanguages">${esc(t("webcall.languages", "Languages you can take calls in"))}</label>
+            <select id="pmVetLanguages" multiple size="4" aria-label="${esc(t("webcall.languages", "Languages you can take calls in"))}">
               ${languages.map((code) => `<option value="${code}" ${(availability.supported_languages || []).includes(code) ? "selected" : ""}>${code.toUpperCase()}</option>`).join("")}
             </select>
           </div>
@@ -1446,7 +1676,10 @@
           <button class="btn btn-ghost btn-sm" id="pmVetEnablePush">🔔 ${esc(t("webcall.enable_push", "Enable call notifications"))}</button>
           <button class="btn btn-ghost btn-sm" onclick="location.hash='#/vet/calls'">${esc(t("webcall.history", "Call history"))}</button>
         </div>
-        <div class="small-muted" id="pmVetPushStatus" style="margin-top:6px"></div>
+        <div class="small-muted" id="pmVetPushStatus" style="margin-top:6px" role="status" aria-live="polite"></div>
+        <div class="small-muted" style="margin-top:10px;line-height:1.4">
+          <b>State honesty:</b> 1 availability (your choice) · 2 Socket.IO (${socketLabel}) · 3 presence lease (${presenceLabel}) · 4 routability (${breakdown.routable ? "routable" : "not routable"}) · 5 WebRTC PC · 6 ICE · 7 media. Only when 1-4 are all true are you advertised as receiving calls.
+        </div>
       </div>`;
   }
 
@@ -1492,6 +1725,26 @@
       });
     }
     const routability = vetRoutabilityState();
+    const breakdown = routability.breakdown || {};
+    const availabilityBadge = document.getElementById("pmVetAvailabilityBadge");
+    if (availabilityBadge) {
+      availabilityBadge.textContent = `Avail: ${breakdown.availability || availability.status || "OFFLINE"}`;
+    }
+    const linkBadge = document.getElementById("pmCallLinkBadge");
+    if (linkBadge) {
+      // Keep backward compat: tests check pmCallLinkBadge text for online/offline,
+      // but we now also show socket state explicitly. Preserve original semantics
+      // via updateOverlayStatus which overwrites this badge; here we just set a fallback.
+      if (!linkBadge.textContent || linkBadge.textContent === "…") {
+        linkBadge.textContent = breakdown.socketOnline ? "Web calls online" : "Web calls offline";
+        linkBadge.className = "badge " + (breakdown.socketOnline ? "badge-green" : "badge-orange");
+      }
+    }
+    const presenceBadge = document.getElementById("pmVetPresenceBadge");
+    if (presenceBadge) {
+      presenceBadge.textContent = `Lease: ${breakdown.presenceLease || "OFFLINE"} (${breakdown.leaseLabel || "no lease"})`;
+      presenceBadge.className = "badge " + (breakdown.presenceOnline ? "badge-green" : "badge-orange");
+    }
     const badge = document.getElementById("pmVetRoutableBadge");
     if (badge) {
       badge.textContent = routability.label;
@@ -1499,6 +1752,10 @@
     }
     const detail = document.getElementById("pmVetRoutableStatus");
     if (detail) detail.textContent = routability.detail;
+    const presenceDetail = document.getElementById("pmVetPresenceDetail");
+    if (presenceDetail) {
+      presenceDetail.textContent = `Presence: ${breakdown.presenceLease || "OFFLINE"} · ${breakdown.leaseLabel || "no lease"}${breakdown.lease_expires_at ? ` · expires ${breakdown.lease_expires_at}` : ""}`;
+    }
     updateOverlayStatus();
   }
 
@@ -1546,24 +1803,24 @@
         <div class="meta" style="margin-bottom:10px">
           ${esc(ft("call_vet_help", "Talk to a veterinarian now, from this browser. Your microphone is used only during the call."))}
         </div>
-        <div class="field"><label>${esc(ft("call_language", "Call language"))}</label>
-          <select id="pmCallLanguage">
+        <div class="field"><label for="pmCallLanguage">${esc(ft("call_language", "Call language"))}</label>
+          <select id="pmCallLanguage" aria-label="${esc(ft("call_language", "Call language"))}">
             ${languages.map((lang) => `<option value="${esc(lang.code)}" ${lang.code === preferred ? "selected" : ""}>${esc(lang.name)}</option>`).join("")}
           </select>
         </div>
-        <div class="field"><label>${esc(ft("call_reason", "Reason for calling"))}</label>
-          <select id="pmCallReason">
+        <div class="field"><label for="pmCallReason">${esc(ft("call_reason", "Reason for calling"))}</label>
+          <select id="pmCallReason" aria-label="${esc(ft("call_reason", "Reason for calling"))}">
             ${REASONS.map((reason) => `<option value="${reason}">${esc(reasonLabel(reason))}</option>`).join("")}
           </select>
         </div>
-        <div class="field"><label>${esc(ft("call_notes", "Notes (optional)"))}</label>
-          <textarea id="pmCallNotes" rows="3" maxlength="500" placeholder="${esc(ft("call_notes_placeholder", "Symptoms, since when, animal tag…"))}"></textarea>
+        <div class="field"><label for="pmCallNotes">${esc(ft("call_notes", "Notes (optional)"))}</label>
+          <textarea id="pmCallNotes" rows="3" maxlength="500" placeholder="${esc(ft("call_notes_placeholder", "Symptoms, since when, animal tag…"))}" aria-label="${esc(ft("call_notes", "Notes (optional)"))}"></textarea>
         </div>
         <div id="pmCallAnimalOptions" class="field"></div>
-        <div id="pmCallAvailabilityBox" class="small-muted" style="margin-top:6px;margin-bottom:10px"></div>
-        <button class="btn btn-primary" id="pmCallStart" disabled>📞 ${esc(ft("start_call", "Start call"))}</button>
-        <div class="small-muted" id="pmCallSignalStatus" style="margin-top:8px"></div>
-        <div class="small-muted" id="pmCallPrepStatus" style="margin-top:8px"></div>
+        <div id="pmCallAvailabilityBox" class="small-muted" style="margin-top:6px;margin-bottom:10px" role="status" aria-live="polite"></div>
+        <button class="btn btn-primary" id="pmCallStart" disabled aria-label="${esc(ft("start_call", "Start call"))}">📞 ${esc(ft("start_call", "Start call"))}</button>
+        <div class="small-muted" id="pmCallSignalStatus" style="margin-top:8px" role="status" aria-live="polite"></div>
+        <div class="small-muted" id="pmCallPrepStatus" style="margin-top:8px" role="status" aria-live="polite"></div>
       </div>
       ${helplineFallbackHtml()}
       ${nav}`;
@@ -1611,25 +1868,36 @@
     const start = document.getElementById("pmCallStart");
     if (!box || !start) return;
     const helpline = result.helpline || currentHelpline();
-    start.disabled = !result.routable;
-    const badgeClass = result.routable ? "badge-green" : "badge-orange";
-    const badgeText = result.routable ? "Vet online now" : "Not routable now";
+    const sig = signalingState();
+    const sigOnline = sig === "connected";
+    start.disabled = !result.routable || !sigOnline;
+    const badgeClass = result.routable && sigOnline ? "badge-green" : "badge-orange";
+    const badgeText = result.routable && sigOnline ? "Vet online now" : !sigOnline ? "Signaling offline" : "Not routable now";
     const selected = result.selected_vet
       ? `<div class="small-muted" style="margin-top:6px">Matched vet: <b>${esc(result.selected_vet.name)}</b>${result.selected_vet.district ? ` · ${esc(result.selected_vet.district)}` : ""}</div>`
       : "";
     const fallback = !result.routable && helpline.number
       ? `<div class="small-muted" style="margin-top:6px">If you need help now, call the helpline <b>${esc(helpline.number)}</b>.</div>`
       : "";
+    const skipped = (result.skipped_codes || []).length
+      ? `<div class="small-muted" style="margin-top:6px">Reason: ${esc((result.skipped_codes || []).join(", "))}${result.skipped_reasons ? ` · ${esc(result.skipped_reasons.join(", "))}` : ""}</div>`
+      : "";
+    const signalingNote = !sigOnline
+      ? `<div class="small-muted" style="margin-top:6px">Your signaling connection is ${esc(sig)} — web calls need an online connection.</div>`
+      : "";
     const alternatives = (result.alternatives || []).length
       ? `<div class="small-muted" style="margin-top:8px">Try another language with an online veterinarian:</div>
          <div class="btn-row" style="margin-top:6px">${result.alternatives.map((alt) => `<button type="button" class="btn btn-ghost btn-sm" data-alt-language="${esc(alt.code)}">${esc(alt.name)}</button>`).join("")}</div>`
       : "";
     box.innerHTML = `
-      <div><span class="badge ${badgeClass}">${esc(badgeText)}</span></div>
-      <div class="meta" style="margin-top:6px">${esc(result.message || `No veterinarian for ${farmerLanguageName(result.requested_language)} is currently online.`)}</div>
+      <div role="status" aria-live="polite"><span class="badge ${badgeClass}">${esc(badgeText)}</span> <span class="badge badge-blue">Signaling: ${esc(sig)}</span></div>
+      <div class="meta" style="margin-top:6px" role="status" aria-live="polite">${esc(result.message || `No veterinarian for ${farmerLanguageName(result.requested_language)} is currently online.`)}</div>
       ${selected}
+      ${skipped}
+      ${signalingNote}
       ${fallback}
-      ${alternatives}`;
+      ${alternatives}
+      <div class="small-muted" style="margin-top:8px">State honesty: 1 availability (vet choice) · 2 Socket.IO (${esc(sig)}) · 3 presence lease (server) · 4 routability (${result.routable ? "routable" : "not routable"}) · 5 WebRTC · 6 ICE · 7 media.</div>`;
     bindAlternativeLanguageButtons(params);
   }
 
