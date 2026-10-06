@@ -1,5 +1,5 @@
 /* ==========================================================================
- * Pashu-Shield — Organisation / owner configuration
+ * Pashu-Mitra — Organisation / owner configuration
  * --------------------------------------------------------------------------
  * GIGW 3.0: Q01 (logo + ownership), Q02 (ownership on every entry page),
  *           Q05 (last updated), Q09 (About us), Q10 (Contact us),
@@ -25,20 +25,29 @@
     approved: OWNER_DETAILS_APPROVED,
 
     // Application / service identity (safe: it is the product's own name).
-    appName: "Pashu-Shield",
-    appNameLocal: "पशु-शील्ड",
+    // The user-facing product name is Pashu-Mitra. Internal identifiers that
+    // belong to the deployment (Render service names, database paths, env
+    // variable names, storage keys) deliberately keep their existing values —
+    // renaming those would break the running services, not the branding.
+    appName: "Pashu-Mitra",
+    appNameLocal: "पशु-मित्र",
     tagline: "Animal Disease Reporting, Veterinary Care & Surveillance Platform",
 
     // Q01 — Emblem / logo.
     // The State Emblem of India is deliberately NOT used: its use is governed by
     // the State Emblem of India (Prohibition of Improper Use) Act, 2005 and
-    // requires authorisation. A neutral mark is used instead.
+    // requires authorisation. The product uses its own logo asset instead.
+    //
+    // assets/pashu-mitra-logo.png is the official Pashu-Mitra logo. Replace the
+    // file with a new export to re-brand; no code change is needed. If the file
+    // is missing the header falls back to the plain product name (never to a
+    // different or redrawn logo).
     logo: {
-      src: "",                       // empty -> the text/emoji mark below is used
-      mark: "🐄",
-      alt: "Pashu-Shield — Animal Disease Reporting and Veterinary Care Platform",
-      aspectRatio: "1 / 1",
-      href: "#/",                    // logo links to the home page (GIGW Q01)
+      src: "assets/pashu-mitra-logo.png",
+      mark: "🐄",                     // last-resort text fallback only
+      alt: "Pashu-Mitra — Animal Disease Reporting and Veterinary Care Platform",
+      aspectRatio: "auto",            // never force a ratio: the asset keeps its own
+      href: "#/",                     // logo links to the home page (GIGW Q01)
     },
 
     // Q02 — Ownership. Placeholder until the owning body supplies it.

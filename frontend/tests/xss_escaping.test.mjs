@@ -1,5 +1,5 @@
 /**
- * XSS output-escaping regression tests for Pashu-Shield SPA.
+ * XSS output-escaping regression tests for the Pashu-Mitra SPA.
  *
  *   node --test frontend/tests/xss_escaping.test.mjs
  *

@@ -246,10 +246,10 @@ def mobile_variants(e164: str) -> tuple[str, str]:
 # OTP message templates (farmer's preferred language when available)
 # --------------------------------------------------------------------------
 _MESSAGES = {
-    "en": "PashuMitra: {code} is your login OTP. Valid for {minutes} minutes. Never share this code.",
-    "mr": "PashuMitra: {code} हा तुमचा लॉगिन OTP आहे. {minutes} मिनिटांसाठी वैध. हा कोड कोणालाही देऊ नका.",
-    "hi": "PashuMitra: {code} आपका लॉगिन OTP है। {minutes} मिनट तक मान्य। यह कोड किसी को न बताएं।",
-    "te": "PashuMitra: {code} మీ లాగిన్ OTP. {minutes} నిమిషాల పాటు చెల్లుతుంది. ఈ కోడ్ ఎవరికీ చెప్పవద్దు.",
+    "en": "Pashu-Mitra: {code} is your login OTP. Valid for {minutes} minutes. Never share this code.",
+    "mr": "Pashu-Mitra: {code} हा तुमचा लॉगिन OTP आहे. {minutes} मिनिटांसाठी वैध. हा कोड कोणालाही देऊ नका.",
+    "hi": "Pashu-Mitra: {code} आपका लॉगिन OTP है। {minutes} मिनट तक मान्य। यह कोड किसी को न बताएं।",
+    "te": "Pashu-Mitra: {code} మీ లాగిన్ OTP. {minutes} నిమిషాల పాటు చెల్లుతుంది. ఈ కోడ్ ఎవరికీ చెప్పవద్దు.",
 }
 
 

@@ -203,7 +203,7 @@ def _html_error_page(status: int, detail: str | None = None) -> Response:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{status} — {safe_title} — Pashu-Shield</title>
+<title>{status} — {safe_title} — Pashu-Mitra</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>

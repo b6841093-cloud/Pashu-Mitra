@@ -124,12 +124,21 @@ services:
       - key: SIH_STUN_URLS
         value: stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302
       # Browser origins allowed to open the signaling socket (the Vercel portal).
-      # Supports BOTH the older production origin and the CURRENT preview origin
-      # under test (https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app) so
-      # the deployed vet browser can establish Socket.IO signaling without
-      # breaking the existing production deployment.
+      # EXPLICIT origins only — never "*" and never "https://*.vercel.app".
+      #
+      # IMPORTANT: blueprint (render.yaml) env vars are applied when a service
+      # is CREATED. An existing service keeps its old value until the variable
+      # is edited in the Render dashboard (or the blueprint is synced), so in
+      # practice this variable is a fallback: backend/realtime.py also carries
+      # the same origins as an explicit built-in list so a new Vercel preview
+      # URL cannot silently break web calling. Check the effective list with
+      #   GET /api/health -> web_calling.allowed_origins
+      #                     -> web_calling.allowed_origins_source
+      #
+      # RECOMMENDED: keep ONE stable Vercel production domain and list it here;
+      # add a preview origin temporarily only while testing that preview.
       - key: SIH_ALLOWED_ORIGINS
-        value: https://pashu-mitra-smoky.vercel.app,https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app
+        value: https://pashu-mitra-smoky.vercel.app,https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app,https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app
       # Socket.IO path. MUST keep the leading slash: the browser client appends
       # this value to the origin, so "socket.io" produces
       # "https://hostsocket.io/" (unresolvable) and signaling never connects
@@ -188,8 +197,13 @@ services:
       - key: SIH_TURN_TTL_SECONDS
         value: "3600"
       # Public HTTPS/WSS URL of this service for browser-side signaling.
-      # REQUIRED for a split Vercel frontend + Render backend so Socket.IO opens
-      # WSS directly to Render; leave blank only for same-origin/local dev.
+      # RECOMMENDED for a split Vercel frontend + Render backend so Socket.IO
+      # opens WSS directly to Render; leave blank only for same-origin/local dev.
+      # When it is blank, backend/realtime.py falls back to Render's own
+      # RENDER_EXTERNAL_URL, so signaling still resolves to this service and
+      # never to the Vercel host (Vercel only proxies /api/*, not /socket.io).
+      # Verify: GET /api/health -> web_calling.signaling_url +
+      #         web_calling.signaling_url_source.
       - key: SIH_PUBLIC_BACKEND_URL
         sync: false
       # Web Push (ringing the vet when the portal tab is in the background).

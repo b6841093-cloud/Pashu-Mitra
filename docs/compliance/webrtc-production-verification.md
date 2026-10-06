@@ -1,275 +1,361 @@
-# WebRTC Production Verification — Final Pass
+# WebRTC / Web-Calling Production Verification
 
-**Date:** 2026-10-06  
-**Branch:** `arena/f0020195-pashu-shield-updated`  
-**Frontend under test:** https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app/  
-**Backend under test:** https://pashu-shield-backend-hjgr.onrender.com  
-**Socket.IO path (canonical):** `/socket.io`  
-**Full signaling endpoint:** https://pashu-shield-backend-hjgr.onrender.com/socket.io/  
+**Date of this pass:** 2026-10-06 (second pass — task "MASTER FIX PASS")
+**Branch:** `arena/78af3dc6-pashu-shield-updated`
+**Frontend under test:** https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app/#/owner/webcall
+**Backend under test:** https://pashu-shield-backend-hjgr.onrender.com
+**Canonical Socket.IO path:** `/socket.io`
+**Full signaling endpoint:** `https://pashu-shield-backend-hjgr.onrender.com/socket.io`
 
----
-
-## 1. Screenshot observation (real production failure)
-
-Vet dashboard displayed:
-
-- "Web calls reconnecting..."
-- "Lease: STALE (lease expired 448s ago)"
-- "AVAILABLE · NOT RECEIVING — signaling offline"
-- "Call receiving is offline — reconnecting... (xhr poll error — the signaling server could not be reached at https://pashu-shield-backend-hjgr.onrender.com)"
-
-This is honest-state UI (must remain). The failure was real, not hypothetical.
+> Honesty rule for this document: every row below is either **VERIFIED** (with the
+> exact command/evidence), **FAILED** (reproduced), or **NOT VERIFIED** (with the
+> reason it could not be executed here). Nothing is claimed as passing because it
+> "should" work.
 
 ---
 
-## 2. Root cause analysis
+## 1. Status summary
 
-### 2.1 Backend health snapshot (2026-10-06)
+| # | Check | Status | Evidence |
+|---|-------|--------|----------|
+| 1 | Production `allowed_origins` contained the origin the browser was using | **FAILED (root cause)** | `/api/health` snapshot, §2 |
+| 2 | Origin allow-list normalizes, de-duplicates, refuses wildcards | **VERIFIED** | `test_webcalling.py` #88, §4.1 |
+| 3 | Current preview origin allowed without any env change | **VERIFIED** | `socketio_origin_check.mjs` with `Origin: https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app`, §4.2 |
+| 4 | Unlisted origin is refused (no `Access-Control-Allow-Origin`, handshake `connect_error`) | **VERIFIED** | same script, §4.2 |
+| 5 | `Access-Control-Allow-Origin` is the exact origin, never `*` | **VERIFIED** | same script, §4.2 |
+| 6 | `/socket.io` path canonical on both sides (`socket.io` → `/socket.io`, never `hostsocket.io`) | **VERIFIED** | `test_webcalling.py` #90 + `webcall_ui.test.mjs` |
+| 7 | Signaling URL never points at the Vercel host (no `/api`-rewrite dependence for WSS) | **VERIFIED** | `socket_public_url()` + `RENDER_EXTERNAL_URL` fallback, tests #89 |
+| 8 | JWT-authenticated handshake; unauthenticated socket refused | **VERIFIED** | `socketio_origin_check.mjs`, §4.2 |
+| 9 | Presence lease registered / renewed / expired correctly | **VERIFIED** | `test_webcalling.py` presence + sweeper suites |
+| 10 | Vet presence drives routability (AVAILABLE alone is never enough) | **VERIFIED** | `test_webcalling.py` #91, `webcall_state_honesty.test.mjs` |
+| 11 | Farmer → vet call routing, ringing, atomic answer | **VERIFIED** | `two_peer_call.mjs` steps 1–4, §4.3 |
+| 12 | Real SDP/ICE exchange through the server, DTLS-SRTP connected | **VERIFIED** | `two_peer_call.mjs` — both PCs `connected` |
+| 13 | **Real two-way RTP audio** (packets *and* decoded frames, both directions) | **VERIFIED** | `two_peer_call.mjs`: farmer 199 packets / 402 frames, vet 199 / 403 |
+| 14 | Mute state relayed to the peer | **VERIFIED** | `two_peer_call.mjs` |
+| 15 | Hang-up finalizes state, timestamps, duration, history | **VERIFIED** | `two_peer_call.mjs` |
+| 16 | Second call after hang-up (backend lifecycle) | **VERIFIED** | `test_webcalling.py` re-call tests |
+| 17 | TURN/STUN configuration reported correctly, credentials never public | **VERIFIED** | `/api/health` + `test_webcalling.py` ICE suites |
+| 18 | TURN **relay path** actually used (carrier/CGNAT peer) | **NOT VERIFIED** | needs two networks + `SIH_ICE_TRANSPORT_POLICY=relay`, §5 |
+| 19 | Two **real browsers** (farmer + vet, real `getUserMedia`, mute button, refresh/reconnect) | **NOT VERIFIED** | Playwright Chromium download blocked in this sandbox; §5 |
+| 20 | Production end-to-end after the Render redeploy | **NOT VERIFIED** | owner action (Render dashboard env + deploy); §6 |
 
-Fetched `GET /api/health` via production endpoint:
+Result: the **server-side chain is verified end-to-end with real WebRTC media**
+(transport, JWT auth, presence, routing, offer/answer, ICE, DTLS, RTP, mute,
+hang-up). The two rows that remain unverified are the ones that require a real
+browser and a real carrier network, and they are stated as such.
+
+---
+
+## 2. Root cause (reproduced, not inferred)
+
+`GET https://pashu-shield-backend-hjgr.onrender.com/api/health` was fetched from
+the live service on 2026-10-06 and returned:
 
 ```json
-{
-  "web_calling": {
-    "allowed_origins": [
-      "https://pashu-mitra-smoky.vercel.app",
-      "http://localhost:5001",
-      "http://127.0.0.1:5001",
-      "http://localhost:8000"
-    ],
-    "signaling_configured": true,
-    "signaling_url": "https://pashu-shield-backend-hjgr.onrender.com",
-    "socketio_path": "/socket.io",
-    "worker_configuration_safe": true,
-    "turn_configured": true,
-    "turn_mode": "static",
-    "turn_url_count": 4
-  }
+"web_calling": {
+  "allowed_origins": [
+    "https://pashu-mitra-smoky.vercel.app",
+    "https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app",
+    "http://localhost:5001",
+    "http://127.0.0.1:5001",
+    "http://localhost:8000"
+  ],
+  "signaling": "flask-socketio",
+  "signaling_configured": true,
+  "signaling_url": "https://pashu-shield-backend-hjgr.onrender.com",
+  "socketio_path": "/socket.io",
+  "turn_configured": true, "turn_mode": "static", "turn_url_count": 4,
+  "push_configured": true, "worker_configuration_safe": true
 }
 ```
 
-**Finding:** `allowed_origins` contains only the OLD production origin `https://pashu-mitra-smoky.vercel.app` plus localhost defaults. It does **NOT** contain the CURRENT production origin `https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app`.
+The browser was on **`https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app`**
+(the current Vercel preview origin). It is **not** in `allowed_origins`.
 
-### 2.2 Socket.IO flow inspection
+Consequences, in order (this is the complete chain the screen showed):
 
-- `backend/realtime.py`:
-  - `socketio = SocketIO(async_mode="threading", cors_allowed_origins=None, ...)`
-  - `init_realtime()` replaces cors_allowed_origins with `allowed_origins()` from env.
-  - `allowed_origins()` parses `SIH_ALLOWED_ORIGINS` (comma-separated, trailing slash stripped) and appends localhost defaults.
-  - `_on_connect` checks `origin_allowed(request.headers.get("Origin"))` — if not in allow-list, returns `False` (handshake rejected).
-  - `socketio_path()` normalizes `SIH_SOCKETIO_PATH` to always start with `/`, default `/socket.io`.
-- `backend/app.py`:
-  - Calls `init_realtime(app, decode_token, get_db)` once at startup.
-  - No other Socket.IO initialization.
-- `frontend/call.js`:
-  - `DEFAULT_SOCKET_PATH = "/socket.io"` — must start with `/` or browser client produces `https://hostsocket.io/` (documented incident 2026-10-05).
-  - `normalizeSocketPath()` ensures leading slash, strips trailing slashes.
-  - `signalingUrl(cfg)` returns `cfg.signaling.url` which is `socket_public_url()` = `SIH_PUBLIC_BACKEND_URL` or empty (same-origin).
-  - `ensureSocket()` does `io(url, {path, transports, auth:{token}, tryAllTransports:true})`.
-  - Transports: `["websocket","polling"]` (server advertises same).
-  - On `connect`: clears error, sets `everConnected=true`, starts presence heartbeat (20s interval), reloads config.
-  - On `disconnect`: stops heartbeat, sets `disconnectedAt`.
-  - On `connect_error`: sets `signalingErrorType`, `signalingError` with message + URL, logs URL/path/transport.
-- `frontend/vercel.json`:
-  - Rewrites `/api/:path*` to `https://pashu-shield-backend-hjgr.onrender.com/api/:path*`.
-  - No rewrite for `/socket.io` — frontend goes directly to Render for signaling (correct).
-- `render.yaml`:
-  - `startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 100 --timeout 120 ...`
-  - This is the safe configuration (earlier testing: sync worker 2 workers broke Engine.IO polling sessions "Invalid session" and 0/6 call:incoming delivered; gthread 1 worker 100 threads delivered 4/4 events in 5-9ms, REST median 3ms).
-  - `SIH_ALLOWED_ORIGINS` set to single old origin: `https://pashu-mitra-smoky.vercel.app`
-  - `SIH_SOCKETIO_PATH` = `/socket.io` (correct, leading slash)
-  - `SIH_PUBLIC_BACKEND_URL` sync:false (set in Render dashboard, health shows it's set)
+1. The Engine.IO polling handshake from that origin receives **no
+   `Access-Control-Allow-Origin` header**, and the WebSocket handshake is
+   rejected by `_on_connect` → `origin_allowed(...) is False`.
+2. The Socket.IO client reports `TransportError` / `connect_error`. A browser
+   **cannot** expose the CORS reason to JavaScript, so the portal can only say
+   "signaling offline / connecting".
+3. The farmer's Start button stays disabled (it requires a live socket), and the
+   vet can never hold a live presence lease from that origin — so
+   `NO_LIVE_SESSION` is the routing answer and the panel showed
+   `Reason: NO_LIVE_SESSION · NO_LIVE_SESSION`.
 
-### 2.3 Production Socket.IO handshake tests
+Why it recurs: `render.yaml` is applied when a Render service is **created**; an
+existing service keeps its old `SIH_ALLOWED_ORIGINS` until somebody edits it in
+the dashboard. Every new Vercel preview URL therefore re-introduces the same
+fault. Two earlier incidents (2026-10-05, and the first 2026-10-06 pass with
+`efyqsdomw`) had exactly this shape.
 
-- `GET https://pashu-shield-backend-hjgr.onrender.com/socket.io/?EIO=4&transport=polling` via fetch_page:
-  - **PASS** — returns `0{"sid":"...","upgrades":["websocket"],"pingTimeout":60000,"pingInterval":25000,"maxPayload":65536}`
-  - Proves Socket.IO server IS running in production, Flask-SocketIO initialized correctly, path `/socket.io` is mounted, polling transport works.
-- `GET /api/health`:
-  - **PASS** — 200, database ok, signaling_configured true, socketio_path `/socket.io`, signaling_url `https://pashu-shield-backend-hjgr.onrender.com`
-- CORS / Origin:
-  - **FAILED (ROOT CAUSE)** — Current Vercel origin `https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app` not in `allowed_origins`. Browser's XHR poll and WebSocket handshake include `Origin` header; Flask-SocketIO's CORS check and our explicit `origin_allowed` reject it.
-  - Old origin `https://pashu-mitra-smoky.vercel.app` **PASS** (in allow-list)
-  - New origin **FAILED** — explains "xhr poll error — signaling server could not be reached"
-- Authentication:
-  - JWT via `auth: {token}` and query `?token=` supported, verified with `decode_token`, user re-loaded from DB (no client-supplied role trusted). Token presence logged as boolean only, never value. **PASS**
-- Render routing:
-  - `/socket.io/` not blocked, polling works (verified). **PASS**
-- Path normalization:
-  - Backend `socketio_path()` returns `/socket.io`, frontend `normalizeSocketPath()` returns `/socket.io`, `/api/health` reports `/socket.io`, `/api/webcall/config` returns `/socket.io`. No concatenation bug `...comsocket.io`, no double slash. **PASS**
+Two secondary defects made the failure harder to read:
 
-### 2.4 Summary of 26 verification points
-
-| # | Check | Result | Evidence |
-|---|-------|--------|----------|
-| 1 | Socket.IO server running in production | PASS | polling handshake returns sid |
-| 2 | Flask-SocketIO initialized correctly | PASS | realtime.py init_realtime called from app.py |
-| 3 | Production Render start command uses Socket.IO-compatible worker | PASS | render.yaml: gthread, workers 1, threads 100 |
-| 4 | Gunicorn worker class compatible | PASS | gthread |
-| 5 | Not running as ordinary WSGI-only sync | PASS | gthread, not sync |
-| 6 | Socket.IO path exactly /socket.io | PASS | DEFAULT_SOCKETIO_PATH, socketio_path() |
-| 7 | Frontend uses https://.../socket.io/ and NOT ...comsocket.io/ | PASS | normalizeSocketPath, io(url,{path}) |
-| 8 | Engine.IO version compatible | PASS | client v4.8.4, server python-socketio 5.11+, engineio 4.9+ |
-| 9 | Polling transport works | PASS | fetch_page polling handshake 200 |
-| 10 | WebSocket upgrade works | PASS | handshake advertises upgrades ["websocket"] |
-| 11 | CORS allows CURRENT production Vercel origin | **FAILED** | allowed_origins missing new origin — ROOT CAUSE |
-| 12 | Current Vercel deployment origin included in SIH_ALLOWED_ORIGINS | **FAILED** | only old origin present |
-| 13 | Render env has SIH_PUBLIC_BACKEND_URL | PASS | health signaling_url set |
-| 14 | Socket.IO does not use Vercel rewrite as WS endpoint | PASS | vercel.json only rewrites /api, signaling.url is Render absolute |
-| 15 | Vercel NOT expected to proxy Socket.IO WebSockets | PASS | documented, direct Render |
-| 16 | Render is direct Socket.IO signaling endpoint | PASS | signaling.url = Render |
-| 17 | Auth cookies/JWT available | PASS | auth token via localStorage, auth:{token} |
-| 18 | Polling requests not 401/403/404/405/500 | PASS (no token) / will be 401 when token missing, but handshake itself 200 |
-| 19 | Render routing does not block /socket.io/ | PASS | handshake 200 |
-| 20 | Origin validation does not reject current Vercel URL | **FAILED** | rejects — ROOT CAUSE |
-| 21 | Socket.IO path normalization consistent | PASS | backend+frontend+health+config all /socket.io |
-| 22 | Presence registration starts only after socket connection | PASS | on connect handler |
-| 23 | Presence heartbeat continues while Vet page open | PASS | 20s interval, stops on disconnect |
-| 24 | Lease renewal before expiry | PASS | lease 60s, heartbeat 20s |
-| 25 | Reconnect restores presence automatically | PASS | on connect restarts heartbeat + reloads config |
-| 26 | Stale lease cleared/replaced after reconnect | PASS | heartbeat INSERT ON CONFLICT, drop_presence, sweep_presence |
+* the farmer panel printed the **raw** routing codes (`NO_LIVE_SESSION ·
+  NO_LIVE_SESSION`) as the primary sentence, and showed `Matched vet: …` even
+  when the call was not routable — the matched name came from a *different*
+  vet's successful match, so the screen contradicted itself;
+* `socket_public_url()` had no fallback, so a deployment that forgot
+  `SIH_PUBLIC_BACKEND_URL` would tell the browser "same origin" and the socket
+  would be sent to the Vercel host (Vercel rewrites `/api/*` only — never
+  `/socket.io`).
 
 ---
 
-## 3. Fix
+## 3. The fix (additive; no feature removed)
 
-### ROOT CAUSE
-CORS origin mismatch: `SIH_ALLOWED_ORIGINS` in production Render deployment listed only the old Vercel origin `https://pashu-mitra-smoky.vercel.app`. The CURRENT production origin under test `https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app` was not in the allow-list, so every browser Socket.IO polling XHR and WebSocket handshake from the new origin was rejected (CORS failure → TransportError → "xhr poll error — signaling server could not be reached"). The lease then expired (60s TTL) and UI correctly showed STALE + "AVAILABLE · NOT RECEIVING — signaling offline".
+### 3.1 `backend/realtime.py` — explicit, self-healing allow-list
 
-### FIX
-1. **render.yaml** — change `SIH_ALLOWED_ORIGINS` from single old origin to comma-separated list containing BOTH old and new origins:
+* `BUILTIN_ALLOWED_ORIGINS` — the portal origins this product is deployed on,
+  listed **explicitly** (no `*`, no `*.vercel.app`):
+  * `https://pashu-mitra-smoky.vercel.app` (stable production)
+  * `https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app` (current preview)
+  * `https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app` (previous preview)
+* `LOCAL_DEV_ORIGINS` — localhost/127.0.0.1 dev ports, unchanged in purpose.
+* `_normalize_origin()` — trims whitespace, strips trailing slashes, lower-cases.
+  Both the configured list **and** the incoming `Origin` header pass through it,
+  so `https://Portal.example.com/` and `https://portal.example.com` match.
+* `_split_origins()` — comma-separated parsing of `SIH_ALLOWED_ORIGINS` **and**
+  the historical alias `SIH_FRONTEND_ORIGINS`, de-duplicated, and any entry
+  containing `*` is **refused with a warning** (logged once per value).
+* `origin_diagnostics()` — secret-free provenance for `/api/health`.
+* `socket_public_url()` — `SIH_PUBLIC_BACKEND_URL` → `RENDER_EXTERNAL_URL`
+  (Render sets it automatically) → `""` (same origin). `socket_public_url_source()`
+  and `signaling_endpoint()` report which was used and the exact WSS URL.
+* `_on_connect` — an origin rejection now logs the rejected origin, the
+  effective list and both sources, with the corrective action, instead of a
+  single opaque line.
+
+### 3.2 `backend/app.py` — diagnostics an operator can read from outside
+
+* `GET /api/health → web_calling` additionally reports `signaling_url_source`,
+  `signaling_endpoint`, `allowed_origins_source`
+  (`{count, from_env, from_builtin, env_configured, wildcards_allowed}`).
+  Nothing secret is added — the origins were already public.
+* `GET /api/webcall/config → signaling` additionally reports `url_source`,
+  `endpoint`, `client_origin`, and **`client_origin_allowed`**: the verdict for
+  the requesting browser's own `Origin`. That is what lets the portal say
+  "this deployment's address is not permitted yet" instead of the misleading
+  "signaling offline".
+
+### 3.3 `frontend/call.js` — the UI can only claim what the server proves
+
+* `clientOriginAllowed()` + `signalingFailureInfo()` → farmer text, developer
+  detail (`ORIGIN_NOT_ALLOWED` / `CONNECTING` / `RECONNECTING` / `FAILED`).
+* `callState()` / `callStateLabel()` / `callStateStripHtml()` — the twelve
+  states (OFFLINE, CONNECTING, AVAILABLE, INCOMING_CALL, CALLING, RINGING,
+  CONNECTING_MEDIA, CONNECTED, MUTED, RECONNECTING, ENDED, FAILED) are rendered
+  as **text** (a badge plus a labelled strip), never by colour alone.
+* `skipReasonSentence()` — `NO_LIVE_SESSION` → "not connected right now",
+  `LANGUAGE_NOT_SUPPORTED` → "does not take calls in this language", etc. The
+  raw codes stay in the console and in `data-*` attributes for developers.
+* The farmer card prints `Matched veterinarian: …` **only when routable**, and
+  the primary sentence when the socket is down is
+  "Your connection to the veterinarian service is being restored."
+* `reconnectSignaling()` (+ a **Retry connection** button on both the farmer
+  and vet cards, and a `window online` hook) re-opens the socket *and* refreshes
+  the server configuration, so a later call can never use a stale ICE/TURN list.
+* On reconnect the vet re-registers presence/heartbeat and both roles refresh
+  their configuration (ICE servers, presence, routability).
+
+### 3.4 `render.yaml`
+
+`SIH_ALLOWED_ORIGINS` now lists the stable production origin, the current
+preview origin and the previous preview origin; the comments explain the
+blueprint-at-creation caveat and the recommended single-production-origin
+policy, and that `SIH_PUBLIC_BACKEND_URL` has the `RENDER_EXTERNAL_URL`
+fallback. The Vercel `/api/*` rewrite is still used for REST only — WebSocket
+traffic never depends on it.
+
+---
+
+## 4. Verification executed in this pass
+
+### 4.1 Unit/integration suites
+
+```bash
+bash backend/run_tests.sh            # 10/10 suites PASS (344 tests)
+node --test frontend/tests/*.test.mjs # 80 tests: 78 pass, 2 skipped, 0 fail
+```
+
+New backend tests added to `backend/test_webcalling.py` (they live in the
+origin/URL test class, so the numbers below are that class's own):
+
+* **#87** the three portal origins are allowed with an **empty**
+  `SIH_ALLOWED_ORIGINS` (the regression that caused this incident), and a
+  foreign origin is still refused;
+* **#88** parsing: trailing slash / whitespace / case / duplicates, both
+  variable names merged, `*` and `https://*.vercel.app` refused;
+* **#89** `socket_public_url()` falls back to `RENDER_EXTERNAL_URL`, explicit
+  configuration wins, `/api/health` reports source + endpoint;
+* **#90** `/api/webcall/config` returns the requesting Origin's verdict and the
+  canonical `/socket.io` path; `/api/health` reports the allow-list provenance.
+
+### 4.2 Origin / CORS behaviour (new tool: `backend/tests/webrtc/socketio_origin_check.mjs`)
+
+Run against the current code (local instance started from this branch) with the
+**production preview origin** as the allowed origin:
+
+```
+▶ Engine.IO polling handshake — allowed origin (https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app)
+  ✔ handshake answered with HTTP 200
+  ✔ the engine.io open packet was returned
+  ✔ Access-Control-Allow-Origin is exactly the frontend origin
+  ✔ no wildcard CORS policy is in use
+  ✔ the signaling path is the canonical /socket.io
+▶ Engine.IO polling handshake — origin that is NOT in the allow-list
+  ✔ an unlisted origin receives no ACAO header (got null)
+▶ WebSocket transport — allowed origin
+  ✔ the authenticated socket reached session:ready
+▶ WebSocket transport — origin that is NOT in the allow-list
+  ✔ the unlisted origin was refused
+▶ WebSocket transport — no token
+  ✔ an unauthenticated socket was refused
+PASS — Socket.IO origin + CORS behaviour verified (6 groups).
+```
+
+This is the exact request pair a browser makes; the only difference is that the
+`Origin` header is under our control, which is what makes the allow-list
+observable. It reproduces "allowed → 200 + exact ACAO" and "unlisted → no ACAO
+and refused handshake" from the same code that will be deployed.
+
+### 4.3 Real two-peer WebRTC audio (`backend/tests/webrtc/two_peer_call.mjs`)
+
+Two genuine `@roamhq/wrtc` peers, signaling exclusively through the running
+server (Socket.IO + REST):
+
+```
+✔ the assigned vet received call:incoming for this call
+✔ offer/answer exchanged through the server's durable signal relay
+✔ both real peer connections reached the connected state (ICE + DTLS-SRTP)
+✔ farmer received RTP audio (199 packets)
+✔ vet received RTP audio (199 packets)
+✔ both directions decoded real audio frames (farmer 402, vet 403)
+✔ the peer learned that the other side is muted
+✔ the call carries accurate timestamps and a duration
+PASS — real two-way WebRTC audio verified (13 steps).
+```
+
+The candidate pairs were `host->host` on one machine, so this proves the
+signaling + SDP + ICE + DTLS + RTP path, **not** the TURN relay path (§5).
+
+### 4.4 ICE/TURN posture (unchanged, re-verified)
+
+`/api/health → web_calling.ice` on the deployed service: `turn_configured: true`,
+`turn_mode: "static"`, `turn_url_count: 4`, `turn_config_issue: null`,
+`ice_transport_policy: "all"`, `stun_configured: true`; `turn_env` reports
+`SIH_TURN_SECRET: missing` (correct: a non-empty secret would switch the backend
+to coturn credentials the Metered provider rejects). No credential, username or
+URL list is exposed by `/api/health`; ICE credentials are returned only by the
+authenticated `GET /api/webcall/config`, and no TURN credential appears in
+frontend source, git, logs or documentation.
+
+---
+
+## 5. NOT VERIFIED — and why
+
+1. **Two real browsers (farmer + vet) with a real microphone.**
+   `frontend/tests/webcall_browser.test.mjs` requires Playwright + Chromium. In
+   this sandbox `npx playwright install chromium` fails (the browser CDN is not
+   reachable) and no system browser is installed. Therefore: *not run, not
+   claimed*. The script still exists and skips with an explicit reason; running
+   it needs a machine with a browser:
+
+   ```bash
+   npm install --no-save playwright && npx playwright install chromium
+   PM_BROWSER_URL=https://pashu-shield-backend-hjgr.onrender.com \
+   PM_VET_EMAIL=vet1@example.com PM_VET_PASSWORD=*** \
+   PM_FARMER_MOBILE=8341564042 PM_FARMER_OTP=123456 \
+   node --test frontend/tests/webcall_browser.test.mjs
    ```
-   https://pashu-mitra-smoky.vercel.app,https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app
-   ```
-   Minimal safe change, no wildcard, preserves existing production origin.
 
-2. **backend/realtime.py** — make `allowed_origins()` merge `SIH_ALLOWED_ORIGINS` AND `SIH_FRONTEND_ORIGINS` (historical alias mentioned in docs/compliance), deduplicate, strip trailing slashes, preserve order. This prevents future breakage if operator sets either variable.
+2. **The TURN relay path** (mobile-carrier/CGNAT peers): needs two networks and
+   `SIH_ICE_TRANSPORT_POLICY=relay`; §4.4 shows the credentials are served, but
+   no relay candidate was exercised here.
 
-Both changes keep:
-- leading slash path `/socket.io`
-- gthread 1 worker 100 threads
-- direct Render signaling endpoint
-- honest-state UI
-- JWT auth model
-
-### FILES CHANGED
-- `render.yaml` — SIH_ALLOWED_ORIGINS value expanded to include current Vercel deployment origin
-- `backend/realtime.py` — allowed_origins() now reads SIH_ALLOWED_ORIGINS + SIH_FRONTEND_ORIGINS, deduplicates
-
-### DEPLOYMENT CHANGES
-- **Render** (`pashu-shield-backend` service):
-  - Environment variable `SIH_ALLOWED_ORIGINS` must be updated in Render dashboard to:
-    `https://pashu-mitra-smoky.vercel.app,https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app`
-  - Redeploy service after change (Render only injects env into new process)
-  - Verify `GET /api/health` → `web_calling.allowed_origins` includes both origins
-  - Verify `GET /socket.io/?EIO=4&transport=polling` with `Origin: https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app` returns 200 + `Access-Control-Allow-Origin: https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app`
-- No Vercel change needed (frontend already uses absolute signaling URL and normalized path)
-- No TURN credential change needed (static mode already configured, 4 URLs)
-- No database migration needed
+3. **Production end-to-end after redeploy**: the live service still holds the
+   old `SIH_ALLOWED_ORIGINS`, so the current incident is fixed by code only
+   *after* the backend is redeployed (§6). Until then the fix is verified
+   against the same code on a local instance, not against the live URL.
 
 ---
 
-## 4. Production verification after fix (simulated + live endpoint checks)
+## 6. Production configuration (owner action)
 
-Because Render redeploy requires dashboard access, verification below is split into **live endpoint checks** (actual production) and **simulated fix verification** (local with same env).
+The code change alone fixes the current origin **after the backend redeploys**.
+To make the deployment configuration explicit as well, set on
+**Render → `pashu-shield-backend` → Environment** and redeploy:
 
-### Live production endpoint (before redeploy)
+| Variable | Value | Why |
+|----------|-------|-----|
+| `SIH_ALLOWED_ORIGINS` | `https://pashu-mitra-smoky.vercel.app,https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app` | explicit portal origins; no wildcards |
+| `SIH_PUBLIC_BACKEND_URL` | `https://pashu-shield-backend-hjgr.onrender.com` | already correct (health confirms); the `RENDER_EXTERNAL_URL` fallback now covers a fresh service too |
+| `SIH_SOCKETIO_PATH` | `/socket.io` | must keep the leading slash |
+| `SIH_TURN_URLS` / `SIH_TURN_USERNAME` / `SIH_TURN_CREDENTIAL` | Metered values (secrets) | static TURN mode; `SIH_TURN_SECRET` must stay **empty** |
+| `SIH_GUNICORN_WORKERS` | `1` | Socket.IO rooms are per-process (health: `worker_configuration_safe: true`) |
 
-- **Frontend URL:** https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app/
-- **Backend URL:** https://pashu-shield-backend-hjgr.onrender.com
-- **Socket.IO path:** /socket.io
-- **Browser (simulated via fetch_page):** fetch_page polling handshake **PASS** (sid returned)
-- **Transport:** polling **PASS**, websocket upgrade advertised **PASS**
-- **Connection result (old origin):** would succeed (allowed)
-- **Connection result (new origin):** **FAILED** before fix — CORS rejection → TransportError → reconnecting loop
-- **Presence result:** cannot register because socket never connects → lease STALE (expired 448s)
-- **Lease result:** STALE, lease_expires_at in past
-- **TURN result:** from /api/health — turn_configured true, turn_mode static, turn_url_count 4, turn_config_issue null — **PASS**
-- **Two-way RTP, mute, hangup, second-call:** NOT VERIFIED (blocked by signaling failure)
+Recommended long-term: deploy the portal on **one stable Vercel production
+domain** and keep only that origin (plus temporarily the preview under test) in
+the list.
 
-### Simulated fix verification (local)
+Verify after the redeploy:
 
-- Set `SIH_ALLOWED_ORIGINS=https://pashu-mitra-smoky.vercel.app,https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app`
-- `realtime.allowed_origins()` → includes both + localhost defaults — **PASS**
-- `origin_allowed("https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app")` → True — **PASS**
-- `origin_allowed("https://pashu-mitra-smoky.vercel.app")` → True — **PASS**
-- `socketio_path()` → `/socket.io` — **PASS**
-- Backend tests: `bash backend/run_tests.sh` → 10 suites PASS (including test_webcalling 66 tests)
-- Frontend tests: `node --test frontend/tests/*.test.mjs` → 68 pass, 2 skipped, 0 fail
-- Presence/lease logic: heartbeat 20s < lease 60s, reconnect restores — **PASS** by code inspection + tests
+```bash
+curl -s https://pashu-shield-backend-hjgr.onrender.com/api/health \
+  | python3 -c "import json,sys; w=json.load(sys.stdin)['web_calling']; \
+print(w['allowed_origins']); print(w['signaling_url'], w['signaling_url_source'], w['socketio_path'], w['signaling_endpoint']); \
+print(w['turn_configured'], w['turn_mode'], w['turn_url_count'], w['push_configured'])"
+```
 
-### Expected after Render redeploy
+`allowed_origins` must contain the browser's own origin; the browser then shows
+`[WEB_CALL] signaling URL … | path /socket.io | transports websocket,polling`,
+`[WEB_CALL] socket connected sid=… | transport=websocket`,
+`[WEB_CALL] presence registered online=true`, `[WEB_CALL] presence heartbeat ok`.
+No token or TURN credential is ever logged.
 
-- **Production Socket.IO result:** CONNECTED (websocket or polling), sid assigned, transport websocket (or polling fallback), no TransportError
-- **Vet presence result:** online true, presence ONLINE, lease valid for ~60s, routable true when AVAILABLE
-- **Farmer → Vet result:** Calling → Ringing → Connected (after vet Accept)
-- **Two-way audio result:** inbound RTP observed, mediaConfirmed true, outbound packets >0 (requires real browser mic test)
-- **TURN result:** /api/webcall/config returns ice_servers with 4 TURN URLs + ephemeral/static credentials, turn_configured true, turn_mode static, turn_url_count 4
+### Manual two-browser acceptance (still required)
 
----
-
-## 5. Checklist for real two-browser production test (to be executed after redeploy)
-
-**Browser B — Vet:**
-1. Login as vet
-2. Open Web Call, choose AVAILABLE, select languages, Save
-3. Wait for CONNECTED — expect "CONNECTED · AVAILABLE — receiving calls", "Lease: ONLINE (lease valid for Xs)", "Signaling connected"
-4. Verify presence: `GET /api/webcall/config` → presence.online true
-
-**Browser A — Farmer:**
-5. Login as farmer
-6. Open Web Call, select language, check availability → should show "Vet online now" + matched vet name, Start Call enabled
-7. Start call → Calling → Ringing
-8. Vet sees Incoming call → Accept → Connecting audio → Connected
-9. Verify real two-way mic audio:
-   - Farmer → Vet audio
-   - Vet → Farmer audio
-   - Farmer mute (track.enabled false, peer sees muted badge)
-   - Farmer unmute
-   - Vet mute
-   - Vet unmute
-   - Farmer hangup → both show summary
-   - Vet hangup (second call)
-   - Second call
-   - Refresh Vet page → should reconnect → CONNECTED · AVAILABLE
-   - Refresh Farmer page → make another call
-
-**Evidence to capture:** browser console logs `[WEB_CALL] signaling URL ...`, `socket connected sid=... transport=...`, `presence registered online=true`, `presence heartbeat ok`, plus network tab showing `/socket.io/?EIO=4&transport=polling` 200 and WebSocket 101.
-
----
-
-## 6. TURN verification
-
-- Endpoint: `GET /api/webcall/config` (authenticated)
-- Expected: `ice.turn_configured true`, `turn_mode static`, `turn_url_count 4`, no credential in health (only in authenticated config)
-- Current health already shows: turn_configured true, turn_mode static, turn_url_count 4, turn_config_issue null, turn_env all set except SECRET missing (correct for static mode) — **PASS**
-- Secret exposure check: grep codebase for TURN credentials — none in git, source, logs, health (only names/states reported) — **PASS**
-- Recommendation: if previously exposed TURN credentials were committed anywhere, regenerate in Metered dashboard and update Render env `SIH_TURN_USERNAME` + `SIH_TURN_CREDENTIAL`.
+Vet browser: log in → Web Call → **AVAILABLE** + languages → Save → expect
+`CONNECTED · AVAILABLE — receiving calls`, `Lease: ONLINE (lease valid for …)`,
+`Signaling connected`. Farmer browser: log in → Call a veterinarian → language /
+reason / notes → expect `Veterinarian available` + matched vet → Start → Ringing
+→ vet Accept → both reach `Connected` → speak both ways → Mute / Unmute → Hang
+up → repeat (second call) → refresh the vet tab and confirm the socket
+reconnects and the lease returns. Anything that does not match one of those
+sentences must be reported as a defect, not explained away.
 
 ---
 
 ## 7. Remaining blockers
 
-- Render redeploy needed for SIH_ALLOWED_ORIGINS change to take effect in production
-- Real two-browser audio test (Farmer → Vet, mute, hangup, second call, refresh) requires actual browsers with microphones and cannot be fully automated in this sandbox — marked NOT VERIFIED until manual execution
-- Vercel preview URLs are hash-based; future previews will need their origins added to SIH_ALLOWED_ORIGINS (explicit allow-list, no wildcard)
+1. Render redeploy required before the live service accepts the current preview
+   origin (code-level fix is already in this branch).
+2. Real two-browser verification must be run by a human (or on a machine with
+   Playwright + Chromium) — §5.1.
+3. TURN relay path unexercised — §5.2.
+4. Vercel preview URLs change on every deployment; keep one stable production
+   domain, or extend the explicit list (`SIH_ALLOWED_ORIGINS` or
+   `BUILTIN_ALLOWED_ORIGINS`) — never a wildcard.
 
 ---
 
-## 8. Automated test result
+## 8. Files changed in this pass
 
-- `bash backend/run_tests.sh`: 10 suites PASS (test_webcalling 66 tests PASS)
-- `node --test frontend/tests/*.test.mjs`: 68 pass, 2 skipped, 0 fail
-- `frontend/tests/webcall_state_honesty.test.mjs`: validates 7-state honesty (availability, socket, lease, routability, PC, ICE, media) — PASS
-
----
-
-## 9. Commit
-
-Files changed in this branch:
-- render.yaml
-- backend/realtime.py
-- docs/compliance/webrtc-production-verification.md (this file)
-- docs/compliance/browser-accessibility-audit.md (separate doc)
-
-Commit hash to be filled after final commit.
+| File | Change |
+|------|--------|
+| `backend/realtime.py` | explicit built-in origins, normalization/wildcard refusal, origin diagnostics, `RENDER_EXTERNAL_URL` fallback, actionable rejection log |
+| `backend/app.py` | health + `/api/webcall/config` diagnostics (`signaling_url_source`, `signaling_endpoint`, `allowed_origins_source`, `client_origin_allowed`), user-facing report/error/SMS branding |
+| `backend/test_webcalling.py` | tests #87–#90 (origins, normalization, URL fallback, config verdict) |
+| `backend/tests/webrtc/socketio_origin_check.mjs` | **new** origin/CORS verification tool |
+| `backend/tests/webrtc/README.md` | documents the new rung |
+| `backend/test_compliance.py` | logo rule updated (product logo allowed; emblem still forbidden) |
+| `backend/compliance_security.py`, `backend/ivr_service.py`, `backend/otp_service.py` | user-facing product name (error page title, IVR welcome prompts, OTP SMS) |
+| `render.yaml` | `SIH_ALLOWED_ORIGINS` explicit list + corrected comments |
+| `frontend/call.js` | 12-state labels, human routing wording, origin verdict, retry/reconnect, config refresh on reconnect |
+| `frontend/app.js`, `frontend/shell.js`, `frontend/org-config.js`, `frontend/index.html`, `frontend/manifest.json`, `frontend/sw.js`, `frontend/info-pages.js`, `frontend/style.css`, `frontend/a11y.js`, `frontend/captcha.js` | Pashu-Mitra branding, official logo wiring, demo-access card, web-call translations (en/mr/hi/te) |
+| `frontend/tests/branding_webcall_states.test.mjs` | **new** branding + state-honesty tests (incl. the logo asset check: PNG signature, dimensions, aspect ratio, under 2 MB — skipped with a reason while the asset is absent) |
+| `frontend/tests/demo_account_ui.test.mjs` | demo card copy updated to the new (non-warning) wording |
+| `docs/compliance/webrtc-production-verification.md` | this document |
+| `docs/compliance/browser-accessibility-audit.md` | accessibility status for the branding/login changes |

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Pashu-Shield — Accessibility helpers (keyboard, focus, dialogs, forms)
+   Pashu-Mitra — Accessibility helpers (keyboard, focus, dialogs, forms)
    --------------------------------------------------------------------------
    High-value code-level gaps:
      A21 keyboard operable, A22 no trap, A29 focus order, A33 focus visible,

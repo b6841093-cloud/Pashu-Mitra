@@ -1371,6 +1371,110 @@ class TestStaticTurnConfiguration(WebCallingTestBase):
         self.set_static_env(urls="turn:global.relay.metered.ca:443?transport=tcp")
         self.assertEqual(turn_config.turn_urls(), ("turn:global.relay.metered.ca:443?transport=tcp",))
 
+    # 10 — signaling origins (the production "Signaling offline" root cause) --
+    def test_87_current_portal_origin_is_allowed_without_any_env_var(self):
+        """A Vercel preview origin must work even when the deployed Render
+        service still holds an older SIH_ALLOWED_ORIGINS value.
+
+        Blueprint env vars are applied at service creation, so an existing
+        service silently keeps its old value; the built-in explicit origin list
+        is what stops a new preview URL from producing a rejected handshake
+        ("Signaling offline") with no actionable message in the browser.
+        """
+        with mock.patch.dict(os.environ, {"SIH_ALLOWED_ORIGINS": "",
+                                         "SIH_FRONTEND_ORIGINS": ""}, clear=False):
+            for origin in (
+                "https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app",
+                "https://pashu-mitra-smoky.vercel.app",
+                "https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app",
+            ):
+                with self.subTest(origin=origin):
+                    self.assertTrue(realtime.origin_allowed(origin))
+            # Still an allow-list: an unknown origin is refused.
+            self.assertFalse(realtime.origin_allowed("https://evil.example.com"))
+            self.assertNotIn("*", realtime.allowed_origins())
+
+    def test_88_origin_parsing_normalizes_and_refuses_wildcards(self):
+        """Trailing slash, whitespace, case and duplicates must not matter, and
+        a wildcard must never be accepted (explicit origins only)."""
+        raw = (" https://Portal.Example.com/ , https://portal.example.com ,"
+               "https://second.example.com/,*,https://*.vercel.app ")
+        with mock.patch.dict(os.environ, {"SIH_ALLOWED_ORIGINS": raw,
+                                         "SIH_FRONTEND_ORIGINS": "https://third.example.com"},
+                             clear=False):
+            origins = realtime.allowed_origins()
+            self.assertEqual(origins.count("https://portal.example.com"), 1)
+            self.assertIn("https://second.example.com", origins)
+            # Both variable names are honoured consistently.
+            self.assertIn("https://third.example.com", origins)
+            self.assertFalse(any("*" in o for o in origins))
+            # Case/format-insensitive matching on the way in.
+            self.assertTrue(realtime.origin_allowed("https://PORTAL.example.com/"))
+            self.assertFalse(realtime.origin_allowed("https://not-listed.example.com"))
+
+    def test_89_signaling_url_falls_back_to_render_external_url(self):
+        """A split Vercel+Render deployment resolves the backend address even
+        when SIH_PUBLIC_BACKEND_URL was never set: Render provides
+        RENDER_EXTERNAL_URL automatically, and signaling must never be pointed
+        at the Vercel host (Vercel proxies /api/* only)."""
+        with mock.patch.dict(os.environ, {"SIH_PUBLIC_BACKEND_URL": ""}, clear=False):
+            os.environ.pop("SIH_PUBLIC_BACKEND_URL", None)
+            os.environ["RENDER_EXTERNAL_URL"] = "https://backend.example.com/"
+            try:
+                self.assertEqual(realtime.socket_public_url(), "https://backend.example.com")
+                self.assertEqual(realtime.socket_public_url_source(), "RENDER_EXTERNAL_URL")
+                self.assertEqual(realtime.signaling_endpoint(),
+                                 "https://backend.example.com/socket.io")
+                body = self.client.get("/api/health").get_json()["web_calling"]
+                self.assertEqual(body["signaling_url"], "https://backend.example.com")
+                self.assertEqual(body["signaling_url_source"], "RENDER_EXTERNAL_URL")
+                self.assertEqual(body["socketio_path"], "/socket.io")
+                self.assertEqual(body["signaling_endpoint"],
+                                 "https://backend.example.com/socket.io")
+            finally:
+                os.environ.pop("RENDER_EXTERNAL_URL", None)
+
+        # Explicit configuration always wins over the Render fallback.
+        with mock.patch.dict(os.environ, {
+            "SIH_PUBLIC_BACKEND_URL": "https://explicit.example.com",
+            "RENDER_EXTERNAL_URL": "https://ignored.example.com",
+        }, clear=False):
+            self.assertEqual(realtime.socket_public_url(), "https://explicit.example.com")
+            self.assertEqual(realtime.socket_public_url_source(), "SIH_PUBLIC_BACKEND_URL")
+
+    def test_90_webcall_config_reports_the_browser_origin_verdict(self):
+        """The browser must be able to tell *why* signaling cannot connect:
+        the config endpoint returns its own Origin verdict (boolean only)."""
+        with mock.patch.dict(os.environ, {"SIH_ALLOWED_ORIGINS": "https://portal.example.com"},
+                             clear=False):
+            allowed = self.client.get(
+                "/api/webcall/config",
+                headers={**_auth(self.owner_token),
+                         "Origin": "https://portal.example.com"})
+            blocked = self.client.get(
+                "/api/webcall/config",
+                headers={**_auth(self.owner_token),
+                         "Origin": "https://not-allowed.example.com"})
+            # /api/health says where the allow-list came from (variable names
+            # and public portal origins only — never a secret value).
+            health = self.client.get("/api/health").get_json()["web_calling"]
+        good = allowed.get_json()["signaling"]
+        bad = blocked.get_json()["signaling"]
+        self.assertTrue(good["client_origin_allowed"])
+        self.assertFalse(bad["client_origin_allowed"])
+        self.assertEqual(bad["client_origin"], "https://not-allowed.example.com")
+        # Public diagnostics: path is canonical, the transports are explicit.
+        self.assertTrue(good["path"].startswith("/"))
+        self.assertEqual(good["transports"], ["websocket", "polling"])
+        source = health["allowed_origins_source"]
+        self.assertIn("https://portal.example.com", source["from_env"])
+        self.assertTrue(source["env_configured"])
+        self.assertFalse(source["wildcards_allowed"])
+        # The current preview origin is a built-in default, so a stale
+        # environment variable cannot break signaling again.
+        self.assertIn("https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app",
+                      source["from_builtin"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
