@@ -493,9 +493,20 @@ class FrontendComplianceTest(unittest.TestCase):
         self.assertIn("[OWNER ACTION:", cfg)
         self.assertIn("OWNER_DETAILS_APPROVED = false", cfg)
         # GIGW Q01 — the State Emblem may not be used without authorisation.
-        # What matters is that no emblem/logo ASSET is wired up, not that the
-        # word is absent from explanatory comments.
-        self.assertIn('src: ""', cfg, "no emblem/logo asset may be wired up yet")
+        # The product now ships its OWN official logo (Pashu-Mitra), supplied by
+        # the product owner; what must never appear is government artwork the
+        # owner has not approved. So the rule is: an asset may be wired up only
+        # if it is the product's own logo file, and the emblem is never used.
+        self.assertIn('src: "assets/pashu-mitra-logo.png"', cfg,
+                      "the product logo asset must be the checkout's own file")
+        lowered = cfg.lower()
+        for forbidden in ("emblem",):
+            # The word may only appear in the explanatory comment that says it is
+            # NOT used; it must never be a path or a file name.
+            self.assertNotIn(f'{forbidden}: "', lowered, "no emblem asset may be wired up")
+            self.assertNotIn(f'{forbidden}.png', lowered, "no emblem asset may be wired up")
+            self.assertNotIn(f'{forbidden}.svg', lowered, "no emblem asset may be wired up")
+        self.assertIn("state emblem of india is deliberately not used", lowered)
         # Every owner-dependent field must still be a marked placeholder.
         for field in ("name", "address", "email", "phone"):
             self.assertIn(f'{field}: "[OWNER ACTION:', cfg,

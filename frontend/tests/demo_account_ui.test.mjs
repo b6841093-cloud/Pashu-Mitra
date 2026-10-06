@@ -1,5 +1,9 @@
 /**
- * Frontend checks for the prototype Demo Account on the farmer login screen.
+ * Frontend checks for the demo access card on the farmer login screen.
+ *
+ * The card is a small information card (not a warning banner): it must show the
+ * server-supplied demo number and OTP, and it must never read like a
+ * development-environment notice.
  *
  *   node --test frontend/tests/
  *
@@ -144,7 +148,7 @@ test("the farmer login screen shows the demo phone number and OTP", () => {
   const html = app.el("farmerDemoAccountSlot").innerHTML;
 
   assert.match(html, /id="farmerDemoAccount"/, "the demo box must be mounted");
-  assert.match(html, /Demo Account/, "the box must be clearly labelled");
+  assert.match(html, /Demo access/, "the box must be clearly labelled");
   assert.match(html, new RegExp(DEMO_MOBILE), "the demo phone number must be visible");
   assert.match(html, new RegExp(DEMO_OTP), "the demo OTP must be visible");
   // The two documented labels from the brief.
@@ -166,7 +170,7 @@ test("the demo box is localised in en, mr, hi and te", () => {
       assert.ok(I18N[lang][key].length > 0, `${lang}.${key} is empty`);
     }
   }
-  assert.equal(I18N.en["farmer.demo_account_title"], "Demo Account");
+  assert.equal(I18N.en["farmer.demo_account_title"], "Demo access");
   assert.match(I18N.en["farmer.demo_otp_label"], /^Demo OTP$/);
 });
 

@@ -1,7 +1,7 @@
 /* ==========================================================================
- * Pashu-Shield — GIGW information pages
+ * Pashu-Mitra — GIGW information pages
  * --------------------------------------------------------------------------
- * Adds the pages GIGW 3.0 requires that Pashu-Shield did not previously have:
+ * Adds the pages GIGW 3.0 requires that Pashu-Mitra did not previously have:
  *   #/about     Q09  About Us
  *   #/contact   Q10  Contact Us
  *   #/feedback  Q11  Feedback
@@ -14,7 +14,7 @@
  *
  * ZERO-REGRESSION RULE: this file only ADDS routes. It registers them through
  * the existing global `route()` from app.js and renders through the existing
- * `render()`/`header()` helpers, so the look and feel stays Pashu-Shield's own.
+ * `render()`/`header()` helpers, so the look and feel stays Pashu-Mitra's own.
  *
  * NO INVENTED GOVERNMENT INFORMATION: every owner-dependent value comes from
  * org-config.js and is rendered as a clearly marked placeholder.
@@ -78,7 +78,7 @@
       ${!o.approved ? ownerNotice("The organisation details below are placeholders. The owning organisation must confirm them before this page can be considered official content (GIGW Q09).") : ""}
 
       <h2 class="pm-h2">Purpose</h2>
-      <p>Pashu-Shield connects livestock owners with veterinarians, laboratories and
+      <p>Pashu-Mitra connects livestock owners with veterinarians, laboratories and
          government officers so that animal disease can be reported early, diagnosed
          quickly and contained effectively.</p>
 
@@ -109,7 +109,7 @@
       <p>${esc(o.lastReviewed || "Not set")}</p>
     `, {
       metaTitle: "About Us",
-      description: "About the Pashu-Shield animal disease reporting, veterinary care and surveillance platform.",
+      description: "About the Pashu-Mitra animal disease reporting, veterinary care and surveillance platform.",
     });
   }
 
@@ -162,7 +162,7 @@
       </dl>
     `, {
       metaTitle: "Contact Us",
-      description: "Contact details for the Pashu-Shield animal health platform.",
+      description: "Contact details for the Pashu-Mitra animal health platform.",
     });
   }
 
@@ -224,7 +224,7 @@
       <div id="pmFeedbackResult" hidden></div>
     `, {
       metaTitle: "Feedback",
-      description: "Send feedback about the Pashu-Shield animal health platform.",
+      description: "Send feedback about the Pashu-Mitra animal health platform.",
     });
 
     const form = document.getElementById("pmFeedbackForm");
@@ -388,7 +388,7 @@
          <a class="link" href="#/feedback">Send feedback</a></p>
     `, {
       metaTitle: "Help",
-      description: "Help and frequently asked questions for using the Pashu-Shield platform.",
+      description: "Help and frequently asked questions for using the Pashu-Mitra platform.",
     });
   }
 
@@ -459,7 +459,7 @@
         </ul>`).join("")}
     `, {
       metaTitle: "Site Map",
-      description: "Site map listing every page of the Pashu-Shield platform.",
+      description: "Site map listing every page of the Pashu-Mitra platform.",
     });
   }
 
@@ -485,7 +485,7 @@
       </div>
     `, {
       metaTitle: "Search",
-      description: "Search the Pashu-Shield platform.",
+      description: "Search the Pashu-Mitra platform.",
     });
 
     const input = document.getElementById("pmSearchInput");

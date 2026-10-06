@@ -1,4 +1,4 @@
-"""Application-level IVR orchestration for Pashu-Shield.
+"""Application-level IVR orchestration for Pashu-Mitra.
 
 The module owns business state only. SIP, RTP, DTMF and audio remain the PBX's
 responsibility and are represented by provider-independent voice instructions.
@@ -26,7 +26,7 @@ LANGUAGE_DIGITS = {"1": "en", "2": "te", "3": "hi", "4": "mr"}
 
 PROMPTS = {
     "en": {
-        "welcome": "Welcome to Pashu-Shield.",
+        "welcome": "Welcome to Pashu-Mitra.",
         "language": "For English press 1. Telugu press 2. Hindi press 3. Marathi press 4.",
         "region": "Please say your district and village after the tone.",
         "menu": "Press 1 to connect to a veterinarian. Press 2 to report an animal health problem.",
@@ -34,7 +34,7 @@ PROMPTS = {
         "complete": "Thank you. Your animal health report has been saved for veterinary review.",
     },
     "te": {
-        "welcome": "పశు-షీల్డ్‌కు స్వాగతం.",
+        "welcome": "పశు-మిత్రకు స్వాగతం.",
         "language": "ఇంగ్లీష్ కోసం 1, తెలుగు కోసం 2, హిందీ కోసం 3, మరాఠీ కోసం 4 నొక్కండి.",
         "region": "టోన్ తర్వాత మీ జిల్లా మరియు గ్రామం పేరు చెప్పండి.",
         "menu": "పశువైద్యునితో మాట్లాడటానికి 1 నొక్కండి. పశు ఆరోగ్య సమస్యను నివేదించడానికి 2 నొక్కండి.",
@@ -42,7 +42,7 @@ PROMPTS = {
         "complete": "ధన్యవాదాలు. మీ పశు ఆరోగ్య నివేదిక పశువైద్య సమీక్ష కోసం భద్రపరచబడింది.",
     },
     "hi": {
-        "welcome": "पशु-शील्ड में आपका स्वागत है।",
+        "welcome": "पशु-मित्र में आपका स्वागत है।",
         "language": "अंग्रेज़ी के लिए 1, तेलुगु के लिए 2, हिंदी के लिए 3, मराठी के लिए 4 दबाएँ।",
         "region": "टोन के बाद अपना जिला और गाँव बताएँ।",
         "menu": "पशु चिकित्सक से जुड़ने के लिए 1 दबाएँ। पशु स्वास्थ्य समस्या दर्ज करने के लिए 2 दबाएँ।",
@@ -50,7 +50,7 @@ PROMPTS = {
         "complete": "धन्यवाद। आपकी पशु स्वास्थ्य रिपोर्ट पशु चिकित्सक की समीक्षा के लिए सहेज ली गई है।",
     },
     "mr": {
-        "welcome": "पशु-शील्डमध्ये आपले स्वागत आहे.",
+        "welcome": "पशु-मित्रमध्ये आपले स्वागत आहे.",
         "language": "इंग्रजीसाठी 1, तेलुगूसाठी 2, हिंदीसाठी 3, मराठीसाठी 4 दाबा.",
         "region": "टोननंतर आपला जिल्हा आणि गाव सांगा.",
         "menu": "पशुवैद्यकाशी जोडण्यासाठी 1 दाबा. पशू आरोग्य समस्या नोंदवण्यासाठी 2 दाबा.",
@@ -901,7 +901,7 @@ def finalize_report(conn, call_id: str) -> dict:
                 "description": "; ".join(details) or "Helpline report; no additional details provided.",
             },
             source="HELPLINE",
-            actor_name="Pashu-Shield Helpline",
+            actor_name="Pashu-Mitra Helpline",
             actor_role="system",
             assigned_vet_id=assigned_vet_id,
             notify_veterinarians=False,
@@ -954,7 +954,7 @@ def finalize_report(conn, call_id: str) -> dict:
     })
     audit_log(
         conn, "CREATE_HELPLINE_REPORT", "helpline_report", report_no,
-        actor_name="Pashu-Shield Helpline", actor_role="system",
+        actor_name="Pashu-Mitra Helpline", actor_role="system",
         details={"call_id": call_id, "case_id": case["id"] if case else None, "status": report_status},
     )
     conn.commit()

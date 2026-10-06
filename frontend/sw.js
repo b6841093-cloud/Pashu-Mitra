@@ -1,5 +1,5 @@
 /* =================================================================
-   PashuMitra Service Worker — Offline Support + Incoming Call Push
+   Pashu-Mitra Service Worker — Offline Support + Incoming Call Push
    =================================================================
    Cache versioning: bump CACHE_NAME whenever a pre-cached asset changes.
    v7 adds the web-calling client (call.js, vendor/socket.io.min.js) and the
@@ -130,7 +130,7 @@ self.addEventListener("push", (event) => {
   if (!payload || payload.type !== "incoming_call" || !payload.call_id) {
     // Non-call pushes keep the previous behaviour: show a plain notification.
     if (payload && (payload.title || payload.body)) {
-      event.waitUntil(self.registration.showNotification(payload.title || "PashuMitra", {
+      event.waitUntil(self.registration.showNotification(payload.title || "Pashu-Mitra", {
         body: payload.body || "",
         icon: "/manifest.json",
       }));
@@ -141,7 +141,7 @@ self.addEventListener("push", (event) => {
   const target = payload.url || ("/#/vet/calls?incoming=" + encodeURIComponent(payload.call_id));
   event.waitUntil(
     self.registration.showNotification(payload.title || "Incoming web call", {
-      body: payload.body || "A farmer is calling you in the PashuMitra veterinary portal.",
+      body: payload.body || "A farmer is calling you in the Pashu-Mitra veterinary portal.",
       tag: "pm-call-" + payload.call_id,
       renotify: true,
       requireInteraction: true,

@@ -68,8 +68,12 @@ from realtime import (
     emit_call_event,
     emit_to_user,
     init_realtime,
+    origin_allowed,
+    origin_diagnostics,
     signaling_configured,
+    signaling_endpoint,
     socket_public_url,
+    socket_public_url_source,
     socketio,
     socketio_path,
     worker_configuration_safe,
@@ -426,10 +430,22 @@ def health():
             # by /api/webcall/config — and this is what makes a misconfigured
             # SIH_PUBLIC_BACKEND_URL or SIH_SOCKETIO_PATH visible from outside.
             "signaling_url": socket_public_url(),
+            # Where the signaling URL came from (SIH_PUBLIC_BACKEND_URL,
+            # RENDER_EXTERNAL_URL, or "none" = same origin). Secret-free, and
+            # the quickest way to see that a split deployment resolved its
+            # backend address automatically.
+            "signaling_url_source": socket_public_url_source(),
+            # Full URL the browser opens: <signaling_url>/socket.io (empty when
+            # the deployment is same-origin).
+            "signaling_endpoint": signaling_endpoint(),
             "socketio_path": socketio_path(),
             # Browser origins allowed to open the signaling socket (the portal
             # origins are public by design; nothing secret is exposed here).
             "allowed_origins": allowed_origins(),
+            # Which origins came from the environment vs the built-in portal
+            # defaults — the difference between "the variable was never
+            # updated" and "the browser is on an unexpected origin".
+            "allowed_origins_source": origin_diagnostics(),
             "ring_timeout_seconds": webcalling.ring_timeout_seconds(),
             "ring_timeout": webcalling.ring_timeout_seconds(),
             "sweeper_enabled": os.environ.get("SIH_WEBCALL_SWEEPER", "true").strip().lower() not in {"0", "false", "no", "off"},
@@ -4227,7 +4243,7 @@ def sms_gateway_test():
                         "code": "INVALID_MOBILE"}), 400
     try:
         result = sms_gateway.send_text_message(
-            e164, "PashuMitra SMS gateway test message. No action required."
+            e164, "Pashu-Mitra SMS gateway test message. No action required."
         )
     except sms_gateway.SmsGatewayError as exc:
         return jsonify({
@@ -4718,7 +4734,7 @@ def govt_export():
                 bio = io.BytesIO()
                 doc = SimpleDocTemplate(bio, pagesize=A4)
                 styles = getSampleStyleSheet()
-                story = [Paragraph(f"Pashu-Shield {export_type.title()} Report", styles['Title']), Spacer(1,12),
+                story = [Paragraph(f"Pashu-Mitra {export_type.title()} Report", styles['Title']), Spacer(1,12),
                          Paragraph(f"Generated: {__import__('datetime').datetime.utcnow().isoformat()}Z | Total: {len(data)}", styles['Normal']), Spacer(1,12)]
                 if data:
                     # Limit columns for PDF readability
@@ -5029,12 +5045,26 @@ def webcall_config():
                 # the absolute Render backend URL so the browser opens WSS
                 # directly to the backend instead of through the Vercel /api rewrite.
                 "url": socket_public_url(),
+                # Which variable supplied the URL (never a secret): makes a
+                # same-origin fallback visible instead of silently failing.
+                "url_source": socket_public_url_source(),
+                # The exact WSS endpoint the browser will open (empty when the
+                # deployment is same-origin).
+                "endpoint": signaling_endpoint(),
                 # Always browser-safe (leading slash): Socket.IO's client appends
                 # this value to the origin, so "socket.io" would become
                 # "https://hostsocket.io/" and never reach the server.
                 "path": socketio_path(),
                 "transports": ["websocket", "polling"],
                 "offline_warning_seconds": 10,
+                # Self-diagnosis for the browser that just asked: if its own
+                # Origin is not in the allow-list the handshake WILL be rejected
+                # (CORS for polling, connect_error for WebSocket). Reporting the
+                # boolean lets the portal say "this deployment's origin is not
+                # permitted" instead of the misleading "signaling offline".
+                # The allow-list itself is already public in /api/health.
+                "client_origin": (request.headers.get("Origin") or ""),
+                "client_origin_allowed": origin_allowed(request.headers.get("Origin")),
             },
             "ring_timeout_seconds": webcalling.ring_timeout_seconds(),
             "supported_languages": [

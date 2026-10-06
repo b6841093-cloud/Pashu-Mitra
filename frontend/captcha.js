@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Pashu-Shield — CAPTCHA hook (GA-21 / C1.2f)
+   Pashu-Mitra — CAPTCHA hook (GA-21 / C1.2f)
    --------------------------------------------------------------------------
    Env-driven, no hard-coded secrets. Supports:
      - none (default) — no CAPTCHA, existing tests stay green

@@ -72,6 +72,9 @@
     signalingErrorType: null,
     everConnected: false,
     disconnectedAt: null,
+    // Raw routing codes from the last failed attempt (developer diagnostics
+    // only — never rendered as the farmer-facing sentence).
+    lastCallDiagnosticCodes: null,
   };
 
   /** Safe diagnostic logging: the exact signaling failure is never hidden. */
@@ -199,6 +202,169 @@
     if (!state.signalingError) return "";
     const text = String(state.signalingError);
     return text.length > 160 ? text.slice(0, 157) + "…" : text;
+  }
+
+  /**
+   * Did the server tell this browser that its own Origin is not allowed?
+   *
+   * /api/webcall/config reports the verdict for the requesting Origin
+   * (`signaling.client_origin_allowed`). A rejected Origin fails the Socket.IO
+   * handshake with a bare "TransportError" in the browser — CORS failures do
+   * not expose a reason to JavaScript — so this server-side verdict is the only
+   * way the portal can say what is actually wrong instead of "signaling
+   * offline". Null when the server did not report it (older backend).
+   */
+  function clientOriginAllowed() {
+    const value = state.config && state.config.signaling && state.config.signaling.client_origin_allowed;
+    return typeof value === "boolean" ? value : null;
+  }
+
+  /**
+   * One human-readable explanation of a signaling problem, plus the raw detail
+   * that a developer needs. Never contains a token or a credential.
+   */
+  function signalingFailureInfo() {
+    const channel = signalingState();
+    const status = signalingStatus();
+    const originOk = clientOriginAllowed();
+    const dev = signalingErrorText();
+    const endpoint = (state.signalingUrl || (typeof location !== "undefined" ? location.origin : "")) +
+      (state.signalingPath || DEFAULT_SOCKET_PATH);
+    if (originOk === false) {
+      return {
+        code: "ORIGIN_NOT_ALLOWED",
+        farmer: t("webcall.origin_not_allowed",
+          "Web calls are not enabled for this address yet. Please open the portal from the official link, or call the helpline."),
+        dev: "Origin " + (state.config && state.config.signaling && state.config.signaling.client_origin) +
+          " is not in the server's allowed_origins (see /api/health -> web_calling.allowed_origins). " +
+          "Endpoint: " + endpoint,
+      };
+    }
+    if (channel === "connected") return { code: "CONNECTED", farmer: "", dev: "" };
+    if (channel === "connecting" || channel === "idle") {
+      return {
+        code: "CONNECTING",
+        farmer: t("webcall.signal_restoring",
+          "Your connection to the veterinarian service is being restored."),
+        dev: "Engine.IO handshake has not completed yet. Endpoint: " + endpoint +
+          (dev ? " · " + dev : ""),
+      };
+    }
+    if (channel === "reconnecting" && !status.offlineLong) {
+      return {
+        code: "RECONNECTING",
+        farmer: t("webcall.signal_restoring",
+          "Your connection to the veterinarian service is being restored."),
+        dev: "Socket dropped; automatic reconnection is running. Endpoint: " + endpoint +
+          (dev ? " · " + dev : ""),
+      };
+    }
+    return {
+      code: "FAILED",
+      farmer: t("webcall.signal_failed",
+        "Web calling could not connect. Check your internet connection and try again, or call the helpline."),
+      dev: "Signaling unreachable. Endpoint: " + endpoint + (dev ? " · " + dev : ""),
+    };
+  }
+
+  /**
+   * The 12 user-visible call states in one place (text, not colour alone):
+   *   OFFLINE, CONNECTING, AVAILABLE, INCOMING_CALL, CALLING, RINGING,
+   *   CONNECTING_MEDIA, CONNECTED, MUTED, RECONNECTING, ENDED, FAILED
+   */
+  const CALL_STATE_LABELS = {
+    OFFLINE: "Offline",
+    CONNECTING: "Connecting",
+    AVAILABLE: "Available",
+    INCOMING_CALL: "Incoming call",
+    CALLING: "Calling",
+    RINGING: "Ringing",
+    CONNECTING_MEDIA: "Connecting audio",
+    CONNECTED: "Connected",
+    MUTED: "Connected · muted",
+    RECONNECTING: "Reconnecting",
+    ENDED: "Ended",
+    FAILED: "Failed",
+  };
+
+  function callState() {
+    const session = state.activeSession;
+    const channel = signalingState();
+    if (session) {
+      const call = session.call || {};
+      const pcState = webrtcConnectionState(session);
+      const iceState = iceConnectionState(session);
+      const media = mediaConnectionState(session);
+      if (call.status === "ringing") return session.mode === "callee" ? "INCOMING_CALL" : "RINGING";
+      if (call.status === "accepted" || call.status === "connecting") {
+        if (iceState === "failed" || pcState === "failed") return "FAILED";
+        return "CONNECTING_MEDIA";
+      }
+      if (call.status === "connected") {
+        if (pcState === "failed" || iceState === "failed") return "FAILED";
+        // A muted call is still a connected call: the label says both
+        // ("Connected · muted") so the two facts are never conflated.
+        if (media.confirmed && pcState === "connected") return session.muted ? "MUTED" : "CONNECTED";
+        return "CONNECTING_MEDIA";
+      }
+      if (call.status === "missed" || call.status === "failed" || call.status === "busy") return "FAILED";
+      if (TERMINAL_STATUSES.includes(call.status)) return "ENDED";
+      return "CALLING";
+    }
+    if (channel === "connected") return "AVAILABLE";
+    if (channel === "reconnecting") return "RECONNECTING";
+    if (channel === "connecting") return "CONNECTING";
+    if (channel === "error") return "FAILED";
+    return "OFFLINE";
+  }
+
+  function callStateLabel(code) {
+    const key = "webcall.state." + String(code || "").toLowerCase();
+    return t(key, CALL_STATE_LABELS[code] || String(code || "").replace(/_/g, " "));
+  }
+
+  const CALL_STATE_ORDER = [
+    "OFFLINE", "CONNECTING", "AVAILABLE", "INCOMING_CALL", "CALLING", "RINGING",
+    "CONNECTING_MEDIA", "CONNECTED", "MUTED", "RECONNECTING", "ENDED", "FAILED",
+  ];
+
+  /** The complete state list with the current one marked (text, not colour). */
+  function callStateStripHtml(current) {
+    const active = current || callState();
+    const chips = CALL_STATE_ORDER.map((code) =>
+      `<span class="pm-state-chip" role="listitem" aria-current="${code === active ? "true" : "false"}">${esc(callStateLabel(code))}</span>`
+    ).join("");
+    return `<div class="pm-state-strip" role="list" aria-label="${esc(t("webcall.state_machine", "Call states"))}">${chips}</div>`;
+  }
+
+  /** Refresh every mounted state strip (farmer panel and vet card). */
+  function renderStateStrips() {
+    const html = callStateStripHtml();
+    ["pmCallStateStripFarmer", "pmCallStateStripVet"].forEach((id) => {
+      const host = document.getElementById(id);
+      if (host) host.innerHTML = html;
+    });
+  }
+
+  /**
+   * Human wording for the server's routing codes. The codes themselves are
+   * developer information: they stay in the console and in a data attribute,
+   * never as the farmer's primary message ("NO_LIVE_SESSION · NO_LIVE_SESSION").
+   */
+  const SKIP_REASON_TEXT = {
+    NO_LIVE_SESSION: "not connected right now",
+    LANGUAGE_NOT_SUPPORTED: "does not take calls in this language",
+    BUSY_WEB_CALL: "already on a web call",
+    BUSY_IVR_CALL: "already on a phone call",
+    NOT_AVAILABLE: "marked as not available",
+  };
+
+  function skipReasonSentence(codes) {
+    const list = Array.isArray(codes) ? codes.filter(Boolean) : [];
+    if (!list.length) return "";
+    const phrases = list.map((code) => SKIP_REASON_TEXT[String(code).split(":")[0]] || "not reachable");
+    const unique = phrases.filter((phrase, index) => phrases.indexOf(phrase) === index);
+    return unique.join(", ");
   }
   function scheduleSignalingStatusRefresh() {
     clearSignalingWarningTimer();
@@ -395,16 +561,24 @@
         setSignalingConnected(true);
         const activeTransport = socket.io && socket.io.engine && socket.io.engine.transport
           ? socket.io.engine.transport.name : "unknown";
-        logCall("socket connected", "sid=" + (socket.id || "?"), "| transport=" + activeTransport);
+        logCall("socket connected", "sid=" + (socket.id || "?"), "| transport=" + activeTransport,
+          "| endpoint=" + (state.signalingUrl || location.origin) + (state.signalingPath || DEFAULT_SOCKET_PATH));
         if (currentRole() === "vet") {
           // Presence is (re)registered by the server on every connect; ask for
           // the fresh server state so the card and the lease agree again.
           startPresenceHeartbeat();
-          loadConfig(true).then((fresh) => {
+        }
+        // Every reconnect refreshes the server configuration: presence lease,
+        // ICE/TURN list and (for a farmer) whether a vet is routable. Nothing
+        // in the UI may keep using a stale answer.
+        loadConfig(true).then((fresh) => {
+          if (currentRole() === "vet") {
             if (fresh && fresh.presence) state.presence = fresh.presence;
             refreshVetCard(state.presence);
-          }).catch(() => {});
-        }
+          } else if (currentRole() === "owner" && document.getElementById("pmCallAvailabilityBox")) {
+            refreshFarmerAvailability({}, { keepExisting: true }).catch(() => {});
+          }
+        }).catch(() => {});
         updateOverlayStatus();
       });
       socket.on("disconnect", (reason) => {
@@ -1060,6 +1234,7 @@
             ? t("webcall.signal_reconnecting_farmer", "Web calling is reconnecting… Please wait.")
             : "";
     }
+    renderStateStrips();
     const vetNotice = document.getElementById("pmVetSignalStatus");
     if (vetNotice) {
       vetNotice.setAttribute("role", "status");
@@ -1253,7 +1428,7 @@
           <div class="pm-call-sub">${esc(callerContextHtml(call || {}))}</div></div>
         </div>
         ${duration ? `<div class="pm-call-status">${esc(t("webcall.talk_time", "Talk time"))}: ${esc(mmss(duration))}</div>` : ""}
-        ${reason && status !== "ended" ? `<div class="pm-call-warn">${esc(reason)}</div>` : ""}
+        ${reason && status !== "ended" ? `<div class="pm-call-warn" data-diagnostic="${esc(state.lastCallDiagnosticCodes || "")}">${esc(reason)}</div>` : ""}
         <div class="pm-call-actions">
           <button class="pm-call-btn" id="pmCallClose">${esc(t("webcall.close", "Close"))}</button>
           ${isFarmer() ? `<button class="pm-call-btn pm-call-accept" id="pmCallRetry">🔁 ${esc(t("webcall.try_again", "Try again"))}</button>` : ""}
@@ -1442,8 +1617,24 @@
       return;
     }
     if (created.outcome !== "ringing") {
+      // The farmer reads a sentence, not a routing code. The codes the server
+      // returned stay in the console (and in the overlay's data attribute) for
+      // developers.
+      const skipSentence = skipReasonSentence(created.skipped_codes);
+      const reason = [
+        skipSentence
+          ? t("webcall.unavailable_reason", "Veterinarians on the platform are currently ") + skipSentence + "."
+          : "",
+        (created.skipped_codes || []).length ? "" : created.code || "",
+      ].filter(Boolean).join(" ");
+      state.lastCallDiagnosticCodes = (created.skipped_codes || []).join(",");
+      if ((created.skipped_codes || []).length) {
+        logCall("call not routed", "outcome=" + created.outcome,
+          "| skipped=" + created.skipped_codes.join(","),
+          "| reasons=" + ((created.skipped_reasons || []).join(",") || "n/a"));
+      }
       await showCallSummary(created.call, created.message ||
-        t("webcall.unavailable", "No veterinarian was available."), created.skipped_codes && created.skipped_codes.join(", "));
+        t("webcall.unavailable", "No veterinarian was available."), reason);
       return;
     }
     const live = new WebCallSession(created.call, "caller");
@@ -1600,14 +1791,17 @@
       };
     }
     if (available && !socketOnline) {
-      const reason = signalingErrorText();
+      const failure = signalingFailureInfo();
       return {
         badgeClass: "badge-red",
-        label: "AVAILABLE · NOT RECEIVING — signaling offline",
+        label: t("webcall.vet_not_receiving",
+          "SIGNALING OFFLINE · NOT RECEIVING CALLS"),
         detail: (channel === "connecting" || channel === "idle"
           ? t("webcall.signal_connecting_vet", "Connecting to call signaling…")
-          : t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting..."))
-          + (reason ? " (" + reason + ")" : ""),
+          : channel === "error"
+            ? failure.farmer
+            : t("webcall.signal_offline_vet", "Call receiving is offline — reconnecting...")),
+        devDetail: failure.dev,
         breakdown: { ...breakdown, routable: false },
       };
     }
@@ -1657,6 +1851,9 @@
           <span class="badge ${routability.badgeClass}" id="pmVetRoutableBadge" title="Routability = AVAILABLE + socket connected + lease live + not busy">${esc(routability.label)}</span>
         </div>
         <div class="small-muted" id="pmVetRoutableStatus" style="margin-bottom:4px" role="status" aria-live="polite">${esc(routability.detail)}</div>
+        <div class="btn-row" id="pmVetRetryRow" style="margin-bottom:6px" hidden>
+          <button class="btn btn-ghost btn-sm" id="pmVetRetrySignaling" type="button">🔁 ${esc(t("webcall.retry_signaling", "Retry connection"))}</button>
+        </div>
         <div class="small-muted" id="pmVetPresenceDetail" style="margin-bottom:4px" role="status" aria-live="polite">${esc(`Presence: ${presenceLabel} · ${leaseInfo}${breakdown.lease_expires_at ? ` · expires ${breakdown.lease_expires_at}` : ""}`)}</div>
         <div class="small-muted" id="pmVetSignalStatus" style="margin-bottom:8px" role="status" aria-live="polite"></div>
         <div class="form-row">
@@ -1680,6 +1877,10 @@
         <div class="small-muted" style="margin-top:10px;line-height:1.4">
           <b>State honesty:</b> 1 availability (your choice) · 2 Socket.IO (${socketLabel}) · 3 presence lease (${presenceLabel}) · 4 routability (${breakdown.routable ? "routable" : "not routable"}) · 5 WebRTC PC · 6 ICE · 7 media. Only when 1-4 are all true are you advertised as receiving calls.
         </div>
+        <details class="pm-state-details" style="margin-top:8px">
+          <summary>${esc(t("webcall.all_states", "All call states"))}</summary>
+          <div id="pmCallStateStripVet"></div>
+        </details>
       </div>`;
   }
 
@@ -1710,6 +1911,13 @@
     });
     const push = document.getElementById("pmVetEnablePush");
     if (push) push.addEventListener("click", enablePushForCalls);
+    const retry = document.getElementById("pmVetRetrySignaling");
+    if (retry) retry.addEventListener("click", () => {
+      reconnectSignaling({ refresh: true, params: {} });
+      // The card is a static render: refresh the text badges once the socket
+      // has had a moment to come back.
+      setTimeout(() => refreshVetCard(state.presence), 1200);
+    });
     refreshVetCard(state.presence);
   }
 
@@ -1751,7 +1959,22 @@
       badge.className = "badge " + routability.badgeClass;
     }
     const detail = document.getElementById("pmVetRoutableStatus");
-    if (detail) detail.textContent = routability.detail;
+    if (detail) {
+      detail.textContent = routability.detail;
+      // Developer detail lives in the title attribute (hover), never in the
+      // sentence a veterinarian reads. Guarded: minimal DOM shims used by the
+      // test harness may not implement attributes.
+      if (routability.devDetail && typeof detail.setAttribute === "function") {
+        detail.setAttribute("title", routability.devDetail);
+      } else if (typeof detail.removeAttribute === "function") {
+        detail.removeAttribute("title");
+      }
+    }
+    const retryRow = document.getElementById("pmVetRetryRow");
+    if (retryRow) {
+      // The button only appears when this portal cannot actually be reached.
+      retryRow.hidden = !!breakdown.socketOnline;
+    }
     const presenceDetail = document.getElementById("pmVetPresenceDetail");
     if (presenceDetail) {
       presenceDetail.textContent = `Presence: ${breakdown.presenceLease || "OFFLINE"} · ${breakdown.leaseLabel || "no lease"}${breakdown.lease_expires_at ? ` · expires ${breakdown.lease_expires_at}` : ""}`;
@@ -1870,35 +2093,133 @@
     const helpline = result.helpline || currentHelpline();
     const sig = signalingState();
     const sigOnline = sig === "connected";
+    const failure = signalingFailureInfo();
     start.disabled = !result.routable || !sigOnline;
-    const badgeClass = result.routable && sigOnline ? "badge-green" : "badge-orange";
-    const badgeText = result.routable && sigOnline ? "Vet online now" : !sigOnline ? "Signaling offline" : "Not routable now";
-    const selected = result.selected_vet
-      ? `<div class="small-muted" style="margin-top:6px">Matched vet: <b>${esc(result.selected_vet.name)}</b>${result.selected_vet.district ? ` · ${esc(result.selected_vet.district)}` : ""}</div>`
+
+    // The primary state is ALWAYS about this browser's connection to the call
+    // service, because nothing else can work without it. "Vet online now" is
+    // only claimed when the server says the call is routable AND the socket is
+    // live.
+    let stateCode;
+    let badgeClass;
+    let badgeText;
+    if (!sigOnline) {
+      stateCode = failure.code === "ORIGIN_NOT_ALLOWED" ? "FAILED" : callState();
+      badgeClass = stateCode === "FAILED" ? "badge-red" : "badge-orange";
+      badgeText = callStateLabel(stateCode);
+    } else if (result.routable) {
+      stateCode = "AVAILABLE";
+      badgeClass = "badge-green";
+      badgeText = t("webcall.vet_available_now", "Veterinarian available");
+    } else {
+      stateCode = "OFFLINE";
+      badgeClass = "badge-orange";
+      badgeText = t("webcall.no_vet_now", "No veterinarian available right now");
+    }
+
+    // The farmer-facing sentence. A raw routing code is never the message.
+    let primaryMessage;
+    if (!sigOnline) {
+      primaryMessage = failure.farmer;
+    } else if (result.routable && result.selected_vet) {
+      primaryMessage = result.message ||
+        t("webcall.vet_online", "A veterinarian is online now.");
+    } else {
+      const languageName = farmerLanguageName(result.requested_language);
+      primaryMessage = t("webcall.no_vet_online",
+        "No veterinarian for {language} is online right now. Try another language or call the helpline.")
+        .replace("{language}", languageName);
+    }
+
+    // "Matched vet" is only shown when the server really can route the call.
+    const selected = (result.routable && result.selected_vet)
+      ? `<div class="small-muted" style="margin-top:6px">${esc(t("webcall.matched_vet", "Matched veterinarian"))}: <b>${esc(result.selected_vet.name)}</b>${result.selected_vet.district ? ` · ${esc(result.selected_vet.district)}` : ""}</div>`
       : "";
+
     const fallback = !result.routable && helpline.number
-      ? `<div class="small-muted" style="margin-top:6px">If you need help now, call the helpline <b>${esc(helpline.number)}</b>.</div>`
+      ? `<div class="small-muted" style="margin-top:6px">${esc(t("webcall.helpline_fallback", "If you need help now, call the helpline"))} <b>${esc(helpline.number)}</b>.</div>`
       : "";
-    const skipped = (result.skipped_codes || []).length
-      ? `<div class="small-muted" style="margin-top:6px">Reason: ${esc((result.skipped_codes || []).join(", "))}${result.skipped_reasons ? ` · ${esc(result.skipped_reasons.join(", "))}` : ""}</div>`
+
+    // Other veterinarians' routing codes are summarised in words; the codes
+    // themselves stay in the console and in data attributes for developers.
+    const skipSentence = skipReasonSentence(result.skipped_codes);
+    const others = (result.routable && skipSentence)
+      ? `<div class="small-muted" style="margin-top:6px">${esc(t("webcall.other_vets", "Other veterinarians on the platform are"))} ${esc(skipSentence)}.</div>`
       : "";
-    const signalingNote = !sigOnline
-      ? `<div class="small-muted" style="margin-top:6px">Your signaling connection is ${esc(sig)} — web calls need an online connection.</div>`
+
+    // When this browser cannot reach the call service, the server's routing
+    // sentence is secondary information (it can still be true that a vet is
+    // online) — shown as a note, never as the reason the call cannot start.
+    const signalingNote = !sigOnline && result.routable && result.message
+      ? `<div class="small-muted" style="margin-top:6px">${esc(result.message)}</div>`
       : "";
+    const retry = !sigOnline
+      ? `<div class="btn-row" style="margin-top:8px"><button type="button" class="btn btn-ghost btn-sm" id="pmCallRetrySignaling">🔁 ${esc(t("webcall.retry_signaling", "Retry connection"))}</button></div>`
+      : "";
+
     const alternatives = (result.alternatives || []).length
-      ? `<div class="small-muted" style="margin-top:8px">Try another language with an online veterinarian:</div>
+      ? `<div class="small-muted" style="margin-top:8px">${esc(t("webcall.try_other_language", "Try another language with an online veterinarian"))}:</div>
          <div class="btn-row" style="margin-top:6px">${result.alternatives.map((alt) => `<button type="button" class="btn btn-ghost btn-sm" data-alt-language="${esc(alt.code)}">${esc(alt.name)}</button>`).join("")}</div>`
       : "";
+
     box.innerHTML = `
-      <div role="status" aria-live="polite"><span class="badge ${badgeClass}">${esc(badgeText)}</span> <span class="badge badge-blue">Signaling: ${esc(sig)}</span></div>
-      <div class="meta" style="margin-top:6px" role="status" aria-live="polite">${esc(result.message || `No veterinarian for ${farmerLanguageName(result.requested_language)} is currently online.`)}</div>
+      <div role="status" aria-live="polite"><span class="badge ${badgeClass}" id="pmCallStateBadge">${esc(badgeText)}</span> <span class="badge badge-blue" id="pmCallSignalBadge">${esc(t("webcall.signaling", "Signaling"))}: ${esc(callStateLabel(sigOnline ? "AVAILABLE" : (sig === "error" ? "FAILED" : sig.toUpperCase())))}</span></div>
+      <div class="meta" style="margin-top:6px" role="status" aria-live="polite" id="pmCallAvailabilityMessage">${esc(primaryMessage)}</div>
       ${selected}
-      ${skipped}
+      ${others}
       ${signalingNote}
+      ${retry}
       ${fallback}
       ${alternatives}
-      <div class="small-muted" style="margin-top:8px">State honesty: 1 availability (vet choice) · 2 Socket.IO (${esc(sig)}) · 3 presence lease (server) · 4 routability (${result.routable ? "routable" : "not routable"}) · 5 WebRTC · 6 ICE · 7 media.</div>`;
+      <div class="small-muted" style="margin-top:8px" data-signaling-state="${esc(sig)}" data-skipped-codes="${esc((result.skipped_codes || []).join(","))}" data-state-code="${esc(stateCode)}">
+        ${esc(t("webcall.state_honesty",
+          "State: availability (vet choice) · Socket.IO ({socket}) · presence lease (server) · routability ({routable}) · WebRTC · ICE · media.")
+          .replace("{socket}", sig).replace("{routable}", result.routable ? t("webcall.routable", "routable") : t("webcall.not_routable", "not routable")))}
+        ${failure.dev ? `<span class="pm-dev-detail">${esc(failure.dev)}</span>` : ""}
+      </div>
+      <details class="pm-state-details" style="margin-top:8px">
+        <summary>${esc(t("webcall.all_states", "All call states"))}</summary>
+        <div id="pmCallStateStripFarmer"></div>
+      </details>`;
+    if (failure.dev || (result.skipped_codes || []).length) {
+      logCall("availability", "state=" + stateCode, "| signaling=" + sig,
+        "| routable=" + !!result.routable,
+        "| skipped=" + ((result.skipped_codes || []).join(",") || "none"),
+        failure.dev ? "| " + failure.dev : "");
+    }
+    const retryButton = document.getElementById("pmCallRetrySignaling");
+    if (retryButton) retryButton.addEventListener("click", () => reconnectSignaling({ refresh: true }));
     bindAlternativeLanguageButtons(params);
+  }
+
+  /**
+   * Re-open the signaling socket on demand (used by the "Retry connection"
+   * button and after the browser regains connectivity). Reconnect also refreshes
+   * the server configuration, so the ICE/TURN list a later call uses is current.
+   */
+  function reconnectSignaling(options) {
+    const opts = options || {};
+    logCall("manual signaling reconnect requested", "| current=" + signalingState());
+    try {
+      if (state.socket) {
+        if (state.socket.connected) {
+          state.socket.disconnect();
+        }
+        state.socket.connect();
+      } else {
+        state.socketReady = null;
+        ensureSocket().catch((err) => warnCall("signaling reconnect failed:", err && err.message));
+      }
+    } catch (err) {
+      warnCall("signaling reconnect failed:", err && err.message);
+    }
+    // Refresh server-side configuration (presence lease, ICE servers) so the
+    // next call cannot use a stale TURN/STUN list.
+    loadConfig(true).then((cfg) => {
+      if (cfg && cfg.presence) applyPresence(cfg.presence);
+      if (opts.refresh) refreshFarmerAvailability(opts.params || {}, { keepExisting: true }).catch(() => {});
+    }).catch(() => {});
+    updateOverlayStatus();
   }
 
   async function refreshFarmerAvailability(params, options) {
@@ -2087,6 +2408,8 @@
     signaling_transports: state.signalingTransports,
     signaling_error: state.signalingError,
     signaling_error_type: state.signalingErrorType,
+    client_origin_allowed: clientOriginAllowed(),
+    call_state: callState(),
     presence_online: !!(currentPresenceState() && currentPresenceState().online),
     signaling_offline_long: signalingStatus().offlineLong,
     active_call: state.activeSession ? state.activeSession.call.call_id : null,
@@ -2104,7 +2427,25 @@
     signalingState,
     vetRoutabilityState,
     signalingStatus,
+    callState,
+    callStateLabel,
+    callStateStripHtml,
+    renderStateStrips,
+    signalingFailureInfo,
+    skipReasonSentence,
+    clientOriginAllowed,
+    reconnectSignaling,
+    renderFarmerAvailabilityResult,
   };
+
+  // The browser tells us when connectivity returns: reconnect immediately
+  // instead of waiting for the next backoff step, then refresh the server
+  // configuration (ICE servers, presence lease) the next call will use.
+  window.addEventListener("online", () => {
+    if (!authToken()) return;
+    logCall("browser online — reconnecting signaling");
+    reconnectSignaling({ refresh: true });
+  });
 
   window.PMCall = PM;
 

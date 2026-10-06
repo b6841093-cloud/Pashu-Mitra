@@ -116,28 +116,32 @@ body{
 .auth-switch a{color:var(--primary);font-weight:700;cursor:pointer;text-decoration:none;}
 .demo-box{background:var(--blue-bg);border-radius:12px;padding:12px 14px;font-size:calc(12px * var(--pm-text-scale, 1));color:var(--primary-dark);margin-top:18px;line-height:1.6;}
 
-/* ---------- prototype demo farmer account (OTP login screen) ---------- */
-/* Kept inside the existing card language: same radius, palette and spacing. */
+/* ---------- demo access card (farmer OTP login screen) ----------
+   A small, professional information card — NOT a warning banner. The demo
+   credentials are intentionally visible on the login screen; the styling
+   deliberately matches the ordinary information-card language (same radius,
+   palette and spacing) so the login page never reads like a development build.
+   Contrast: #1f2557 on #eef0fb is ~12:1 and the muted note ~5.4:1 (WCAG AA). */
 .demo-slot{margin-top:16px;}
 .demo-box-otp{
-  background:linear-gradient(180deg,#fff8e1 0%,#fffdf5 100%);
-  border:1px dashed #ffb300;
-  border-left:4px solid var(--orange);
-  color:#6d4c00;
+  background:var(--blue-bg);
+  border:1px solid #c7cdf3;
+  border-radius:12px;
+  color:var(--primary-dark);
   padding:14px;
   line-height:1.5;
 }
-.demo-box-title{font-weight:800;font-size:calc(13.5px * var(--pm-text-scale, 1));letter-spacing:.3px;text-transform:uppercase;margin-bottom:10px;color:#8a5a00;}
+.demo-box-title{font-weight:800;font-size:calc(14px * var(--pm-text-scale, 1));letter-spacing:.2px;margin-bottom:10px;color:var(--primary-dark);}
 .demo-box-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0;}
-.demo-box-label{font-size:calc(12.5px * var(--pm-text-scale, 1));color:#8a6d3b;}
+.demo-box-label{font-size:calc(12.5px * var(--pm-text-scale, 1));color:var(--muted);}
 .demo-box-value{
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  font-size:calc(16px * var(--pm-text-scale, 1));font-weight:800;letter-spacing:2px;color:#5d4037;
-  background:#fff;border:1px solid #ffe082;border-radius:8px;padding:4px 10px;
+  font-size:calc(15px * var(--pm-text-scale, 1));font-weight:800;letter-spacing:2px;color:#1f2557;
+  background:#fff;border:1px solid #d7dbf5;border-radius:8px;padding:4px 10px;
 }
-.demo-box-btn{margin-top:12px;width:100%;justify-content:center;border-color:var(--orange);color:#8a5a00;font-weight:700;}
-.demo-box-btn:hover{background:#fff3d6;}
-.demo-box-note{margin-top:10px;font-size:calc(11.5px * var(--pm-text-scale, 1));color:#9a7b3f;line-height:1.45;}
+.demo-box-btn{margin-top:12px;width:100%;justify-content:center;border-color:var(--primary);color:var(--primary-dark);font-weight:700;}
+.demo-box-btn:hover{background:#eef0fb;}
+.demo-box-note{margin-top:10px;font-size:calc(11.5px * var(--pm-text-scale, 1));color:var(--muted);line-height:1.45;}
 @media (max-width:420px){
   .demo-box-row{flex-direction:column;align-items:flex-start;gap:4px;}
   .demo-box-value{align-self:stretch;text-align:center;letter-spacing:4px;}
@@ -660,7 +664,7 @@ main#main-content:focus{ outline:none; }
   width:40px; height:40px; flex:none; display:flex; align-items:center; justify-content:center;
   font-size:calc(24px * var(--pm-text-scale, 1)); background:#eef0f6; border-radius:8px;
 }
-.pm-logo-img{ height:40px; width:auto; display:block; } /* aspect-ratio set inline */
+.pm-logo-img{ height:40px; width:auto; max-width:100%; object-fit:contain; display:block; } /* no forced aspect-ratio: the asset keeps its own */
 .pm-brand-text{ display:flex; flex-direction:column; line-height:1.2; }
 .pm-brand-name{
   font-weight:800; font-size:calc(16px * var(--pm-text-scale, 1)); color:var(--color-primary-dark);
@@ -2223,4 +2227,24 @@ html.pm-reduced-motion .pm-skeleton{animation:none; background:#eef0f6;}
   .pm-table-scroll table{ min-width:0 !important; width:100% !important; }
   thead{ display:table-header-group; }
   tr{ break-inside:avoid; }
+}
+
+/* ---------- web call: developer-only diagnostics ----------
+   Raw routing/signaling codes stay available for developers (visible on
+   hover/focus, in the DOM and in the console) but never as the primary
+   sentence a farmer reads. */
+.pm-dev-detail{display:block;margin-top:4px;font-size:calc(10.5px * var(--pm-text-scale, 1));color:var(--muted);word-break:break-word;}
+.pm-state-strip{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.pm-state-chip{font-size:calc(11px * var(--pm-text-scale, 1));padding:3px 8px;border-radius:999px;background:#eceefc;color:var(--muted);border:1px solid #d7dbf5;}
+.pm-state-chip[aria-current="true"]{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:700;}
+
+/* ---------- brand logo (official asset from org-config.js) ----------
+   Height-limited only: the asset keeps its own aspect ratio (object-fit
+   contain), so the logo is never stretched or cropped. */
+.pm-brand-logo{height:40px;width:auto;max-width:100%;object-fit:contain;display:block;}
+.auth-logo .auth-logo-img{height:56px;margin:0 auto 6px;}
+.owner-brand .owner-brand-img{height:24px;width:auto;vertical-align:middle;}
+@media (max-width:360px){
+  .auth-logo .auth-logo-img{height:44px;}
+  .pm-brand-logo{height:32px;}
 }

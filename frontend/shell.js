@@ -1,5 +1,5 @@
 /* ==========================================================================
- * Pashu-Shield — Global shell: accessibility bar, preferences, announcements,
+ * Pashu-Mitra — Global shell: accessibility bar, preferences, announcements,
  *                page metadata, site footer, breadcrumbs.
  * --------------------------------------------------------------------------
  * GIGW 3.0 mapping
@@ -15,7 +15,7 @@
  *
  * ZERO-REGRESSION RULE
  *   This file is purely ADDITIVE. It never removes or replaces an existing
- *   Pashu-Shield feature. The existing `.app-header` and `.bottom-nav`
+ *   Pashu-Mitra feature. The existing `.app-header` and `.bottom-nav`
  *   (app.js) are left untouched; a slim global bar is layered above them and
  *   a global footer below the existing app container.
  *
@@ -137,14 +137,14 @@
    */
   function setPageMeta(opts) {
     const o = opts || {};
-    const orgName = (window.ORG && window.ORG.appName) || "Pashu-Shield";
+    const orgName = (window.ORG && window.ORG.appName) || "Pashu-Mitra";
     const title = o.title ? o.title + " — " + orgName : orgName + " — Animal Disease Reporting & Veterinary Care";
     document.title = title;
 
     setMeta("name", "description", o.description ||
-      "Pashu-Shield: animal disease reporting, veterinary care, laboratory diagnostics and disease surveillance for livestock owners, veterinarians, laboratories and government officers.");
+      "Pashu-Mitra: animal disease reporting, veterinary care, laboratory diagnostics and disease surveillance for livestock owners, veterinarians, laboratories and government officers.");
     setMeta("name", "keywords", o.keywords ||
-      "animal health, livestock, disease reporting, veterinary, laboratory, surveillance, Pashu-Shield");
+      "animal health, livestock, disease reporting, veterinary, laboratory, surveillance, Pashu-Mitra");
 
     // lang: keep <html lang> in step with the selected language (A38 / 3.1.1).
     const lang = (o.lang || (window.state && window.state.lang) || "en");
@@ -263,7 +263,7 @@
         '<div class="pm-footer-inner">' +
           '<section class="pm-footer-col" aria-labelledby="pm-f-about">' +
             '<h2 id="pm-f-about" class="pm-footer-h">About this service</h2>' +
-            '<p class="pm-org-name">' + escapeHtml(org.appName || "Pashu-Shield") + "</p>" +
+            '<p class="pm-org-name">' + escapeHtml(org.appName || "Pashu-Mitra") + "</p>" +
             '<p class="pm-footer-text">' + escapeHtml(org.tagline || "") + "</p>" +
             (pending
               ? '<p class="pm-owner-note"><strong>Ownership:</strong> ' + escapeHtml(owner.name || "") +
@@ -355,20 +355,27 @@
     const org = window.ORG || {};
     const logo = org.logo || {};
     const mark = logo.mark || "🐄";
+    // The logo is an <img> so the official asset is used as-is (never redrawn,
+    // stretched or cropped): the file's own ratio is kept because no aspect
+    // ratio is forced and CSS limits only the height. If the asset is missing
+    // the image hides itself and the accessible product name stays visible —
+    // a broken-image icon is never shown to a user.
     const logoInner = logo.src
       ? '<img class="pm-logo-img" src="' + escapeHtml(logo.src) + '" alt="' +
-        escapeHtml(logo.alt || org.appName || "") + '" style="aspect-ratio:' +
-        escapeHtml(logo.aspectRatio || "1 / 1") + '">'
+        escapeHtml(logo.alt || org.appName || "") + '"' +
+        (logo.aspectRatio && logo.aspectRatio !== "auto"
+          ? ' style="aspect-ratio:' + escapeHtml(logo.aspectRatio) + '"' : "") +
+        ' onerror="this.style.display=\'none\'">'
       : '<span class="pm-logo-mark" aria-hidden="true">' + mark + "</span>";
 
     return '' +
       '<header class="pm-site-header" id="site-header" role="banner">' +
         '<div class="pm-site-header-inner">' +
           '<a class="pm-brand" href="' + escapeHtml(logo.href || "#/") + '" ' +
-            'aria-label="' + escapeHtml((org.appName || "Pashu-Shield") + " — go to the home page") + '">' +
+            'aria-label="' + escapeHtml((org.appName || "Pashu-Mitra") + " — go to the home page") + '">' +
             logoInner +
             '<span class="pm-brand-text">' +
-              '<span class="pm-brand-name">' + escapeHtml(org.appName || "Pashu-Shield") + "</span>" +
+              '<span class="pm-brand-name">' + escapeHtml(org.appName || "Pashu-Mitra") + "</span>" +
               '<span class="pm-brand-tag">' + escapeHtml(org.tagline || "") + "</span>" +
             "</span>" +
           "</a>" +

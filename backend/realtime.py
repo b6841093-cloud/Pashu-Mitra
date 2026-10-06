@@ -78,55 +78,175 @@ def socketio_path() -> str:
     return normalized or DEFAULT_SOCKETIO_PATH
 
 
+# --------------------------------------------------------------------------
+# Browser origins allowed to open the signaling socket
+# --------------------------------------------------------------------------
+# The allow-list is ALWAYS explicit: one full origin per entry (scheme + host
+# [+ port]). ``*`` and wildcard patterns are refused on purpose — a wildcard
+# would let any site on the internet drive an authenticated vet's socket.
+#
+# Two sources feed the list, in this order:
+#
+#   1. ``SIH_ALLOWED_ORIGINS`` (alias: ``SIH_FRONTEND_ORIGINS``) —
+#      comma-separated, the deployment's own configuration. Update it in the
+#      Render dashboard whenever the portal origin really changes.
+#   2. ``BUILTIN_ALLOWED_ORIGINS`` — the portal origins this product is
+#      deployed on. Render applies blueprint (``render.yaml``) env vars only
+#      when a service is created; an *existing* service keeps its old value
+#      until somebody edits it in the dashboard. Without this built-in list a
+#      new Vercel preview URL therefore fails with a silent origin rejection
+#      and the farmer only sees "Signaling offline" (2026-10-05 and again
+#      2026-10-06: the preview origin under test was never in the deployed
+#      variable). These entries are public portal URLs, never secrets.
+BUILTIN_ALLOWED_ORIGINS = (
+    # Stable production portal (recommended single production origin).
+    "https://pashu-mitra-smoky.vercel.app",
+    # Current preview origin under test (2026-10-06).
+    "https://pashu-mitra-2bu09eba6-pashu-shield.vercel.app",
+    # Earlier preview origin still referenced by the deployed service.
+    "https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app",
+)
+
+# Local development origins. Harmless in production: they can only be used by a
+# browser that is already running on the developer's own machine.
+LOCAL_DEV_ORIGINS = (
+    "http://localhost:5001",
+    "http://127.0.0.1:5001",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+)
+
+
+def _normalize_origin(raw: str | None) -> str:
+    """Canonical form of one origin: trimmed, no trailing slash, lowercase.
+
+    Browsers send the ``Origin`` header without a trailing slash and with a
+    lowercase scheme/host, but a value pasted into a dashboard can arrive with
+    either ("https://portal.example.com/", "Portal.example.com "). Normalizing
+    both sides is what makes an operator's paste actually work.
+    """
+    value = (raw or "").strip().rstrip("/")
+    return value.lower()
+
+
+_wildcard_warned: set[str] = set()
+
+
 def _split_origins(raw: str) -> list[str]:
-    return [part.strip().rstrip("/") for part in raw.split(",") if part.strip()]
+    """Comma-separated origins -> normalized, de-duplicated, wildcard-free list."""
+    out: list[str] = []
+    for part in (raw or "").split(","):
+        origin = _normalize_origin(part)
+        if not origin:
+            continue
+        if "*" in origin:
+            # Never accept a wildcard, and say so instead of silently ignoring
+            # it (an operator who pastes "*" must see that it had no effect).
+            # Warned once per distinct value: this function is called on every
+            # health check and every handshake.
+            if origin not in _wildcard_warned:
+                _wildcard_warned.add(origin)
+                logger.warning(
+                    "SIH_ALLOWED_ORIGINS entry %r was ignored: wildcards are not allowed. "
+                    "List each portal origin explicitly.", part.strip())
+            continue
+        if origin not in out:
+            out.append(origin)
+    return out
+
+
+def allowed_origins_env() -> list[str]:
+    """Origins configured through the environment (both variable names)."""
+    raw_allowed = os.environ.get("SIH_ALLOWED_ORIGINS") or ""
+    raw_frontend = os.environ.get("SIH_FRONTEND_ORIGINS") or ""
+    return _split_origins(",".join(part for part in (raw_allowed, raw_frontend) if part.strip()))
 
 
 def allowed_origins() -> list[str]:
     """Origins allowed to open a cross-origin Socket.IO connection.
 
-    This deployment deliberately keeps the allow-list explicit. For Vercel
-    previews, add each required preview origin to ``SIH_ALLOWED_ORIGINS``; do
-    not use a blanket ``*.vercel.app`` wildcard.
-
-    ``SIH_FRONTEND_ORIGINS`` is accepted as an alias for historical
-    compatibility (older docs referenced it). Both variables are merged,
-    duplicates removed, trailing slashes stripped.
+    Merges the environment list with the built-in portal origins and the local
+    development origins. Order is preserved (configured first), duplicates and
+    trailing slashes are removed, and the result is always an explicit list.
     """
-    raw_allowed = (os.environ.get("SIH_ALLOWED_ORIGINS") or "").strip()
-    raw_frontend = (os.environ.get("SIH_FRONTEND_ORIGINS") or "").strip()
-    combined = ",".join(part for part in (raw_allowed, raw_frontend) if part)
-    origins = _split_origins(combined)
-    # Local development defaults; harmless in production because the deployed
-    # origins are always listed explicitly.
-    for origin in ("http://localhost:5001", "http://127.0.0.1:5001", "http://localhost:8000"):
-        if origin not in origins:
-            origins.append(origin)
-    # Preserve order, deduplicate
-    seen = set()
-    deduped = []
-    for o in origins:
-        if o not in seen:
-            seen.add(o)
-            deduped.append(o)
-    return deduped
+    origins: list[str] = []
+    for origin in allowed_origins_env() + list(BUILTIN_ALLOWED_ORIGINS) + list(LOCAL_DEV_ORIGINS):
+        normalized = _normalize_origin(origin)
+        if normalized and normalized not in origins:
+            origins.append(normalized)
+    return origins
 
 
 def origin_allowed(origin: str | None) -> bool:
+    """Is this ``Origin`` header allowed to open the socket?
+
+    Comparison is case-insensitive and trailing-slash insensitive, so a
+    harmless formatting difference in an env var can never break signaling.
+    """
     if not origin:
         # Flask-SocketIO's test client and some non-browser clients send no
         # Origin header. Browser security is enforced by the explicit allow-list
         # below and by the browser's own same-origin rules.
         return True
-    return origin.strip().rstrip("/") in allowed_origins()
+    return _normalize_origin(origin) in allowed_origins()
+
+
+def origin_diagnostics() -> dict:
+    """Secret-free summary of where the allow-list comes from.
+
+    Reported by ``/api/health`` so a rejected handshake can be explained from
+    outside the process: the origins are public portal URLs, and knowing which
+    of them came from the environment (vs the built-in defaults) is the
+    difference between "the variable was never updated" and "the browser is on
+    a different origin than expected".
+    """
+    env_origins = allowed_origins_env()
+    builtin = [_normalize_origin(o) for o in BUILTIN_ALLOWED_ORIGINS]
+    effective = allowed_origins()
+    return {
+        "count": len(effective),
+        "from_env": env_origins,
+        "from_builtin": [o for o in builtin if o in effective],
+        "env_configured": bool(env_origins),
+        "wildcards_allowed": False,
+    }
 
 
 def socket_public_url() -> str:
-    """Absolute base URL the browser must use for the signaling connection."""
-    explicit = (os.environ.get("SIH_PUBLIC_BACKEND_URL") or "").strip().rstrip("/")
-    if explicit.startswith("https://") or explicit.startswith("http://"):
-        return explicit
+    """Absolute base URL the browser must use for the signaling connection.
+
+    Priority:
+
+    1. ``SIH_PUBLIC_BACKEND_URL`` — the deployment's explicit answer.
+    2. ``RENDER_EXTERNAL_URL`` — Render sets this automatically on every web
+       service, so a split Vercel-frontend/Render-backend deployment gets the
+       correct ``wss://<service>.onrender.com/socket.io`` endpoint even when
+       nobody configured ``SIH_PUBLIC_BACKEND_URL``. Without this fallback the
+       browser is told "same origin", tries ``<vercel-host>/socket.io`` and
+       fails, because Vercel only proxies ``/api/*`` — the 2026-10-05
+       "Signaling offline" class of failure.
+    3. ``""`` — same origin (single-service deployment or local development).
+    """
+    for name in ("SIH_PUBLIC_BACKEND_URL", "RENDER_EXTERNAL_URL"):
+        value = (os.environ.get(name) or "").strip().rstrip("/")
+        if value.startswith("https://") or value.startswith("http://"):
+            return value
     return ""
+
+
+def socket_public_url_source() -> str:
+    """Which variable supplied :func:`socket_public_url` (``none`` = same origin)."""
+    for name in ("SIH_PUBLIC_BACKEND_URL", "RENDER_EXTERNAL_URL"):
+        value = (os.environ.get(name) or "").strip().rstrip("/")
+        if value.startswith("https://") or value.startswith("http://"):
+            return name
+    return "none"
+
+
+def signaling_endpoint() -> str:
+    """Full ``<base><path>`` URL a browser must open — empty for same origin."""
+    base = socket_public_url()
+    return (base + socketio_path()) if base else ""
 
 
 def signaling_configured() -> bool:
@@ -246,7 +366,18 @@ def _session_user():
 def _on_connect(auth):
     origin = request.headers.get("Origin")
     if not origin_allowed(origin):
-        logger.info("socket rejected: origin %s is not in SIH_ALLOWED_ORIGINS", origin)
+        # The browser cannot be told *why* a CORS/handshake rejection happened
+        # (that is the browser's security model), so the server log is the only
+        # place the real reason is visible. Log the rejected origin next to the
+        # effective allow-list — these are public portal URLs, never secrets.
+        logger.warning(
+            "socket rejected: origin %r is not in the signaling allow-list. "
+            "Effective allowed_origins=%s (from_env=%s, builtin=%s). Add this origin to "
+            "SIH_ALLOWED_ORIGINS (comma-separated, no wildcards) in the Render dashboard "
+            "and redeploy, or serve the portal from one of the allowed origins.",
+            origin, allowed_origins(), allowed_origins_env(),
+            list(BUILTIN_ALLOWED_ORIGINS),
+        )
         return False
 
     token = None

@@ -1,5 +1,5 @@
 // ==========================================================================
-// PashuMitra — Animal Disease Management & Surveillance Platform
+// Pashu-Mitra — Animal Disease Management & Surveillance Platform
 // Integrated Pashu Health Chain:
 // 1. Animal Health Identity (QR, Passport, Reproductive, Medication & Allergies)
 // 2. Digital Biological Sample Tracking (GPS, Time, Chain of Custody)
@@ -169,7 +169,7 @@ const I18N = {
     "farmer.notification_auto_escalation": "Urgent: report {case} needs immediate attention.",
     "farmer.mobile_label": "Mobile", "farmer.email": "Email", "farmer.specialization": "Specialization",
     "farmer.current_language": "Current language", "farmer.logout": "Log out", "farmer.user": "User",
-    "farmer.helpline_title": "Need help for an animal?", "farmer.helpline_name": "Pashu-Shield helpline",
+    "farmer.helpline_title": "Need help for an animal?", "farmer.helpline_name": "Pashu-Mitra helpline",
     "farmer.call_now": "Call now", "farmer.desktop_call_note": "Use your mobile phone to call this number.",
     "farmer.not_found": "Page not found.", "farmer.go_home": "Go to Home", "farmer.error": "Something went wrong.",
     "farmer.offline_queued": "No internet. Your request is saved and will send when you reconnect.",
@@ -201,7 +201,7 @@ const I18N = {
     "farmer.register_error": "Please check the information and try again.",
     // ---- OTP login (farmer) ----
     "farmer.otp_title": "Login with mobile OTP", "farmer.otp_mobile_label": "Registered mobile number",
-    "farmer.otp_mobile_hint": "Enter the 10-digit mobile number registered with PashuMitra.",
+    "farmer.otp_mobile_hint": "Enter the 10-digit mobile number registered with Pashu-Mitra.",
     "farmer.otp_mobile_placeholder": "10-digit mobile number",
     "farmer.send_otp": "Send OTP", "farmer.sending_otp": "Sending OTP…",
     "farmer.enter_otp": "Enter the 6-digit OTP", "farmer.otp_placeholder": "6-digit OTP",
@@ -211,9 +211,9 @@ const I18N = {
     "farmer.change_mobile": "Change mobile number",
     // Honest delivery wording: a 200 only means the request was accepted. The
     // same sentence is shown for registered and unknown numbers (no enumeration).
-    "farmer.otp_sent": "If +91 {mobile} is registered with PashuMitra, an OTP has been sent. It is valid for 5 minutes.",
+    "farmer.otp_sent": "If +91 {mobile} is registered with Pashu-Mitra, an OTP has been sent. It is valid for 5 minutes.",
     "farmer.otp_resent": "If +91 {mobile} is registered, a new OTP has been sent. It is valid for 5 minutes.",
-    "farmer.otp_missing_hint": "Didn't get the SMS? Check that this number is registered with PashuMitra, keep the phone switched on and the SIM active, then tap Resend OTP.",
+    "farmer.otp_missing_hint": "Didn't get the SMS? Check that this number is registered with Pashu-Mitra, keep the phone switched on and the SIM active, then tap Resend OTP.",
     "farmer.otp_invalid_mobile": "Enter a valid 10-digit mobile number.",
     "farmer.otp_invalid_code": "Enter the 6-digit OTP.",
     "farmer.otp_invalid": "The OTP is incorrect. Please check and try again.",
@@ -242,13 +242,43 @@ const I18N = {
     "farmer.otp_unavailable_hint": "OTP SMS login is not available right now. Please try again shortly or call the helpline {helpline}.",
     "farmer.demo_mobile": "Demo mobile number",
     // ---- Prototype demo account (shown only while the server has DEMO_MODE on)
-    "farmer.demo_account_title": "Demo Account",
+    "farmer.demo_account_title": "Demo access",
     "farmer.demo_phone_label": "Phone Number",
     "farmer.demo_otp_label": "Demo OTP",
     "farmer.demo_use_button": "Use Demo Account",
     "farmer.demo_filled": "Demo number filled in. Tap Send OTP, then enter the demo OTP.",
-    "farmer.demo_no_sms": "Prototype demo — no real SMS is sent. Use the demo OTP shown above.",
+    "farmer.demo_no_sms": "Use the mobile number and OTP shown here to sign in.",
     "farmer.demo_welcome": "Signed in with the demo account.",
+    // ---- Web call states (text, never colour alone) ------------------------
+    "webcall.signaling": "Signaling",
+    "webcall.state.offline": "Offline",
+    "webcall.state.connecting": "Connecting",
+    "webcall.state.available": "Available",
+    "webcall.state.incoming_call": "Incoming call",
+    "webcall.state.calling": "Calling",
+    "webcall.state.ringing": "Ringing",
+    "webcall.state.connecting_media": "Connecting audio",
+    "webcall.state.connected": "Connected",
+    "webcall.state.muted": "Connected · muted",
+    "webcall.state.reconnecting": "Reconnecting",
+    "webcall.state.ended": "Ended",
+    "webcall.state.failed": "Failed",
+    "webcall.signal_restoring": "Your connection to the veterinarian service is being restored.",
+    "webcall.signal_failed": "Web calling could not connect. Check your internet connection and try again, or call the helpline.",
+    "webcall.origin_not_allowed": "Web calls are not enabled for this address yet. Please open the portal from the official link, or call the helpline.",
+    "webcall.retry_signaling": "Retry connection",
+    "webcall.vet_available_now": "Veterinarian available",
+    "webcall.no_vet_now": "No veterinarian available right now",
+    "webcall.no_vet_online": "No veterinarian for {language} is online right now. Try another language or call the helpline.",
+    "webcall.vet_online": "A veterinarian is online now.",
+    "webcall.matched_vet": "Matched veterinarian",
+    "webcall.helpline_fallback": "If you need help now, call the helpline",
+    "webcall.other_vets": "Other veterinarians on the platform are",
+    "webcall.try_other_language": "Try another language with an online veterinarian",
+    "webcall.state_honesty": "State: availability (vet choice) · Socket.IO ({socket}) · presence lease (server) · routability ({routable}) · WebRTC · ICE · media.",
+    "webcall.routable": "routable",
+    "webcall.not_routable": "not routable",
+    "webcall.vet_not_receiving": "SIGNALING OFFLINE · NOT RECEIVING CALLS",
     "farmer.notification_settings": "Notification settings", "farmer.push_notifications": "Push notifications",
     "farmer.push_available": "Turn on push notifications to receive alerts about reports, test results, and health updates.",
     "farmer.push_unavailable": "Push notifications are not set up on this device. You will still receive in-app notifications.",
@@ -376,7 +406,7 @@ const I18N = {
     "farmer.notification_auto_escalation": "तातडीचे: अहवाल {case} कडे लगेच लक्ष देणे आवश्यक आहे.",
     "farmer.mobile_label": "मोबाईल", "farmer.email": "ईमेल", "farmer.specialization": "विशेषता",
     "farmer.current_language": "सध्याची भाषा", "farmer.logout": "बाहेर पडा", "farmer.user": "वापरकर्ता",
-    "farmer.helpline_title": "प्राण्यासाठी मदत हवी आहे?", "farmer.helpline_name": "पशु-शील्ड मदत क्रमांक",
+    "farmer.helpline_title": "प्राण्यासाठी मदत हवी आहे?", "farmer.helpline_name": "पशु-मित्र मदत क्रमांक",
     "farmer.call_now": "आता कॉल करा", "farmer.desktop_call_note": "या क्रमांकावर मोबाईलवरून कॉल करा.",
     "farmer.not_found": "पान सापडले नाही.", "farmer.go_home": "मुख्यपृष्ठावर जा", "farmer.error": "काहीतरी चूक झाली.",
     "farmer.offline_queued": "इंटरनेट नाही. विनंती जतन केली आहे; इंटरनेट आल्यावर पाठवली जाईल.",
@@ -445,13 +475,43 @@ const I18N = {
     "farmer.login_link": "आधीच नोंदणीकृत? मोबाईल OTP ने लॉगिन करा",
     "farmer.otp_unavailable_hint": "OTP SMS लॉगिन सध्या उपलब्ध नाही. कृपया थोड्या वेळाने प्रयत्न करा किंवा हेल्पलाइन {helpline} वर कॉल करा.",
     "farmer.demo_mobile": "डेमो मोबाईल क्रमांक",
-    "farmer.demo_account_title": "डेमो खाते",
+    "farmer.demo_account_title": "डेमो प्रवेश",
     "farmer.demo_phone_label": "मोबाईल क्रमांक",
     "farmer.demo_otp_label": "डेमो OTP",
     "farmer.demo_use_button": "डेमो खाते वापरा",
     "farmer.demo_filled": "डेमो क्रमांक भरला आहे. OTP पाठवा दाबा, नंतर डेमो OTP टाका.",
-    "farmer.demo_no_sms": "प्रोटोटाइप डेमो — खरे SMS पाठवले जात नाहीत. वर दाखवलेला डेमो OTP वापरा.",
+    "farmer.demo_no_sms": "लॉगिन करण्यासाठी येथे दाखवलेला मोबाईल क्रमांक आणि OTP वापरा.",
     "farmer.demo_welcome": "डेमो खात्याने लॉगिन केले.",
+    // ---- वेब कॉल स्थिती -----------------------------------------------------
+    "webcall.signaling": "सिग्नलिंग",
+    "webcall.state.offline": "ऑफलाइन",
+    "webcall.state.connecting": "जोडत आहे",
+    "webcall.state.available": "उपलब्ध",
+    "webcall.state.incoming_call": "येणारा कॉल",
+    "webcall.state.calling": "कॉल करत आहे",
+    "webcall.state.ringing": "रिंग होत आहे",
+    "webcall.state.connecting_media": "ऑडिओ जोडत आहे",
+    "webcall.state.connected": "जोडले",
+    "webcall.state.muted": "जोडले · म्यूट",
+    "webcall.state.reconnecting": "पुन्हा जोडत आहे",
+    "webcall.state.ended": "संपला",
+    "webcall.state.failed": "अयशस्वी",
+    "webcall.signal_restoring": "पशुवैद्यकीय सेवेशी तुमचे कनेक्शन पुन्हा जोडले जात आहे.",
+    "webcall.signal_failed": "वेब कॉल जोडता आला नाही. इंटरनेट कनेक्शन तपासून पुन्हा प्रयत्न करा किंवा हेल्पलाइनवर कॉल करा.",
+    "webcall.origin_not_allowed": "या पत्त्यासाठी वेब कॉल अद्याप सुरू केलेले नाहीत. कृपया अधिकृत लिंकवरून पोर्टल उघडा किंवा हेल्पलाइनवर कॉल करा.",
+    "webcall.retry_signaling": "कनेक्शन पुन्हा जोडा",
+    "webcall.vet_available_now": "पशुवैद्यक उपलब्ध आहे",
+    "webcall.no_vet_now": "आत्ता कोणतेही पशुवैद्यक उपलब्ध नाहीत",
+    "webcall.no_vet_online": "{language} साठी आत्ता कोणीही पशुवैद्यक ऑनलाइन नाही. दुसरी भाषा निवडा किंवा हेल्पलाइनवर कॉल करा.",
+    "webcall.vet_online": "एक पशुवैद्यक आत्ता ऑनलाइन आहे.",
+    "webcall.matched_vet": "निवडलेले पशुवैद्यक",
+    "webcall.helpline_fallback": "आत्ता मदत हवी असल्यास हेल्पलाइनवर कॉल करा",
+    "webcall.other_vets": "प्लॅटफॉर्मवरील इतर पशुवैद्यक",
+    "webcall.try_other_language": "ऑनलाइन पशुवैद्यक असलेली दुसरी भाषा वापरून पहा",
+    "webcall.state_honesty": "स्थिती: उपलब्धता (पशुवैद्यक निवड) · Socket.IO ({socket}) · उपस्थिती लीज (सर्व्हर) · मार्ग ({routable}) · WebRTC · ICE · मीडिया.",
+    "webcall.routable": "मार्ग उपलब्ध",
+    "webcall.not_routable": "मार्ग उपलब्ध नाही",
+    "webcall.vet_not_receiving": "सिग्नलिंग बंद · कॉल घेत नाहीत",
     "farmer.notification_settings": "सूचना सेटिंग्ज", "farmer.push_notifications": "पुश सूचना",
     "farmer.push_available": "अहवाल, तपासणीचे निकाल आणि आरोग्याची माहिती मिळवण्यासाठी पुश सूचना सुरू करा.",
     "farmer.push_unavailable": "या उपकरणावर पुश सूचना सुरू केलेल्या नाहीत. अॅपमधील सूचना मिळत राहतील.",
@@ -579,7 +639,7 @@ const I18N = {
     "farmer.notification_auto_escalation": "जरूरी: रिपोर्ट {case} पर तुरंत ध्यान देना चाहिए।",
     "farmer.mobile_label": "मोबाइल", "farmer.email": "ईमेल", "farmer.specialization": "विशेषता",
     "farmer.current_language": "अभी की भाषा", "farmer.logout": "लॉगआउट", "farmer.user": "उपयोगकर्ता",
-    "farmer.helpline_title": "पशु के लिए मदद चाहिए?", "farmer.helpline_name": "पशु-शील्ड हेल्पलाइन",
+    "farmer.helpline_title": "पशु के लिए मदद चाहिए?", "farmer.helpline_name": "पशु-मित्र हेल्पलाइन",
     "farmer.call_now": "अभी कॉल करें", "farmer.desktop_call_note": "इस नंबर पर अपने मोबाइल से कॉल करें।",
     "farmer.not_found": "पेज नहीं मिला।", "farmer.go_home": "होम पर जाएं", "farmer.error": "कुछ गलत हुआ।",
     "farmer.offline_queued": "इंटरनेट नहीं है। अनुरोध सहेजा गया है; इंटरनेट जुड़ने पर भेजा जाएगा।",
@@ -648,13 +708,43 @@ const I18N = {
     "farmer.login_link": "पहले से पंजीकृत? मोबाइल OTP से लॉगिन करें",
     "farmer.otp_unavailable_hint": "OTP SMS लॉगिन अभी उपलब्ध नहीं है। कृपया थोड़ी देर बाद प्रयास करें या हेल्पलाइन {helpline} पर कॉल करें।",
     "farmer.demo_mobile": "डेमो मोबाइल नंबर",
-    "farmer.demo_account_title": "डेमो खाता",
+    "farmer.demo_account_title": "डेमो प्रवेश",
     "farmer.demo_phone_label": "मोबाइल नंबर",
     "farmer.demo_otp_label": "डेमो OTP",
     "farmer.demo_use_button": "डेमो खाता उपयोग करें",
     "farmer.demo_filled": "डेमो नंबर भर गया है। OTP भेजें दबाएं, फिर डेमो OTP डालें।",
-    "farmer.demo_no_sms": "प्रोटोटाइप डेमो — कोई असली SMS नहीं भेजा जाता। ऊपर दिखाया डेमो OTP उपयोग करें।",
+    "farmer.demo_no_sms": "साइन इन करने के लिए यहां दिखाया मोबाइल नंबर और OTP उपयोग करें।",
     "farmer.demo_welcome": "डेमो खाते से लॉगिन किया गया।",
+    // ---- वेब कॉल स्थिति -----------------------------------------------------
+    "webcall.signaling": "सिग्नलिंग",
+    "webcall.state.offline": "ऑफ़लाइन",
+    "webcall.state.connecting": "जोड़ रहे हैं",
+    "webcall.state.available": "उपलब्ध",
+    "webcall.state.incoming_call": "आने वाला कॉल",
+    "webcall.state.calling": "कॉल कर रहे हैं",
+    "webcall.state.ringing": "रिंग हो रहा है",
+    "webcall.state.connecting_media": "ऑडियो जोड़ रहे हैं",
+    "webcall.state.connected": "जुड़ गया",
+    "webcall.state.muted": "जुड़ा · म्यूट",
+    "webcall.state.reconnecting": "फिर से जोड़ रहे हैं",
+    "webcall.state.ended": "समाप्त",
+    "webcall.state.failed": "विफल",
+    "webcall.signal_restoring": "पशु चिकित्सा सेवा से आपका कनेक्शन फिर से जोड़ा जा रहा है।",
+    "webcall.signal_failed": "वेब कॉल नहीं जुड़ सका। इंटरनेट कनेक्शन जांचें और फिर कोशिश करें, या हेल्पलाइन पर कॉल करें।",
+    "webcall.origin_not_allowed": "इस पते के लिए वेब कॉल अभी सक्षम नहीं हैं। कृपया आधिकारिक लिंक से पोर्टल खोलें या हेल्पलाइन पर कॉल करें।",
+    "webcall.retry_signaling": "कनेक्शन फिर से जोड़ें",
+    "webcall.vet_available_now": "पशु चिकित्सक उपलब्ध हैं",
+    "webcall.no_vet_now": "अभी कोई पशु चिकित्सक उपलब्ध नहीं है",
+    "webcall.no_vet_online": "{language} के लिए अभी कोई पशु चिकित्सक ऑनलाइन नहीं है। दूसरी भाषा चुनें या हेल्पलाइन पर कॉल करें।",
+    "webcall.vet_online": "एक पशु चिकित्सक अभी ऑनलाइन है।",
+    "webcall.matched_vet": "चुने गए पशु चिकित्सक",
+    "webcall.helpline_fallback": "अभी मदद चाहिए तो हेल्पलाइन पर कॉल करें",
+    "webcall.other_vets": "प्लेटफ़ॉर्म के अन्य पशु चिकित्सक",
+    "webcall.try_other_language": "ऑनलाइन पशु चिकित्सक वाली दूसरी भाषा आज़माएं",
+    "webcall.state_honesty": "स्थिति: उपलब्धता (पशु चिकित्सक चयन) · Socket.IO ({socket}) · उपस्थिति लीज़ (सर्वर) · रूटिंग ({routable}) · WebRTC · ICE · मीडिया।",
+    "webcall.routable": "रूटिंग उपलब्ध",
+    "webcall.not_routable": "रूटिंग उपलब्ध नहीं",
+    "webcall.vet_not_receiving": "सिग्नलिंग बंद · कॉल नहीं ले रहे",
     "farmer.notification_settings": "सूचना सेटिंग", "farmer.push_notifications": "पुश सूचनाएं",
     "farmer.push_available": "रिपोर्ट, जांच के नतीजे और स्वास्थ्य की जानकारी पाने के लिए पुश सूचनाएं चालू करें।",
     "farmer.push_unavailable": "इस डिवाइस पर पुश सूचनाएं चालू नहीं हैं। ऐप में सूचनाएं मिलती रहेंगी।",
@@ -782,7 +872,7 @@ const I18N = {
     "farmer.notification_auto_escalation": "అత్యవసరం: నివేదిక {case}పై వెంటనే శ్రద్ధ అవసరం.",
     "farmer.mobile_label": "మొబైల్", "farmer.email": "ఈమెయిల్", "farmer.specialization": "ప్రత్యేకత",
     "farmer.current_language": "ప్రస్తుత భాష", "farmer.logout": "లాగ్ అవుట్", "farmer.user": "వినియోగదారు",
-    "farmer.helpline_title": "జంతువుకు సహాయం కావాలా?", "farmer.helpline_name": "పశు-షీల్డ్ సహాయ నంబరు",
+    "farmer.helpline_title": "జంతువుకు సహాయం కావాలా?", "farmer.helpline_name": "పశు-మిత్ర సహాయ నంబరు",
     "farmer.call_now": "ఇప్పుడే కాల్ చేయండి", "farmer.desktop_call_note": "ఈ నంబరుకు మీ మొబైల్ నుంచి కాల్ చేయండి.",
     "farmer.not_found": "పేజీ కనిపించలేదు.", "farmer.go_home": "హోమ్‌కు వెళ్లండి", "farmer.error": "ఏదో తప్పు జరిగింది.",
     "farmer.offline_queued": "ఇంటర్నెట్ లేదు. మీ అభ్యర్థన భద్రపరిచాం; తిరిగి కనెక్ట్ అయినప్పుడు పంపబడుతుంది.",
@@ -851,13 +941,43 @@ const I18N = {
     "farmer.login_link": "ఇప్పటికే నమోదయ్యారా? మొబైల్ OTP తో లాగిన్ చేయండి",
     "farmer.otp_unavailable_hint": "OTP SMS లాగిన్ ప్రస్తుతం అందుబాటులో లేదు. కొద్దిసేపటి తర్వాత ప్రయత్నించండి లేదా హెల్ప్‌లైన్ {helpline} కు కాల్ చేయండి.",
     "farmer.demo_mobile": "డెమో మొబైల్ నంబరు",
-    "farmer.demo_account_title": "డెమో ఖాతా",
+    "farmer.demo_account_title": "డెమో ప్రవేశం",
     "farmer.demo_phone_label": "మొబైల్ నంబరు",
     "farmer.demo_otp_label": "డెమో OTP",
     "farmer.demo_use_button": "డెమో ఖాతా ఉపయోగించండి",
     "farmer.demo_filled": "డెమో నంబరు నమోదు చేయబడింది. OTP పంపండి నొక్కి, తర్వాత డెమో OTP నమోదు చేయండి.",
-    "farmer.demo_no_sms": "ప్రోటోటైప్ డెమో — నిజమైన SMS పంపబడదు. పైన చూపిన డెమో OTP ఉపయోగించండి.",
+    "farmer.demo_no_sms": "సైన్ ఇన్ చేయడానికి ఇక్కడ చూపిన మొబైల్ నంబరు మరియు OTP ఉపయోగించండి.",
     "farmer.demo_welcome": "డెమో ఖాతాతో లాగిన్ అయ్యారు.",
+    // ---- వెబ్ కాల్ స్థితులు ---------------------------------------------------
+    "webcall.signaling": "సిగ్నలింగ్",
+    "webcall.state.offline": "ఆఫ్లైన్",
+    "webcall.state.connecting": "కనెక్ట్ అవుతోంది",
+    "webcall.state.available": "అందుబాటులో",
+    "webcall.state.incoming_call": "వస్తున్న కాల్",
+    "webcall.state.calling": "కాల్ చేస్తోంది",
+    "webcall.state.ringing": "రింగ్ అవుతోంది",
+    "webcall.state.connecting_media": "ఆడియో కనెక్ట్ అవుతోంది",
+    "webcall.state.connected": "కనెక్ట్ అయింది",
+    "webcall.state.muted": "కనెక్ట్ · మ్యూట్",
+    "webcall.state.reconnecting": "మళ్లీ కనెక్ట్ అవుతోంది",
+    "webcall.state.ended": "ముగిసింది",
+    "webcall.state.failed": "విఫలమైంది",
+    "webcall.signal_restoring": "పశువైద్య సేవకు మీ కనెక్షన్ మళ్లీ కలుపుతున్నాము.",
+    "webcall.signal_failed": "వెబ్ కాల్ కనెక్ట్ కాలేదు. ఇంటర్నెట్ కనెక్షన్ తనిఖీ చేసి మళ్లీ ప్రయత్నించండి, లేదా హెల్ప్లైన్కు కాల్ చేయండి.",
+    "webcall.origin_not_allowed": "ఈ చిరునామా కోసం వెబ్ కాల్లు ఇంకా ప్రారంభించబడలేదు. దయచేసి అధికారిక లింక్ నుండి పోర్టల్ తెరవండి, లేదా హెల్ప్లైన్కు కాల్ చేయండి.",
+    "webcall.retry_signaling": "కనెక్షన్ మళ్లీ ప్రయత్నించండి",
+    "webcall.vet_available_now": "పశువైద్యుడు అందుబాటులో ఉన్నారు",
+    "webcall.no_vet_now": "ప్రస్తుతం పశువైద్యుడు అందుబాటులో లేరు",
+    "webcall.no_vet_online": "{language} కోసం ప్రస్తుతం పశువైద్యుడు ఆన్లైన్లో లేరు. మరొక భాష ప్రయత్నించండి లేదా హెల్ప్లైన్కు కాల్ చేయండి.",
+    "webcall.vet_online": "ఒక పశువైద్యుడు ఇప్పుడు ఆన్లైన్లో ఉన్నారు.",
+    "webcall.matched_vet": "ఎంపిక చేసిన పశువైద్యుడు",
+    "webcall.helpline_fallback": "ఇప్పుడే సహాయం కావాలంటే హెల్ప్లైన్కు కాల్ చేయండి",
+    "webcall.other_vets": "ప్లాట్ఫారమ్లోని ఇతర పశువైద్యులు",
+    "webcall.try_other_language": "ఆన్లైన్ పశువైద్యుడు ఉన్న మరొక భాష ప్రయత్నించండి",
+    "webcall.state_honesty": "స్థితి: అందుబాటు (పశువైద్యుని ఎంపిక) · Socket.IO ({socket}) · ఉనికి లీజ్ (సర్వర్) · రూటింగ్ ({routable}) · WebRTC · ICE · మీడియా.",
+    "webcall.routable": "రూటింగ్ సిద్ధం",
+    "webcall.not_routable": "రూటింగ్ లేదు",
+    "webcall.vet_not_receiving": "సిగ్నలింగ్ ఆఫ్లైన్ · కాల్లు తీసుకోవడం లేదు",
     "farmer.notification_settings": "సూచనల అమరికలు", "farmer.push_notifications": "పుష్ సూచనలు",
     "farmer.push_available": "నివేదికలు, పరీక్ష ఫలితాలు, ఆరోగ్య సమాచారం పొందడానికి పుష్ సూచనలను ప్రారంభించండి.",
     "farmer.push_unavailable": "ఈ పరికరంలో పుష్ సూచనలు అమర్చలేదు. యాప్‌లో సూచనలు వస్తూనే ఉంటాయి.",
@@ -1091,9 +1211,9 @@ function helplineCard(info = DEFAULT_IVR_INFO) {
   return `
     <div class="section-card helpline-card">
       <div class="section-title">☎️ ${farmer ? ft("helpline_title") : "Need Veterinary Help?"}</div>
-      <div class="small-muted">${farmer ? ft("helpline_name") : "Pashu-Shield Helpline"}</div>
+      <div class="small-muted">${farmer ? ft("helpline_name") : "Pashu-Mitra Helpline"}</div>
       <div class="helpline-number">${escapeHtml(number)}</div>
-      <a class="btn btn-primary helpline-call" href="${escapeHtml(telUri)}" aria-label="${farmer ? ft("call_now") : "Call Pashu-Shield helpline"} ${escapeHtml(number)}">☎ ${farmer ? ft("call_now") : "CALL NOW"}</a>
+      <a class="btn btn-primary helpline-call" href="${escapeHtml(telUri)}" aria-label="${farmer ? ft("call_now") : "Call Pashu-Mitra helpline"} ${escapeHtml(number)}">☎ ${farmer ? ft("call_now") : "CALL NOW"}</a>
       <div class="desktop-call-note">${escapeHtml(farmer ? ft("desktop_call_note") : "On a desktop computer, call this number from your mobile phone.")}</div>
     </div>`;
 }
@@ -1117,21 +1237,26 @@ function farmerDemoCredentials() {
 function farmerDemoAccountSection() {
   const creds = farmerDemoCredentials();
   if (!creds) return "";
+  // A small information card, not a warning banner: the credentials are shown
+  // on purpose, grouped and labelled so a screen reader announces them as the
+  // demo access details rather than as loose numbers on the page.
   return `
-    <div class="demo-box demo-box-otp" id="farmerDemoAccount">
-      <div class="demo-box-title">🧪 ${ft("demo_account_title")}</div>
+    <div class="demo-box demo-box-otp" id="farmerDemoAccount" role="group"
+         aria-labelledby="farmerDemoAccountTitle">
+      <div class="demo-box-title" id="farmerDemoAccountTitle">ℹ️ ${ft("demo_account_title")}</div>
       <div class="demo-box-row">
-        <span class="demo-box-label">${ft("demo_phone_label")}</span>
-        <span class="demo-box-value">${escapeHtml(creds.mobile)}</span>
+        <span class="demo-box-label" id="farmerDemoPhoneLabel">${ft("demo_phone_label")}</span>
+        <span class="demo-box-value" aria-labelledby="farmerDemoPhoneLabel">${escapeHtml(creds.mobile)}</span>
       </div>
       <div class="demo-box-row">
-        <span class="demo-box-label">${ft("demo_otp_label")}</span>
-        <span class="demo-box-value">${creds.otp}</span>
+        <span class="demo-box-label" id="farmerDemoOtpLabel">${ft("demo_otp_label")}</span>
+        <span class="demo-box-value" aria-labelledby="farmerDemoOtpLabel">${creds.otp}</span>
       </div>
-      <button id="otpUseDemoBtn" class="btn btn-ghost btn-sm demo-box-btn" type="button">
+      <button id="otpUseDemoBtn" class="btn btn-ghost btn-sm demo-box-btn" type="button"
+              aria-describedby="farmerDemoNote">
         ${ft("demo_use_button")}
       </button>
-      <div class="demo-box-note">${ft("demo_no_sms")}</div>
+      <div class="demo-box-note" id="farmerDemoNote">${ft("demo_no_sms")}</div>
     </div>`;
 }
 
@@ -1365,7 +1490,7 @@ function header(title, opts = {}) {
         <div class="owner-header-top">
           ${opts.back ? `<button class="header-icon-btn" aria-label="${ft("back_to_livestock")}" onclick="history.back()">←</button>`
             : `<button class="header-icon-btn" aria-label="${ft("notifications")}" onclick="location.hash='${notifHref}'">🔔${opts.notif ? '<span class="dot"></span>' : ''}</button>`}
-          <div class="owner-brand" aria-label="${ft("app_name")}">🐄 ${ft("app_name")}</div>
+          <div class="owner-brand" aria-label="${ft("app_name")}">${brandLogoHtml({ className: "owner-brand-img" })} ${ft("app_name")}</div>
           <div class="owner-header-actions">
             ${farmerLanguageControl()}
             <button class="header-icon-btn" aria-label="${ft("profile")}" onclick="location.hash='${profileHref}'">👤</button>
@@ -1606,12 +1731,28 @@ const ROLE_META = {
   lab: { emoji: "🔬", label: "role.lab", color: "#00838f" },
 };
 
+// ---------------------------------------------------------- brand identity --
+// One place that renders the official product logo. The asset comes from
+// org-config.js (ORG.logo.src); nothing is redrawn, resized beyond a CSS
+// height or replaced with an emoji. If the asset is missing the image hides
+// itself and the accessible product name stays visible (never a broken icon).
+function brandLogoHtml(options) {
+  const opts = options || {};
+  const logo = (typeof window !== "undefined" && window.ORG && window.ORG.logo) || {};
+  const src = logo.src || "";
+  const alt = opts.alt || logo.alt || "Pashu-Mitra";
+  if (!src) return "";
+  const cls = "pm-brand-logo" + (opts.className ? " " + opts.className : "");
+  return `<img class="${cls}" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" ` +
+    `decoding="async" onerror="this.hidden=true">`;
+}
+
 function renderRoleSelect() {
   render(`
   <div class="auth-wrap">
     <div class="auth-logo">
-      <div class="emoji">🐄</div>
-      <h2>PashuMitra</h2>
+      ${brandLogoHtml({ className: "auth-logo-img" })}
+      <h2>Pashu-Mitra</h2>
       <p>${t("app.tagline")}</p>
     </div>
     <div class="section-title" style="text-align:center;margin-bottom:14px">${t("auth.choose")}</div>
@@ -2267,8 +2408,8 @@ function renderAuth(mode, role) {
   <div class="auth-wrap">
     ${role === "owner" ? `<div class="farmer-auth-language">${farmerLanguageControl()}</div>` : ""}
     <div class="auth-logo">
-      <div class="emoji">${meta.emoji}</div>
-      <h2>PashuMitra · ${t(meta.label)}</h2>
+      ${brandLogoHtml({ className: "auth-logo-img" })}
+      <h2>Pashu-Mitra · ${t(meta.label)}</h2>
       <p>${t("app.tagline")}</p>
     </div>
     <div class="role-banner" style="background:${meta.color}1a;color:${meta.color}">
@@ -2764,7 +2905,7 @@ function helplineReportsView(role) {
     render(`
       ${header("Helpline Reports", { back: true })}
       <div class="section-card" role="img" aria-label="${escapeAttr(summary)}">
-        <div class="section-title">☎️ Pashu-Shield Call Analytics</div>
+        <div class="section-title">☎️ Pashu-Mitra Call Analytics</div>
         <p class="sr-only">${escapeHtml(summary)}</p>
         <div class="stat-grid" style="margin:0">
           ${statCard(analytics.total_calls, "Total Calls")}
