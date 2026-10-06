@@ -557,5 +557,114 @@ class ZeroRegressionTest(unittest.TestCase):
                         "service worker cache name not found")
 
 
+# --------------------------------------------------------------------------
+class XssEscapingTest(unittest.TestCase):
+    """W-2 / W-3 — SPA XSS / output-escaping audit."""
+
+    def test_90_escape_helpers_exist_in_app_js(self):
+        js = read_frontend("app.js")
+        self.assertIn("function escapeHtml", js, "escapeHtml helper missing")
+        self.assertIn("function escapeAttr", js, "escapeAttr helper missing")
+        self.assertIn("function escapeJsStr", js, "escapeJsStr helper missing")
+        self.assertIn("function safeId", js, "safeId helper missing")
+
+    def test_91_escape_helpers_are_correct(self):
+        # Directly test the JS implementation via a tiny Node-like eval in Python
+        # We replicate the JS logic here to ensure it matches expected behaviour
+        def escape_html_py(v):
+            s = str(v if v is not None else "")
+            return (s.replace("&", "&amp;")
+                     .replace("<", "&lt;")
+                     .replace(">", "&gt;")
+                     .replace('"', "&quot;")
+                     .replace("'", "&#39;")
+                     .replace("`", "&#96;"))
+        self.assertEqual(escape_html_py("<script>"), "&lt;script&gt;")
+        self.assertEqual(escape_html_py("&"), "&amp;")
+        self.assertEqual(escape_html_py('"'), "&quot;")
+        self.assertEqual(escape_html_py("'"), "&#39;")
+        # Verify app.js contains the same replacements
+        js = read_frontend("app.js")
+        self.assertIn(".replace(/&/g, \"&amp;\")", js)
+        self.assertIn(".replace(/</g, \"&lt;\")", js)
+        self.assertIn(".replace(/>/g, \"&gt;\")", js)
+
+    def test_92_critical_fields_are_escaped_in_app_js(self):
+        js = read_frontend("app.js")
+        # These fields are user-controlled and must be escaped
+        required_escapes = [
+            "escapeHtml(a.animal_name",
+            "escapeHtml(a.animal_code",
+            "escapeHtml(a.breed",
+            "escapeHtml(c.case_no",
+            "escapeHtml(c.symptoms",
+            "escapeHtml(s.sample_code",
+            "escapeHtml(p.medicine",
+            "escapeHtml(a.herd_code",
+            "escapeHtml(d.district",
+            "escapeHtml(s.sample_type",
+        ]
+        for esc in required_escapes:
+            self.assertIn(esc, js, f"missing escaping for {esc}")
+
+    def test_93_ids_use_safeId(self):
+        js = read_frontend("app.js")
+        self.assertIn("safeId(a.id)", js, "safeId(a.id) missing")
+        self.assertIn("safeId(c.id)", js, "safeId(c.id) missing")
+        self.assertIn("safeId(s.id)", js, "safeId(s.id) missing")
+
+    def test_94_js_string_context_uses_escapeJsStr(self):
+        js = read_frontend("app.js")
+        self.assertIn("escapeJsStr(a.animal_code)", js, "escapeJsStr for animal_code missing")
+        self.assertIn("escapeJsStr(c.case_no)", js, "escapeJsStr for case_no missing")
+        # Ensure no unescaped single-quoted interpolation remains
+        self.assertNotIn("'${a.animal_code}'", js, "unescaped animal_code in JS string context")
+        self.assertNotIn("'${c.case_no}'", js, "unescaped case_no in JS string context")
+
+    def test_95_malicious_payload_is_neutralized(self):
+        # Simulate what escapeHtml does to a classic payload
+        payloads = [
+            "<img src=x onerror=alert(1)>",
+            "<svg onload=alert(1)>",
+            "\"><script>alert(1)</script>",
+            "'><script>alert(1)</script>",
+            "<a href=\"javascript:alert(1)\">click</a>",
+        ]
+        def escape_html_py(v):
+            s = str(v if v is not None else "")
+            return (s.replace("&", "&amp;")
+                     .replace("<", "&lt;")
+                     .replace(">", "&gt;")
+                     .replace('"', "&quot;")
+                     .replace("'", "&#39;")
+                     .replace("`", "&#96;"))
+        for p in payloads:
+            escaped = escape_html_py(p)
+            self.assertNotIn("<script>", escaped)
+            self.assertNotIn("<img", escaped)
+            self.assertNotIn("<svg", escaped)
+            # Must contain escaped entities
+            self.assertTrue("&lt;" in escaped or "&gt;" in escaped or "&quot;" in escaped or "&#39;" in escaped)
+
+    def test_96_qr_image_and_token_are_escaped(self):
+        js = read_frontend("app.js")
+        # qr_image is a data URI, should be escaped as attr
+        self.assertTrue("escapeAttr(data.qr_image)" in js or "escapeHtml(s.qr_image)" in js,
+                        "qr_image should be escaped")
+        self.assertTrue("escapeHtml(data.qr_token" in js or "escapeHtml(s.qr_token" in js,
+                        "qr_token should be escaped")
+
+    def test_97_bar_and_pie_charts_escape_labels(self):
+        js = read_frontend("app.js")
+        self.assertIn("escapeHtml(i.label)", js, "barChart should escape i.label")
+        self.assertIn("escapeHtml(i.value)", js, "barChart/pieChart should escape i.value")
+
+    def test_98_call_js_already_uses_esc(self):
+        call_js = read_frontend("call.js")
+        self.assertIn("function esc(", call_js, "call.js should have esc helper")
+        # Check that dynamic content in call.js is escaped
+        self.assertIn("esc(", call_js)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -1091,9 +1091,9 @@ function helplineCard(info = DEFAULT_IVR_INFO) {
     <div class="section-card helpline-card">
       <div class="section-title">☎️ ${farmer ? ft("helpline_title") : "Need Veterinary Help?"}</div>
       <div class="small-muted">${farmer ? ft("helpline_name") : "Pashu-Shield Helpline"}</div>
-      <div class="helpline-number">${number}</div>
-      <a class="btn btn-primary helpline-call" href="${telUri}" aria-label="${farmer ? ft("call_now") : "Call Pashu-Shield helpline"} ${number}">☎ ${farmer ? ft("call_now") : "CALL NOW"}</a>
-      <div class="desktop-call-note">${farmer ? ft("desktop_call_note") : "On a desktop computer, call this number from your mobile phone."}</div>
+      <div class="helpline-number">${escapeHtml(number)}</div>
+      <a class="btn btn-primary helpline-call" href="${escapeHtml(telUri)}" aria-label="${farmer ? ft("call_now") : "Call Pashu-Shield helpline"} ${escapeHtml(number)}">☎ ${farmer ? ft("call_now") : "CALL NOW"}</a>
+      <div class="desktop-call-note">${escapeHtml(farmer ? ft("desktop_call_note") : "On a desktop computer, call this number from your mobile phone.")}</div>
     </div>`;
 }
 
@@ -1121,7 +1121,7 @@ function farmerDemoAccountSection() {
       <div class="demo-box-title">🧪 ${ft("demo_account_title")}</div>
       <div class="demo-box-row">
         <span class="demo-box-label">${ft("demo_phone_label")}</span>
-        <span class="demo-box-value">${creds.mobile}</span>
+        <span class="demo-box-value">${escapeHtml(creds.mobile)}</span>
       </div>
       <div class="demo-box-row">
         <span class="demo-box-label">${ft("demo_otp_label")}</span>
@@ -1171,7 +1171,7 @@ function demoAccountBox(role) {
     // Farmers now sign in with a mobile OTP; the demo box shows the seeded mobile.
     return `<div class="demo-box">
     <b>${label("demo_account")}</b><br />
-    ${label("demo_mobile")}: <b>${account.mobile}</b>
+    ${label("demo_mobile")}: <b>${escapeHtml(account.mobile)}</b>
   </div>`;
   }
   return `<div class="demo-box">
@@ -1251,13 +1251,51 @@ function severityBadgeClass(sev) {
 function riskBadgeClass(level) {
   return level === "High Risk" || level === "Critical" ? "badge-red" : level === "Moderate Risk" || level === "Moderate" ? "badge-orange" : "badge-green";
 }
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/`/g, "&#96;");
+}
+function escapeAttr(value) { return escapeHtml(value); }
+function escapeJsStr(value) {
+  return String(value == null ? "" : value)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/</g, "\\x3c")
+    .replace(/>/g, "\\x3e")
+    .replace(/&/g, "\\x26")
+    .replace(/"/g, "\\x22");
+}
+function safeId(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? String(Math.trunc(n)) : "0";
+}
+if (typeof window !== "undefined") {
+  window.__pmEscapeHtml = escapeHtml;
+  window.__pmEscapeAttr = escapeAttr;
+  window.__pmEscapeJsStr = escapeJsStr;
+  window.__pmSafeId = safeId;
+}
+
 function emptyState(msg) {
   if (getUserRole() === "owner") msg = farmerRuntimeText(msg);
-  return `<div class="empty-state">${msg}</div>`;
+  const raw = String(msg);
+  const isPlain = !/<[a-z][\s\S]*>/i.test(raw);
+  return `<div class="empty-state">${isPlain ? escapeHtml(raw) : raw}</div>`;
 }
-function statCard(num, lbl) { return `<div class="stat-card"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`; }
+function statCard(num, lbl) {
+  const safeNum = typeof num === "number" || /^\d+(\.\d+)?$/.test(String(num)) ? String(num) : escapeHtml(num);
+  return `<div class="stat-card"><div class="num">${safeNum}</div><div class="lbl">${escapeHtml(lbl)}</div></div>`;
+}
 function iconItem(emoji, label, href) {
-  return `<div class="icon-item" onclick="location.hash='${href}'"><div class="icon-circle">${emoji}</div><span>${label}</span></div>`;
+  const safeHref = String(href).startsWith("#/") ? escapeAttr(href) : "#/";
+  return `<div class="icon-item" onclick="location.hash='${safeHref}'"><div class="icon-circle">${escapeHtml(emoji)}</div><span>${escapeHtml(label)}</span></div>`;
 }
 
 // ---------------------------------------------------------------- shell --
@@ -1372,7 +1410,7 @@ function barChart(items) {
   const max = Math.max(...items.map(i => i.value), 1);
   return items.map(i => `
     <div style="margin:10px 0">
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${i.label}</span><b>${i.value}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${escapeHtml(i.label)}</span><b>${escapeHtml(i.value)}</b></div>
       <div style="background:#e8eaf3;border-radius:6px;height:12px;overflow:hidden">
         <div style="width:${Math.max((i.value / max) * 100, 2)}%;height:12px;background:#3f51b5;border-radius:6px"></div>
       </div>
@@ -1390,7 +1428,7 @@ function pieChart(items) {
   const legend = items.map((i, idx) => `
     <div style="display:flex;align-items:center;gap:6px;font-size:13px">
       <span style="width:12px;height:12px;border-radius:3px;background:${PIE_COLORS[idx % PIE_COLORS.length]};display:inline-block;flex:none"></span>
-      <span>${i.label} — ${i.value} (${Math.round((i.value / total) * 100)}%)</span>
+      <span>${escapeHtml(i.label)} — ${escapeHtml(i.value)} (${Math.round((i.value / total) * 100)}%)</span>
     </div>`).join("");
   return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
       <div style="width:150px;height:150px;border-radius:50%;background:conic-gradient(${stops});flex:none"></div>
@@ -1467,7 +1505,7 @@ async function router() {
   } catch (e) {
     console.error(e);
     const farmer = getUserRole() === "owner";
-    render(`${header(farmer ? ft("error") : "Error", { back: true })}<div class="loading">⚠️ ${farmer ? farmerRuntimeText(e.message) : e.message}</div>`);
+    render(`${header(farmer ? ft("error") : "Error", { back: true })}<div class="loading">⚠️ ${escapeHtml(farmer ? farmerRuntimeText(e.message) : e.message)}</div>`);
   }
 }
 window.addEventListener("hashchange", router);
@@ -2272,7 +2310,7 @@ async function ownerDashboard() {
     ${header(ft("home"))}
     <div class="hello-banner owner-hello">
       <div>${ft("welcome_back")}</div>
-      <div class="owner-name">${state.user.full_name} 👋</div>
+      <div class="owner-name">${escapeHtml(state.user.full_name)} 👋</div>
     </div>
     <div class="section-card owner-home-card">
       <div class="section-title">${ft("home_prompt")}</div>
@@ -2315,23 +2353,23 @@ async function ownerLivestockView() {
       <div class="section-card">
         <div class="section-title">🐄 ${ft("my_animals")} (${animals.length})</div>
         ${animals.length ? animals.map(a => `
-          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${a.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/animals/${a.id}'}">
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${safeId(a.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/animals/${safeId(a.id)}'}">
             <div class="row1">
-              <span class="title">${a.animal_name || a.animal_code}</span>
-              <span class="badge ${a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange"}">${ownerAnimalStatus(a.status)}</span>
+              <span class="title">${escapeHtml(a.animal_name || a.animal_code)}</span>
+              <span class="badge ${escapeHtml(a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange")}">${ownerAnimalStatus(a.status)}</span>
             </div>
-            <div class="meta">${ft("animal_id")}: ${a.animal_code}</div>
-            <div class="meta">${ft("animal_type")}: ${ownerAnimalType(a.animal_type || a.species)} · ${ft("breed")}: ${a.breed || ft("unknown")}</div>
-            <div class="meta">${ft("age")}: ${a.age ?? a.age_years ?? ft("unknown")}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
+            <div class="meta">${ft("animal_id")}: ${escapeHtml(a.animal_code)}</div>
+            <div class="meta">${ft("animal_type")}: ${ownerAnimalType(a.animal_type || a.species)} · ${ft("breed")}: ${escapeHtml(a.breed || ft("unknown"))}</div>
+            <div class="meta">${ft("age")}: ${escapeHtml(a.age ?? a.age_years ?? ft("unknown"))}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
           </div>`).join("") : emptyState(ft("no_animals") + ". " + ft("no_animals_hint"))}
       </div>
       <div class="section-card">
         <div class="section-title">🐑 ${ft("my_herds")} (${herds.length})</div>
         ${herds.length ? herds.map(h => `
-          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/herds/${h.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/herds/${h.id}'}">
-            <div class="row1"><span class="title">${ft("herd_name")} ${h.herd_code}</span><span class="badge badge-blue">${h.animal_count || 0} ${ft("animal_count")}</span></div>
-            <div class="meta">${ft("location")}: ${[h.village, h.block, h.district].filter(Boolean).join(", ") || ft("unknown")}</div>
-            <div class="meta ${h.active_cases ? "farmer-health-warning" : "farmer-health-ok"}">${h.active_cases ? `${ft("active_cases")}: ${h.active_cases}` : ft("no_active_cases")}</div>
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/herds/${safeId(h.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/herds/${safeId(h.id)}'}">
+            <div class="row1"><span class="title">${ft("herd_name")} ${escapeHtml(h.herd_code)}</span><span class="badge badge-blue">${escapeHtml(h.animal_count || 0)} ${ft("animal_count")}</span></div>
+            <div class="meta">${ft("location")}: ${escapeHtml([h.village, h.block, h.district].filter(Boolean).join(", ") || ft("unknown"))}</div>
+            <div class="meta ${escapeHtml(h.active_cases ? "farmer-health-warning" : "farmer-health-ok")}">${h.active_cases ? `${ft("active_cases")}: ${escapeHtml(h.active_cases)}` : ft("no_active_cases")}</div>
           </div>`).join("") : emptyState(ft("no_herds") + ". " + ft("no_herds_hint"))}
       </div>
       ${bottomNav("#/owner/livestock")}
@@ -2350,7 +2388,7 @@ async function vetDashboard() {
   const availability = availabilityRows[0] || { configured_status: "AVAILABLE", effective_status: "AVAILABLE", supported_languages: ["en"] };
   render(`
     ${header("Vet Dashboard")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Welcome,</div><div style="font-size:19px;font-weight:800">${state.user.full_name} 🩺</div></div>
+    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Welcome,</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🩺</div></div>
     <div class="stat-grid">
       ${statCard(summary.new_cases, "🔴 New Cases")}
       ${statCard(summary.vaccinations_due, "🟠 Vax Due")}
@@ -2407,7 +2445,7 @@ async function govtDashboard() {
   const a = await api("/govt/analytics");
   render(`
     ${header("Govt Analytics")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Maharashtra Animal Disease & Vaccine Dashboard</div><div style="font-size:19px;font-weight:800">${state.user.full_name} 🏛️</div></div>
+    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Maharashtra Animal Disease & Vaccine Dashboard</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🏛️</div></div>
     <div class="stat-grid">
       ${statCard(a.totals.cases, "Total Cases")}
       ${statCard(a.totals.active, "Active Cases")}
@@ -2477,7 +2515,7 @@ async function labDashboard() {
   const sum = await api("/lab/summary");
   render(`
     ${header("Laboratory Portal")}
-    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Regional Veterinary Diagnostics</div><div style="font-size:19px;font-weight:800">${state.user.full_name} 🔬</div></div>
+    <div class="hello-banner"><div style="margin-top:-16px;font-size:14px;opacity:0.9">Regional Veterinary Diagnostics</div><div style="font-size:19px;font-weight:800">${escapeHtml(state.user.full_name)} 🔬</div></div>
     <div class="stat-grid">
       ${statCard(sum.pending_receiving, "📥 Intake Pending")}
       ${statCard(sum.in_testing, "🧪 In Testing")}
@@ -2518,12 +2556,12 @@ function helplineReportsView(role) {
       <div class="section-card">
         <div class="section-title">Structured Helpline Reports</div>
         ${reports.length === 0 ? emptyState("No helpline reports yet.") : reports.map(r => `
-          <div class="list-card" ${r.case_id ? `onclick="location.hash='#/${role}/cases/${r.case_id}'"` : "style=\"cursor:default\""}>
-            <div class="row1"><span class="title">${r.report_no}</span><span class="badge ${r.status === 'DUPLICATE_FLAGGED' ? 'badge-orange' : r.status === 'PARTIAL' ? 'badge-blue' : 'badge-green'}">${r.status}</span></div>
-            <div class="meta"><b>Farmer:</b> ${r.farmer_name || "Unlinked caller"} · <b>Animal:</b> ${r.animal_code || r.structured_summary.species || "Not Provided"}</div>
-            <div class="meta"><b>Region:</b> ${r.village || ""}${r.village && r.district ? ", " : ""}${r.district || "Unknown"} · ${r.location_source}</div>
-            <div class="meta"><b>Symptoms:</b> ${r.symptoms || "Not Provided"} · <b>Urgency:</b> ${r.urgency || "Not Provided"}</div>
-            <div class="small-muted">Language: ${r.language || "Unknown"} · Source: ${r.source} · ${fmtDate(r.created_at)}</div>
+          <div class="list-card" ${r.case_id ? `onclick="location.hash='#/${role}/cases/${safeId(r.case_id)}'"` : "style=\"cursor:default\""}>
+            <div class="row1"><span class="title">${escapeHtml(r.report_no)}</span><span class="badge ${escapeHtml(r.status === 'DUPLICATE_FLAGGED' ? 'badge-orange' : r.status === 'PARTIAL' ? 'badge-blue' : 'badge-green')}">${escapeHtml(r.status)}</span></div>
+            <div class="meta"><b>Farmer:</b> ${escapeHtml(r.farmer_name || "Unlinked caller")} · <b>Animal:</b> ${escapeHtml(r.animal_code || r.structured_summary.species || "Not Provided")}</div>
+            <div class="meta"><b>Region:</b> ${escapeHtml(r.village || "")}${escapeHtml(r.village && r.district ? ", " : "")}${escapeHtml(r.district || "Unknown")} · ${escapeHtml(r.location_source)}</div>
+            <div class="meta"><b>Symptoms:</b> ${escapeHtml(r.symptoms || "Not Provided")} · <b>Urgency:</b> ${escapeHtml(r.urgency || "Not Provided")}</div>
+            <div class="small-muted">Language: ${escapeHtml(r.language || "Unknown")} · Source: ${escapeHtml(r.source)} · ${fmtDate(r.created_at)}</div>
           </div>`).join("")}
       </div>
       ${bottomNav(homeFor(role))}
@@ -2542,13 +2580,13 @@ route("#/lab/queue", async () => {
     <div class="section-card">
       <div class="section-title">🧪 Biological Specimens Queue (${queue.length})</div>
       ${queue.length === 0 ? emptyState("No samples in queue.") : queue.map(s => `
-        <div class="list-card" onclick="location.hash='#/lab/samples/${s.id}'">
+        <div class="list-card" onclick="location.hash='#/lab/samples/${safeId(s.id)}'">
           <div class="row1">
-            <span class="title">${s.sample_code}</span>
-            <span class="badge ${statusBadgeClass(s.status)}">${s.status}</span>
+            <span class="title">${escapeHtml(s.sample_code)}</span>
+            <span class="badge ${statusBadgeClass(s.status)}">${escapeHtml(s.status)}</span>
           </div>
-          <div class="meta"><b>Animal:</b> ${s.animal_code} (${s.species}) · <b>Type:</b> ${s.sample_type}</div>
-          <div class="meta">Case ${s.case_no} · Collected: ${fmtDate(s.collected_at)} by ${s.collector_name || "Vet"}</div>
+          <div class="meta"><b>Animal:</b> ${escapeHtml(s.animal_code)} (${escapeHtml(s.species)}) · <b>Type:</b> ${escapeHtml(s.sample_type)}</div>
+          <div class="meta">Case ${escapeHtml(s.case_no)} · Collected: ${fmtDate(s.collected_at)} by ${escapeHtml(s.collector_name || "Vet")}</div>
         </div>
       `).join("")}
     </div>
@@ -2563,21 +2601,21 @@ async function labSampleDetailView(id) {
     ${header("Sample " + s.sample_code, { back: true })}
     <div class="section-card">
       <div class="row1" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-size:18px;font-weight:800">${s.sample_code}</div>
-        <span class="badge ${statusBadgeClass(s.status)}">${s.status}</span>
+        <div style="font-size:18px;font-weight:800">${escapeHtml(s.sample_code)}</div>
+        <span class="badge ${statusBadgeClass(s.status)}">${escapeHtml(s.status)}</span>
       </div>
       <div class="detail-grid">
-        <div><b>Sample Type</b>${s.sample_type}</div>
-        <div><b>Case Number</b><a class="link" onclick="location.hash='#/vet/cases/${s.case_id}'">${s.case_no}</a></div>
-        <div><b>Animal Code</b>${s.animal_code} (${s.species})</div>
-        <div><b>Collection GPS</b>${s.collection_lat ? `${s.collection_lat.toFixed(4)}° N, ${s.collection_lng.toFixed(4)}° E` : "—"} ${s.is_manual_location ? "(Manual)" : "(Device GPS)"}</div>
+        <div><b>Sample Type</b>${escapeHtml(s.sample_type)}</div>
+        <div><b>Case Number</b><a class="link" onclick="location.hash='#/vet/cases/${safeId(s.case_id)}'">${escapeHtml(s.case_no)}</a></div>
+        <div><b>Animal Code</b>${escapeHtml(s.animal_code)} (${escapeHtml(s.species)})</div>
+        <div><b>Collection GPS</b>${s.collection_lat ? `${escapeHtml(s.collection_lat.toFixed(4))}° N, ${escapeHtml(s.collection_lng.toFixed(4))}° E` : "—"} ${escapeHtml(s.is_manual_location ? "(Manual)" : "(Device GPS)")}</div>
         <div><b>Collected On</b>${fmtDate(s.collected_at)}</div>
-        <div><b>Transporter</b>${s.transporter_name || "—"} ${s.transporter_phone ? `(${s.transporter_phone})` : ""}</div>
+        <div><b>Transporter</b>${escapeHtml(s.transporter_name || "—")} ${s.transporter_phone ? `(${escapeHtml(s.transporter_phone)})` : ""}</div>
       </div>
-      ${s.collection_notes ? `<div style="margin-top:10px"><b class="small-muted">Collection Notes:</b><div style="font-size:13px">${s.collection_notes}</div></div>` : ""}
+      ${s.collection_notes ? `<div style="margin-top:10px"><b class="small-muted">Collection Notes:</b><div style="font-size:13px">${escapeHtml(s.collection_notes)}</div></div>` : ""}
       <div style="text-align:center;margin-top:14px">
-        <div class="qr-image-wrap"><img src="${s.qr_image}" alt="Sample QR" /></div>
-        <div class="small-muted">Sample QR Tag (${s.qr_token.slice(0, 16)}…)</div>
+        <div class="qr-image-wrap"><img src="${escapeHtml(s.qr_image)}" alt="Sample QR" /></div>
+        <div class="small-muted">Sample QR Tag (${escapeHtml(s.qr_token.slice(0, 16))}…)</div>
       </div>
     </div>
 
@@ -2586,17 +2624,17 @@ async function labSampleDetailView(id) {
       <div class="section-title">⚙️ Laboratory Processing Workflow</div>
       ${s.status === "COLLECTED" || s.status === "READY_FOR_PICKUP" || s.status === "PICKED_UP" || s.status === "IN_TRANSIT" || s.status === "ARRIVED_AT_LAB" ? `
         <div class="meta" style="margin-bottom:12px">Specimen is awaiting laboratory intake inspection:</div>
-        <button class="btn btn-primary" onclick="labAccept(${s.id})">✅ Accept Specimen (Mark LAB_RECEIVED)</button>
+        <button class="btn btn-primary" onclick="labAccept(${safeId(s.id)})">✅ Accept Specimen (Mark LAB_RECEIVED)</button>
         <div style="margin-top:10px">
           <button class="btn btn-outline" onclick="document.getElementById('rejectBox').style.display='block'">❌ Reject Specimen</button>
         </div>
         <div id="rejectBox" style="display:none;margin-top:10px;background:#fde6e4;padding:12px;border-radius:12px">
           <div class="field"><label>Rejection Reason</label><input id="rejectReasonInput" placeholder="e.g. Hemolyzed, broken seal, delayed transport" /></div>
-          <button class="btn btn-outline btn-sm" style="background:#fff" onclick="labReject(${s.id})">Confirm Rejection</button>
+          <button class="btn btn-outline btn-sm" style="background:#fff" onclick="labReject(${safeId(s.id)})">Confirm Rejection</button>
         </div>
       ` : s.status === "LAB_RECEIVED" ? `
         <div class="meta" style="margin-bottom:12px">Specimen accepted in lab intake. Assign to testing bench:</div>
-        <button class="btn btn-primary" onclick="labStartTesting(${s.id})">🧪 Begin Diagnostic Testing (Mark TESTING)</button>
+        <button class="btn btn-primary" onclick="labStartTesting(${safeId(s.id)})">🧪 Begin Diagnostic Testing (Mark TESTING)</button>
       ` : s.status === "TESTING" ? `
         <div class="subheading">🧬 Structured Result Entry</div>
         <form id="labResultForm">
@@ -2619,7 +2657,7 @@ async function labSampleDetailView(id) {
         </form>
       ` : s.status === "RESULT_READY" ? `
         <div class="meta" style="margin-bottom:12px">Results entered and ready for official verification:</div>
-        <button class="btn btn-primary" onclick="labVerify(${s.id})">✅ Verify &amp; Release Official Report</button>
+        <button class="btn btn-primary" onclick="labVerify(${safeId(s.id)})">✅ Verify &amp; Release Official Report</button>
       ` : `
         <div class="meta">🟢 Official report verified and published to veterinarian and owner.</div>
       `}
@@ -2633,8 +2671,8 @@ async function labSampleDetailView(id) {
           <div class="timeline-item">
             <div class="timeline-dot"></div>
             <div class="timeline-body">
-              <div class="t-status">${e.status} — ${e.action}</div>
-              <div class="t-note">${e.notes || ""} (${e.actor_name || "System"} · ${e.actor_role || ""})</div>
+              <div class="t-status">${escapeHtml(e.status)} — ${escapeHtml(e.action)}</div>
+              <div class="t-note">${escapeHtml(e.notes || "")} (${escapeHtml(e.actor_name || "System")} · ${escapeHtml(e.actor_role || "")})</div>
               <div class="t-date">${fmtDate(e.timestamp)}</div>
             </div>
           </div>
@@ -2740,13 +2778,13 @@ window.resolveScannedPayload = async function(payload) {
     if (payload.includes("SAMPLE:") || payload.startsWith("SMP-")) {
       const s = await api(`/samples/lookup-qr?payload=${encodeURIComponent(payload)}`);
       if (role === "lab") {
-        location.hash = `#/lab/samples/${s.id}`;
+        location.hash = `#/lab/samples/${safeId(s.id)}`;
       } else {
-        location.hash = `#/${role}/cases/${s.case_id}`;
+        location.hash = `#/${role}/cases/${safeId(s.case_id)}`;
       }
     } else {
       const a = await api(`/animals/lookup-qr?payload=${encodeURIComponent(payload)}`);
-      location.hash = `#/${role}/animals/${a.id}`;
+      location.hash = `#/${role}/animals/${safeId(a.id)}`;
     }
   } catch (e) {
     toast(e.message, true);
@@ -2831,13 +2869,13 @@ route("#/govt/analytics", async () => {
   const [a, geo] = await Promise.all([api("/govt/analytics"), api("/govt/geo")]);
   const districtRows = geo.map(d => `
     <tr>
-      <td><b>${d.district}</b></td>
-      <td><span class="badge ${riskBadgeClass(d.risk_level)}">${d.risk_level}</span></td>
-      <td>${d.cases}</td>
-      <td>${d.active}</td>
-      <td>${d.high_severity}</td>
-      <td>${d.affected_animals}</td>
-      <td>${d.animal_population}</td>
+      <td><b>${escapeHtml(d.district)}</b></td>
+      <td><span class="badge ${riskBadgeClass(d.risk_level)}">${escapeHtml(d.risk_level)}</span></td>
+      <td>${escapeHtml(d.cases)}</td>
+      <td>${escapeHtml(d.active)}</td>
+      <td>${escapeHtml(d.high_severity)}</td>
+      <td>${escapeHtml(d.affected_animals)}</td>
+      <td>${escapeHtml(d.animal_population)}</td>
     </tr>`).join("");
   render(`
     ${header("Analytics & Reports", { back: true })}
@@ -2872,7 +2910,7 @@ route("#/govt/analytics", async () => {
       ${Object.keys(a.vaccine_stock).length === 0 ? emptyState("No stock data yet.") :
         Object.entries(a.vaccine_stock).map(([dist, items]) => `
           <div style="margin:8px 0">
-            <b>${dist}</b>: ${items.map(i => `${i.vaccine} (${i.doses} doses)`).join(", ")}
+            <b>${dist}</b>: ${items.map(i => `${escapeHtml(i.vaccine)} (${escapeHtml(i.doses)} doses)`).join(", ")}
           </div>`).join("")}
       <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="location.hash='#/govt/stock'">Manage Vaccine Stock</button>
     </div>
@@ -2987,11 +3025,11 @@ function drawGis() {
     if (!loc) return;
     const radius = d.risk_level === "High Risk" ? 20 : d.risk_level === "Moderate Risk" ? 15 : 10;
     L.circleMarker([loc.lat, loc.lng], { radius, color: colorFor(d.risk_level), fillColor: colorFor(d.risk_level), fillOpacity: 0.6 })
-      .bindTooltip(`<div style="font-weight:700">${d.district}</div>
-        <div style="color:${colorFor(d.risk_level)};font-weight:700;font-size:12px">${d.risk_level}</div>
-        <div style="font-size:12px">Cases: ${d.cases} · Active: ${d.active}</div>
-        <div style="font-size:12px">Affected animals: ${d.affected_animals}</div>
-        <div style="font-size:12px">Diseases: ${d.diseases.map(x => x.label).join(", ") || "—"}</div>`)
+      .bindTooltip(`<div style="font-weight:700">${escapeHtml(d.district)}</div>
+        <div style="color:${escapeHtml(colorFor(d.risk_level))};font-weight:700;font-size:12px">${escapeHtml(d.risk_level)}</div>
+        <div style="font-size:12px">Cases: ${escapeHtml(d.cases)} · Active: ${escapeHtml(d.active)}</div>
+        <div style="font-size:12px">Affected animals: ${escapeHtml(d.affected_animals)}</div>
+        <div style="font-size:12px">Diseases: ${escapeHtml(d.diseases.map(x => x.label).join(", ") || "—")}</div>`)
       .addTo(layer);
   });
 
@@ -3006,11 +3044,11 @@ function drawGis() {
         weight: 3,
         dashArray: "4, 4"
       }).bindTooltip(`
-        <div style="font-weight:800;color:#8e24aa">📍 Spatiotemporal Cluster: ${c.cluster_id}</div>
-        <div style="font-size:12px"><b>District:</b> ${c.district}</div>
-        <div style="font-size:12px"><b>Cases:</b> ${c.cases} active</div>
-        <div style="font-size:12px"><b>Diseases:</b> ${c.diseases ? c.diseases.join(", ") : "HS"}</div>
-        <div style="font-size:11px;color:#666">Method: ${c.method || "DBSCAN (haversine)"}</div>
+        <div style="font-weight:800;color:#8e24aa">📍 Spatiotemporal Cluster: ${escapeHtml(c.cluster_id)}</div>
+        <div style="font-size:12px"><b>District:</b> ${escapeHtml(c.district)}</div>
+        <div style="font-size:12px"><b>Cases:</b> ${escapeHtml(c.cases)} active</div>
+        <div style="font-size:12px"><b>Diseases:</b> ${escapeHtml(c.diseases ? c.diseases.join(", ") : "HS")}</div>
+        <div style="font-size:11px;color:#666">Method: ${escapeHtml(c.method || "DBSCAN (haversine)")}</div>
       `).addTo(layer);
     });
   }
@@ -3027,8 +3065,8 @@ function drawGis() {
   const top = [...filtered].sort((a, b) => b.affected_animals - a.affected_animals).slice(0, 5);
   document.getElementById("gisTop").innerHTML = top.length === 0 ? emptyState("No matching districts.") :
     top.map(d => `<div class="list-card" style="cursor:default">
-      <div class="row1"><span class="title">${d.district}</span><span class="badge ${riskBadgeClass(d.risk_level)}">${d.risk_level}</span></div>
-      <div class="meta">${d.affected_animals} affected · ${d.cases} cases · ${d.high_severity} high-severity</div>
+      <div class="row1"><span class="title">${escapeHtml(d.district)}</span><span class="badge ${riskBadgeClass(d.risk_level)}">${escapeHtml(d.risk_level)}</span></div>
+      <div class="meta">${escapeHtml(d.affected_animals)} affected · ${escapeHtml(d.cases)} cases · ${escapeHtml(d.high_severity)} high-severity</div>
     </div>`).join("");
 }
 
@@ -3049,17 +3087,17 @@ function surveillanceView(role) {
         </div>
         ${geo.map(g => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${g.district}</span><span class="badge ${riskBadgeClass(g.risk_level)}">${g.risk_level}</span></div>
-            <div class="meta">Cases: ${g.cases} (${g.active} active) · Affected: ${g.affected_animals} · High severity: ${g.high_severity}</div>
-            <div class="meta">Top Diseases: ${g.diseases.map(d => `${d.label} (${d.value})`).join(", ") || "—"}</div>
+            <div class="row1"><span class="title">${escapeHtml(g.district)}</span><span class="badge ${riskBadgeClass(g.risk_level)}">${escapeHtml(g.risk_level)}</span></div>
+            <div class="meta">Cases: ${escapeHtml(g.cases)} (${escapeHtml(g.active)} active) · Affected: ${escapeHtml(g.affected_animals)} · High severity: ${escapeHtml(g.high_severity)}</div>
+            <div class="meta">Top Diseases: ${g.diseases.map(d => `${escapeHtml(d.label)} (${escapeHtml(d.value)})`).join(", ") || "—"}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
         <div class="section-title">📋 Recent Incident Reports</div>
         ${cases.slice(0, 10).map(c => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${c.id}'">
-            <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${c.status}</span></div>
-            <div class="meta">${c.animal ? c.animal.animal_code : "—"} · ${c.disease_suspected || c.diagnosis || "Unspecified"} · ${fmtDate(c.created_at)}</div>
+          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'">
+            <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
+            <div class="meta">${escapeHtml(c.animal ? c.animal.animal_code : "—")} · ${escapeHtml(c.disease_suspected || c.diagnosis || "Unspecified")} · ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
       </div>
       ${bottomNav(`#/${role}/surveillance`)}
@@ -3100,11 +3138,11 @@ function nationalSurveillanceView() {
             <tbody>
               ${data.states.map(s => `
                 <tr>
-                  <td><b>${s.state}</b></td>
-                  <td>${s.reporting_status}</td>
-                  <td>${s.animals_registered}</td>
-                  <td>${s.active_cases}</td>
-                  <td><span class="badge ${s.active_cases > 0 ? "badge-orange" : "badge-blue"}">${s.risk_index}</span></td>
+                  <td><b>${escapeHtml(s.state)}</b></td>
+                  <td>${escapeHtml(s.reporting_status)}</td>
+                  <td>${escapeHtml(s.animals_registered)}</td>
+                  <td>${escapeHtml(s.active_cases)}</td>
+                  <td><span class="badge ${escapeHtml(s.active_cases > 0 ? "badge-orange" : "badge-blue")}">${escapeHtml(s.risk_index)}</span></td>
                 </tr>
               `).join("")}
             </tbody>
@@ -3118,12 +3156,12 @@ function nationalSurveillanceView() {
           data.national_alerts.map(a => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${a.title}</span>
-              <span class="badge ${a.severity === 'CRITICAL' ? 'badge-red' : 'badge-orange'}">${a.severity}</span>
+              <span class="title">${escapeHtml(a.title)}</span>
+              <span class="badge ${escapeHtml(a.severity === 'CRITICAL' ? 'badge-red' : 'badge-orange')}">${escapeHtml(a.severity)}</span>
             </div>
-            <div class="meta"><b>Disease:</b> ${a.disease} · <b>State:</b> ${a.state} (${a.district || "Statewide"})</div>
-            <div class="meta">${a.description}</div>
-            <div class="meta" style="color:var(--primary);margin-top:4px"><b>Measures:</b> ${a.recommended_measures}</div>
+            <div class="meta"><b>Disease:</b> ${escapeHtml(a.disease)} · <b>State:</b> ${escapeHtml(a.state)} (${escapeHtml(a.district || "Statewide")})</div>
+            <div class="meta">${escapeHtml(a.description)}</div>
+            <div class="meta" style="color:var(--primary);margin-top:4px"><b>Measures:</b> ${escapeHtml(a.recommended_measures)}</div>
           </div>
         `).join("")}
       </div>
@@ -3174,18 +3212,18 @@ function farmAlertsView(role) {
         ${alerts.length === 0 ? emptyState("No active farm-level disease alerts.") : alerts.map(a => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${a.herd_code} — ${a.disease}</span>
-              <span class="badge ${riskBadgeClass(a.risk_level)}">${a.risk_level}</span>
+              <span class="title">${escapeHtml(a.herd_code)} — ${escapeHtml(a.disease)}</span>
+              <span class="badge ${riskBadgeClass(a.risk_level)}">${escapeHtml(a.risk_level)}</span>
             </div>
-            <div class="meta"><b>Location:</b> ${a.district} · <b>Trigger:</b> ${a.trigger_reason}</div>
-            <div class="meta"><b>Recommended Action:</b> ${a.recommended_action || "—"}</div>
-            ${a.supporting_evidence ? `<div class="small-muted">Evidence: ${a.supporting_evidence}</div>` : ""}
+            <div class="meta"><b>Location:</b> ${escapeHtml(a.district)} · <b>Trigger:</b> ${escapeHtml(a.trigger_reason)}</div>
+            <div class="meta"><b>Recommended Action:</b> ${escapeHtml(a.recommended_action || "—")}</div>
+            ${a.supporting_evidence ? `<div class="small-muted">Evidence: ${escapeHtml(a.supporting_evidence)}</div>` : ""}
             <div class="row1" style="margin-top:8px">
-              <span class="badge badge-blue">Status: ${a.status}</span>
+              <span class="badge badge-blue">Status: ${escapeHtml(a.status)}</span>
               ${role !== "owner" && a.status === "ACTIVE" ? `
                 <div style="display:flex;gap:6px">
-                  <button class="btn btn-outline btn-sm" onclick="ackFarmAlert(${a.id})">Acknowledge</button>
-                  <button class="btn btn-primary btn-sm" onclick="resolveFarmAlert(${a.id})">Resolve</button>
+                  <button class="btn btn-outline btn-sm" onclick="ackFarmAlert(${safeId(a.id)})">Acknowledge</button>
+                  <button class="btn btn-primary btn-sm" onclick="resolveFarmAlert(${safeId(a.id)})">Resolve</button>
                 </div>
               ` : ""}
             </div>
@@ -3231,12 +3269,12 @@ function campCard(c, canUpdate) {
   const pct = c.target_animals ? Math.min(100, Math.round((c.doses_administered / c.target_animals) * 100)) : 0;
   return `
     <div class="list-card" style="cursor:default">
-      <div class="row1"><span class="title">${c.name}</span><span class="badge ${campStatusClass(c.status)}">${c.status}</span></div>
-      <div class="meta"><b>${c.vaccine}</b> · ${c.district} · ${c.campaign_code}</div>
+      <div class="row1"><span class="title">${escapeHtml(c.name)}</span><span class="badge ${campStatusClass(c.status)}">${escapeHtml(c.status)}</span></div>
+      <div class="meta"><b>${escapeHtml(c.vaccine)}</b> · ${escapeHtml(c.district)} · ${escapeHtml(c.campaign_code)}</div>
       <div class="meta">Dates: ${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</div>
       <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
-      <div class="row1" style="margin-top:2px"><span class="meta">${c.doses_administered} / ${c.target_animals} doses (${pct}%)</span>
-        ${canUpdate ? `<button class="btn btn-ghost btn-sm btn-edit-camp" data-id="${c.id}">Update</button>` : ""}
+      <div class="row1" style="margin-top:2px"><span class="meta">${escapeHtml(c.doses_administered)} / ${escapeHtml(c.target_animals)} doses (${pct}%)</span>
+        ${canUpdate ? `<button class="btn btn-ghost btn-sm btn-edit-camp" data-id="${safeId(c.id)}">Update</button>` : ""}
       </div>
     </div>`;
 }
@@ -3277,7 +3315,7 @@ function renderCampModal(camp, isGovt) {
           <div class="field"><label>End Date</label><input name="end_date" type="date" required /></div>
         ` : `
           <div class="form-row">
-            <div class="field"><label>Doses Administered</label><input name="doses_administered" type="number" value="${camp.doses_administered}" required /></div>
+            <div class="field"><label>Doses Administered</label><input name="doses_administered" type="number" value="${escapeAttr(camp.doses_administered)}" required /></div>
             <div class="field"><label>Status</label><select name="status">
               ${["PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"].map(s => `<option ${s === camp.status ? "selected" : ""}>${s}</option>`).join("")}
             </select></div>
@@ -3329,7 +3367,7 @@ route("#/govt/stock", async () => {
           <div class="list-card" style="cursor:default">
             <div class="row1"><span class="title">${dist}</span></div>
             <div class="tag-row">
-              ${items.map(i => `<span class="badge badge-blue">${i.vaccine}: ${i.doses} doses</span>`).join("")}
+              ${items.map(i => `<span class="badge badge-blue">${escapeHtml(i.vaccine)}: ${escapeHtml(i.doses)} doses</span>`).join("")}
             </div>
           </div>`).join("")}
     </div>
@@ -3405,10 +3443,10 @@ route("#/govt/ai", async () => {
       const feat = pred.features_used || {};
       box.innerHTML = `
         <div class="section-card">
-          <div class="section-title">📈 ${f.disease} — ${f.district}</div>
+          <div class="section-title">📈 ${escapeHtml(f.disease)} — ${escapeHtml(f.district)}</div>
           <div class="stat-grid">
             ${statCard(pred.risk_score + "%", "Risk Score")}
-            <div class="stat-card"><div class="num" style="font-size:18px"><span class="badge ${riskBadgeClass(pred.risk_level)}">${pred.risk_level}</span></div><div class="lbl">Risk Level</div></div>
+            <div class="stat-card"><div class="num" style="font-size:18px"><span class="badge ${riskBadgeClass(pred.risk_level)}">${escapeHtml(pred.risk_level)}</span></div><div class="lbl">Risk Level</div></div>
             ${statCard(pred.trend, "Trend")}
             ${statCard(pred.predicted_cases, "Predicted Cases (14d)")}
           </div>
@@ -3437,7 +3475,7 @@ route("#/govt/ai", async () => {
           <div class="meta small-muted">Weather Source: ${feat.weather_source || "Open-Meteo API"}</div>
         </div>`;
     } catch (err) {
-      box.innerHTML = `<div class="section-card"><div class="meta">⚠️ ${err.message}</div></div>`;
+      box.innerHTML = `<div class="section-card"><div class="meta">⚠️ ${escapeHtml(err.message)}</div></div>`;
     }
   });
 }, ["govt"]);
@@ -3462,12 +3500,12 @@ function diseasesView(role) {
       if (!items.length) { list.innerHTML = emptyState("No matching diseases."); return; }
       list.innerHTML = items.map(d => `
         <div class="list-card" style="cursor:default">
-          <div class="row1"><span class="title">${d.name_en} <span style="font-weight:400;color:var(--muted)">(${d.name_mr})</span></span>
-            <span class="badge ${d.species.includes("Cattle") ? "badge-blue" : "badge-orange"}">${d.species.join(", ")}</span>
+          <div class="row1"><span class="title">${escapeHtml(d.name_en)} <span style="font-weight:400;color:var(--muted)">(${escapeHtml(d.name_mr)})</span></span>
+            <span class="badge ${escapeHtml(d.species.includes("Cattle") ? "badge-blue" : "badge-orange")}">${escapeHtml(d.species.join(", "))}</span>
           </div>
-          <div class="meta" style="color:var(--text);margin-top:4px"><b>${t("nav.reporting")} / Symptoms:</b> ${d.symptoms_en.join(", ")}</div>
-          <div class="meta" style="font-style:italic">${d.symptoms_mr.join(", ")}</div>
-          <div class="meta" style="margin-top:4px"><b>Prevention:</b> ${d.prevention_en.join("; ")}</div>
+          <div class="meta" style="color:var(--text);margin-top:4px"><b>${t("nav.reporting")} / Symptoms:</b> ${escapeHtml(d.symptoms_en.join(", "))}</div>
+          <div class="meta" style="font-style:italic">${escapeHtml(d.symptoms_mr.join(", "))}</div>
+          <div class="meta" style="margin-top:4px"><b>Prevention:</b> ${escapeHtml(d.prevention_en.join("; "))}</div>
         </div>`).join("");
     }
     renderList(diseases);
@@ -3495,15 +3533,15 @@ function profileView(role) {
         <div class="section-card">
           <div style="text-align:center;margin-bottom:16px">
             <div style="font-size:52px">${ROLE_META[role].emoji}</div>
-            <div style="font-size:18px;font-weight:800">${u.full_name || ft("user")}</div>
+            <div style="font-size:18px;font-weight:800">${escapeHtml(u.full_name || ft("user"))}</div>
             <div class="badge badge-blue" style="margin-top:4px">${t(ROLE_META[role].label)}</div>
           </div>
           <div class="detail-grid farmer-detail-grid">
-            <div><b>${ft("mobile_label")}</b>${u.mobile || "—"}</div>
-            <div><b>${ft("email")}</b>${u.email || "—"}</div>
-            <div><b>${ft("village")}</b>${u.village || "—"}</div>
-            <div><b>${ft("block")}</b>${u.block || "—"}</div>
-            <div><b>${ft("district")}</b>${u.district || "—"}</div>
+            <div><b>${ft("mobile_label")}</b>${escapeHtml(u.mobile || "—")}</div>
+            <div><b>${ft("email")}</b>${escapeHtml(u.email || "—")}</div>
+            <div><b>${ft("village")}</b>${escapeHtml(u.village || "—")}</div>
+            <div><b>${ft("block")}</b>${escapeHtml(u.block || "—")}</div>
+            <div><b>${ft("district")}</b>${escapeHtml(u.district || "—")}</div>
             <div><b>${ft("current_language")}</b>${({ en: "English", mr: "मराठी", hi: "हिन्दी", te: "తెలుగు" })[state.lang]}</div>
           </div>
         </div>
@@ -3517,16 +3555,16 @@ function profileView(role) {
       <div class="section-card">
         <div style="text-align:center;margin-bottom:16px">
           <div style="font-size:52px">${ROLE_META[role].emoji}</div>
-          <div style="font-size:18px;font-weight:800">${u.full_name || "User"}</div>
+          <div style="font-size:18px;font-weight:800">${escapeHtml(u.full_name || "User")}</div>
           <div class="badge badge-blue" style="margin-top:4px">${t(ROLE_META[role].label)}</div>
         </div>
         <div class="detail-grid">
-          <div><b>Mobile</b>${u.mobile || "—"}</div>
-          <div><b>Email</b>${u.email || "—"}</div>
-          <div><b>Village</b>${u.village || "—"}</div>
-          <div><b>Block</b>${u.block || "—"}</div>
-          <div><b>District</b>${u.district || "—"}</div>
-          <div><b>Specialization</b>${u.specialization || "General"}</div>
+          <div><b>Mobile</b>${escapeHtml(u.mobile || "—")}</div>
+          <div><b>Email</b>${escapeHtml(u.email || "—")}</div>
+          <div><b>Village</b>${escapeHtml(u.village || "—")}</div>
+          <div><b>Block</b>${escapeHtml(u.block || "—")}</div>
+          <div><b>District</b>${escapeHtml(u.district || "—")}</div>
+          <div><b>Specialization</b>${escapeHtml(u.specialization || "General")}</div>
         </div>
       </div>
       <div class="section-card">
@@ -3550,20 +3588,20 @@ async function herdDetailView(role, id) {
     render(`
       ${header(ft("herd_information"), { back: true })}
       <div class="section-card">
-        <div class="owner-herd-name">🐑 ${hi.herd_code}</div>
+        <div class="owner-herd-name">🐑 ${escapeHtml(hi.herd_code)}</div>
         <div class="detail-grid farmer-detail-grid">
-          <div><b>${ft("animal_count")}</b>${hi.total_animals}</div>
+          <div><b>${ft("animal_count")}</b>${escapeHtml(hi.total_animals)}</div>
           <div><b>${ft("health_status")}</b><span class="badge ${riskBadgeClass(hi.risk_level)}">${ownerRiskLabel(hi.risk_level)}</span></div>
-          <div><b>${ft("active_cases")}</b>${hi.active_cases}</div>
-          <div><b>${ft("location")}</b>${[hi.village, hi.district].filter(Boolean).join(", ") || ft("unknown")}</div>
+          <div><b>${ft("active_cases")}</b>${escapeHtml(hi.active_cases)}</div>
+          <div><b>${ft("location")}</b>${escapeHtml([hi.village, hi.district].filter(Boolean).join(", ") || ft("unknown"))}</div>
         </div>
       </div>
       <div class="section-card">
         <div class="section-title">🐄 ${ft("herd_animals")} (${animals.length})</div>
         ${animals.length ? animals.map(a => `
-          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${a.id}'">
-            <div class="row1"><span class="title">${a.animal_name || a.animal_code}</span><span class="badge ${a.status === "Healthy" ? "badge-green" : "badge-orange"}">${ownerAnimalStatus(a.status)}</span></div>
-            <div class="meta">${ownerAnimalType(a.animal_type || a.species)} · ${ft("age")}: ${a.age ?? a.age_years ?? ft("unknown")}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${safeId(a.id)}'">
+            <div class="row1"><span class="title">${escapeHtml(a.animal_name || a.animal_code)}</span><span class="badge ${escapeHtml(a.status === "Healthy" ? "badge-green" : "badge-orange")}">${ownerAnimalStatus(a.status)}</span></div>
+            <div class="meta">${ownerAnimalType(a.animal_type || a.species)} · ${ft("age")}: ${escapeHtml(a.age ?? a.age_years ?? ft("unknown"))}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
           </div>`).join("") : emptyState(ft("no_herd_animals"))}
         <button class="btn btn-ghost" style="margin-top:8px" onclick="location.hash='#/owner/livestock'">${ft("back_to_livestock")}</button>
       </div>
@@ -3575,13 +3613,13 @@ async function herdDetailView(role, id) {
     ${header("Herd " + hi.herd_code, { back: true })}
     <div class="section-card">
       <div class="row1" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span class="title" style="font-size:18px">${hi.herd_code}</span>
-        <span class="badge ${riskBadgeClass(hi.risk_level)}">${hi.risk_level}</span>
+        <span class="title" style="font-size:18px">${escapeHtml(hi.herd_code)}</span>
+        <span class="badge ${riskBadgeClass(hi.risk_level)}">${escapeHtml(hi.risk_level)}</span>
       </div>
       <div class="detail-grid">
-        <div><b>Location</b>${hi.village}, ${hi.district}</div>
-        <div><b>Total Animals</b>${hi.total_animals}</div>
-        <div><b>Active Cases</b>${hi.active_cases}</div>
+        <div><b>Location</b>${escapeHtml(hi.village)}, ${escapeHtml(hi.district)}</div>
+        <div><b>Total Animals</b>${escapeHtml(hi.total_animals)}</div>
+        <div><b>Active Cases</b>${escapeHtml(hi.active_cases)}</div>
         <div><b>Vaccination Coverage</b>${Math.round(hi.vaccination_coverage * 100)}%</div>
       </div>
     </div>
@@ -3589,9 +3627,9 @@ async function herdDetailView(role, id) {
       <div class="subheading">🚨 Herd Alerts (${hi.alerts.length})</div>
       ${hi.alerts.length === 0 ? emptyState("No active alerts for this herd.") : hi.alerts.map(a => `
         <div class="list-card" style="cursor:default">
-          <div class="row1"><span class="title">${a.disease}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${a.risk_level}</span></div>
-          <div class="meta">${a.trigger_reason}</div>
-          <div class="meta">Action: ${a.recommended_action}</div>
+          <div class="row1"><span class="title">${escapeHtml(a.disease)}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${escapeHtml(a.risk_level)}</span></div>
+          <div class="meta">${escapeHtml(a.trigger_reason)}</div>
+          <div class="meta">Action: ${escapeHtml(a.recommended_action)}</div>
         </div>
       `).join("")}
     </div>
@@ -3606,10 +3644,10 @@ route("#/owner/herds/new", () => {
     <div class="section-card">
       <form id="herdForm">
         <div class="form-row">
-          <div class="field"><label>${ft("village")}</label><input name="village" value="${state.user.village || ""}" autocomplete="address-level3" /></div>
-          <div class="field"><label>${ft("block")}</label><input name="block" value="${state.user.block || ""}" /></div>
+          <div class="field"><label>${ft("village")}</label><input name="village" value="${escapeHtml(state.user.village || "")}" autocomplete="address-level3" /></div>
+          <div class="field"><label>${ft("block")}</label><input name="block" value="${escapeAttr(state.user.block || "")}" /></div>
         </div>
-        <div class="field"><label>${ft("district")}</label><input name="district" value="${state.user.district || ""}" /></div>
+        <div class="field"><label>${ft("district")}</label><input name="district" value="${escapeHtml(state.user.district || "")}" /></div>
         <button class="btn btn-primary" type="submit">${ft("create_herd")}</button>
       </form>
     </div>
@@ -3637,12 +3675,12 @@ function animalsListView(role) {
         ${role === "owner" ? `<button class="btn btn-primary" style="margin-bottom:14px" onclick="location.hash='#/owner/animals/new'">+ Add Animal</button>` : ""}
         ${animals.length === 0 ? emptyState("No animals registered yet.") :
           animals.map(a => `
-          <div class="list-card" onclick="location.hash='#/${role}/animals/${a.id}'">
-            <div class="row1"><span class="title">${a.animal_code}</span><span class="badge ${a.status === 'Healthy' ? 'badge-green' : 'badge-orange'}">${a.status}</span></div>
-            <div class="meta">${a.animal_name || "—"} · ${a.animal_type || a.species || "—"} · ${a.breed || "—"} · ${(a.gender || a.sex || "—")} · ${(a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—"}</div>
+          <div class="list-card" onclick="location.hash='#/${role}/animals/${safeId(a.id)}'">
+            <div class="row1"><span class="title">${escapeHtml(a.animal_code)}</span><span class="badge ${escapeHtml(a.status === 'Healthy' ? 'badge-green' : 'badge-orange')}">${escapeHtml(a.status)}</span></div>
+            <div class="meta">${escapeHtml(a.animal_name || "—")} · ${escapeHtml(a.animal_type || a.species || "—")} · ${escapeHtml(a.breed || "—")} · ${escapeHtml((a.gender || a.sex || "—"))} · ${escapeHtml((a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—")}</div>
             ${role === "owner" ? `<div style="margin-top:8px;display:flex;gap:8px">
-              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();location.hash='#/owner/report?animal=${a.id}'">Report Issue</button>
-              <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();deleteAnimal(${a.id},'${a.animal_code}')"> Delete</button>
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();location.hash='#/owner/report?animal=${safeId(a.id)}'">Report Issue</button>
+              <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();deleteAnimal(${safeId(a.id)},'${escapeJsStr(a.animal_code)}')"> Delete</button>
             </div>` : ""}
           </div>`).join("")}
       </div>
@@ -3670,13 +3708,13 @@ route("#/owner/animals/new", async () => {
         </div>
         <div class="field"><label>${ft("age")}</label><input name="age" type="number" step="0.5" min="0" inputmode="decimal" placeholder="${ft("age_placeholder")}" /></div>
         <div class="field"><label>${ft("herd")} (${ft("optional")})</label>
-          <select name="herd_id"><option value="">${ft("no_herd")}</option>${herds.map(h => `<option value="${h.id}">${ft("herd_name")} ${h.herd_code}</option>`).join("")}</select>
+          <select name="herd_id"><option value="">${ft("no_herd")}</option>${herds.map(h => `<option value="${safeId(h.id)}">${ft("herd_name")} ${escapeHtml(h.herd_code)}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>${ft("full_name")}</label><input name="owner_name" value="${state.user.full_name || ""}" autocomplete="name" required /></div>
-        <div class="field"><label>${ft("mobile")}</label><input name="mobile" value="${state.user.mobile || ""}" inputmode="tel" autocomplete="tel" required /></div>
+        <div class="field"><label>${ft("full_name")}</label><input name="owner_name" value="${escapeHtml(state.user.full_name || "")}" autocomplete="name" required /></div>
+        <div class="field"><label>${ft("mobile")}</label><input name="mobile" value="${escapeAttr(state.user.mobile || "")}" inputmode="tel" autocomplete="tel" required /></div>
         <div class="form-row">
-          <div class="field"><label>${ft("village")}</label><input name="village" value="${state.user.village || ""}" autocomplete="address-level3" /></div>
-          <div class="field"><label>${ft("district")}</label><input name="district" value="${state.user.district || ""}" /></div>
+          <div class="field"><label>${ft("village")}</label><input name="village" value="${escapeHtml(state.user.village || "")}" autocomplete="address-level3" /></div>
+          <div class="field"><label>${ft("district")}</label><input name="district" value="${escapeHtml(state.user.district || "")}" /></div>
         </div>
         <button class="btn btn-primary" type="submit">${ft("register_animal")}</button>
       </form>
@@ -3703,44 +3741,44 @@ function ownerAnimalRecord(a) {
     ${header(ft("animal_information"), { back: true })}
     <div class="section-card">
       <div class="row1 farmer-animal-heading">
-        <div><div class="owner-animal-name">${a.animal_name || a.animal_code}</div><div class="small-muted">${ft("animal_id")}: ${a.animal_code}</div></div>
-        <span class="badge ${a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange"}">${ownerAnimalStatus(a.status)}</span>
+        <div><div class="owner-animal-name">${escapeHtml(a.animal_name || a.animal_code)}</div><div class="small-muted">${ft("animal_id")}: ${escapeHtml(a.animal_code)}</div></div>
+        <span class="badge ${escapeHtml(a.status === "Healthy" ? "badge-green" : a.status === "Deceased" ? "badge-blue" : "badge-orange")}">${ownerAnimalStatus(a.status)}</span>
       </div>
       <div class="detail-grid farmer-detail-grid" style="margin-top:14px">
         <div><b>${ft("animal_type")}</b>${ownerAnimalType(a.animal_type || a.species)}</div>
-        <div><b>${ft("breed")}</b>${a.breed || ft("unknown")}</div>
+        <div><b>${ft("breed")}</b>${escapeHtml(a.breed || ft("unknown"))}</div>
         <div><b>${ft("age")}</b>${age !== null && age !== undefined && age !== "" ? `${age} ${ft("years")}` : ft("unknown")}</div>
-        <div><b>${ft("gender")}</b>${a.gender === "Female" || a.sex === "Female" ? ft("female") : a.gender === "Male" || a.sex === "Male" ? ft("male") : ft("unknown")}</div>
-        <div><b>${ft("herd")}</b>${a.herd ? a.herd.herd_code : ft("no_herd")}</div>
-        <div><b>${ft("location")}</b>${[a.village, a.district].filter(Boolean).join(", ") || ft("unknown")}</div>
+        <div><b>${ft("gender")}</b>${escapeHtml(a.gender === "Female" || a.sex === "Female" ? ft("female") : a.gender === "Male" || a.sex === "Male" ? ft("male") : ft("unknown"))}</div>
+        <div><b>${ft("herd")}</b>${escapeHtml(a.herd ? a.herd.herd_code : ft("no_herd"))}</div>
+        <div><b>${ft("location")}</b>${escapeHtml([a.village, a.district].filter(Boolean).join(", ") || ft("unknown"))}</div>
       </div>
       <div class="owner-detail-actions">
-        <button class="btn btn-primary" onclick="location.hash='#/owner/report?animal=${a.id}'">📋 ${ft("report_problem")}</button>
-        <button class="btn btn-ghost" onclick="showQrModal(${a.id})">🏷️ ${ft("qr_tag")}</button>
-        ${a.status !== "Deceased" ? `<button class="btn btn-outline" onclick="markDeceased(${a.id},'${a.animal_code}')">${ft("mark_deceased")}</button>` : ""}
-        <button class="btn btn-outline owner-danger-button" onclick="deleteAnimal(${a.id},'${a.animal_code}')">${ft("delete_animal")}</button>
+        <button class="btn btn-primary" onclick="location.hash='#/owner/report?animal=${safeId(a.id)}'">📋 ${ft("report_problem")}</button>
+        <button class="btn btn-ghost" onclick="showQrModal(${safeId(a.id)})">🏷️ ${ft("qr_tag")}</button>
+        ${a.status !== "Deceased" ? `<button class="btn btn-outline" onclick="markDeceased(${safeId(a.id)},'${escapeJsStr(a.animal_code)}')">${ft("mark_deceased")}</button>` : ""}
+        <button class="btn btn-outline owner-danger-button" onclick="deleteAnimal(${safeId(a.id)},'${escapeJsStr(a.animal_code)}')">${ft("delete_animal")}</button>
       </div>
     </div>
     <div class="section-card">
       <div class="section-title">💊 ${ft("health_and_treatment")}</div>
       ${cases.length ? cases.slice(0, 4).map(c => `
-        <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${c.id}'">
-          <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
-          <div class="meta">${c.symptoms || ft("case_detail")} · ${fmtDate(c.created_at)}</div>
+        <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(c.id)}'">
+          <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
+          <div class="meta">${escapeHtml(c.symptoms || ft("case_detail"))} · ${fmtDate(c.created_at)}</div>
         </div>`).join("") : `<div class="meta">${ft("healthy_message")}</div>`}
       ${prescriptions.length ? `
         <div class="subheading">${ft("treatment_history")}</div>
         ${prescriptions.slice(0, 4).map(p => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.dosage || ""}</span></div>
-            <div class="meta">${p.frequency || ""}${p.duration ? ` · ${p.duration}` : ""}</div>
-            <div class="meta">${ft("prescribed_by")}: ${p.vet_name || ft("unknown")} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
-            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${p.instructions}</div>` : ""}
+            <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.dosage || "")}</span></div>
+            <div class="meta">${escapeHtml(p.frequency || "")}${p.duration ? ` · ${escapeHtml(p.duration)}` : ""}</div>
+            <div class="meta">${ft("prescribed_by")}: ${escapeHtml(p.vet_name || ft("unknown"))} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
+            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${escapeHtml(p.instructions)}</div>` : ""}
           </div>`).join("")}
       ` : `<div class="subheading">${ft("treatment_history")}</div>${emptyState(ft("no_treatments"))}`}
       ${vaccinations.length ? `
         <div class="subheading">${ft("vaccination_history")}</div>
-        ${vaccinations.slice(0, 3).map(v => `<div class="list-card" style="cursor:default"><div class="row1"><span class="title">${v.vaccine}</span><span class="badge badge-blue">${ft("given_on")}: ${fmtDate(v.date_given)}</span></div></div>`).join("")}
+        ${vaccinations.slice(0, 3).map(v => `<div class="list-card" style="cursor:default"><div class="row1"><span class="title">${escapeHtml(v.vaccine)}</span><span class="badge badge-blue">${ft("given_on")}: ${fmtDate(v.date_given)}</span></div></div>`).join("")}
       ` : ""}
       ${labReports.length ? `
         <button class="btn btn-ghost" style="margin-top:8px" onclick="location.hash='#/owner/lab-reports'">🧪 ${ft("test_results")}</button>
@@ -3767,23 +3805,23 @@ function animalRecordView(role) {
       ${header("Digital Health Record", { back: true })}
       <div class="section-card">
         <div class="row1" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-size:18px;font-weight:800">${a.animal_code}</div>
-          <span class="badge ${a.status === 'Healthy' ? 'badge-green' : 'badge-orange'}">${a.status}</span>
+          <div style="font-size:18px;font-weight:800">${escapeHtml(a.animal_code)}</div>
+          <span class="badge ${escapeHtml(a.status === 'Healthy' ? 'badge-green' : 'badge-orange')}">${escapeHtml(a.status)}</span>
         </div>
         <div class="detail-grid">
-          <div><b>Animal Name</b>${a.animal_name || "—"}</div>
-          <div><b>Animal Type</b>${a.animal_type || a.species || "—"}</div>
-          <div><b>Breed</b>${a.breed || "—"}</div>
-          <div><b>Gender</b>${a.gender || a.sex || "—"}</div>
-          <div><b>Age</b>${(a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—"}</div>
-          <div><b>Owner Name</b>${a.owner_name || "—"}</div>
-          <div><b>Mobile</b>${a.mobile || "—"}</div>
-          <div><b>Herd</b>${a.herd ? a.herd.herd_code : "—"}</div>
-          <div><b>Location</b>${a.village || "—"}, ${a.district || "—"}</div>
+          <div><b>Animal Name</b>${escapeHtml(a.animal_name || "—")}</div>
+          <div><b>Animal Type</b>${escapeHtml(a.animal_type || a.species || "—")}</div>
+          <div><b>Breed</b>${escapeHtml(a.breed || "—")}</div>
+          <div><b>Gender</b>${escapeHtml(a.gender || a.sex || "—")}</div>
+          <div><b>Age</b>${escapeHtml((a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—")}</div>
+          <div><b>Owner Name</b>${escapeHtml(a.owner_name || "—")}</div>
+          <div><b>Mobile</b>${escapeHtml(a.mobile || "—")}</div>
+          <div><b>Herd</b>${escapeHtml(a.herd ? a.herd.herd_code : "—")}</div>
+          <div><b>Location</b>${escapeHtml(a.village || "—")}, ${escapeHtml(a.district || "—")}</div>
         </div>
         <div style="margin-top:14px">
-          <button class="btn btn-ghost btn-sm" onclick="showQrModal(${a.id})">🏷️ Digital QR Passport &amp; Printable Tag</button>
-          ${a.status !== "Deceased" && (role === "owner" || role === "vet") ? `<button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);margin-left:8px" onclick="markDeceased(${a.id},'${a.animal_code}')">☠️ Mark Deceased</button>` : ""}
+          <button class="btn btn-ghost btn-sm" onclick="showQrModal(${safeId(a.id)})">🏷️ Digital QR Passport &amp; Printable Tag</button>
+          ${a.status !== "Deceased" && (role === "owner" || role === "vet") ? `<button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);margin-left:8px" onclick="markDeceased(${safeId(a.id)},'${escapeJsStr(a.animal_code)}')">☠️ Mark Deceased</button>` : ""}
         </div>
       </div>
 
@@ -3791,7 +3829,7 @@ function animalRecordView(role) {
       <div class="section-card">
         <div class="subheading" style="justify-content:space-between">
           <span>🩺 Reproductive Health &amp; Gestation</span>
-          <span class="badge badge-blue">${reproLatest ? reproLatest.pregnancy_status : "Not Pregnant"}</span>
+          <span class="badge badge-blue">${escapeHtml(reproLatest ? reproLatest.pregnancy_status : "Not Pregnant")}</span>
         </div>
         <div class="detail-grid" style="margin-top:8px">
           <div><b>Breeding Date</b>${reproLatest && reproLatest.breeding_date ? fmtDate(reproLatest.breeding_date) : "—"}</div>
@@ -3799,7 +3837,7 @@ function animalRecordView(role) {
           <div><b>Prior Pregnancies</b>${reproLatest ? reproLatest.previous_pregnancies : 0}</div>
           <div><b>Total Offspring</b>${reproLatest ? reproLatest.offspring_count : 0}</div>
         </div>
-        ${reproLatest && reproLatest.breeding_notes ? `<div class="small-muted" style="margin-top:6px"><b>Notes:</b> ${reproLatest.breeding_notes}</div>` : ""}
+        ${reproLatest && reproLatest.breeding_notes ? `<div class="small-muted" style="margin-top:6px"><b>Notes:</b> ${escapeHtml(reproLatest.breeding_notes)}</div>` : ""}
         ${canEdit ? `
           <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="document.getElementById('reproFormWrap').style.display='block'">+ Record Reproductive Event</button>
           <div id="reproFormWrap" style="display:none;margin-top:12px;background:#f8f9fe;padding:12px;border-radius:12px">
@@ -3827,9 +3865,9 @@ function animalRecordView(role) {
           ${(!a.allergies || a.allergies.length === 0) ? `<div class="small-muted" style="margin:4px 0">No known drug allergies on record.</div>` :
             a.allergies.map(al => `
               <div class="conflict-box" style="margin:6px 0;padding:8px 12px">
-                <b>⚠️ ${al.allergen} (${al.allergy_severity} Allergy)</b>
-                <div>Reaction: ${al.reaction} · Recorded: ${fmtDate(al.date_recorded)}</div>
-                ${al.notes ? `<div class="small-muted">${al.notes}</div>` : ""}
+                <b>⚠️ ${escapeHtml(al.allergen)} (${escapeHtml(al.allergy_severity)} Allergy)</b>
+                <div>Reaction: ${escapeHtml(al.reaction)} · Recorded: ${fmtDate(al.date_recorded)}</div>
+                ${al.notes ? `<div class="small-muted">${escapeHtml(al.notes)}</div>` : ""}
               </div>
             `).join("")}
         </div>
@@ -3880,33 +3918,33 @@ function animalRecordView(role) {
       <div class="section-card">
         <div class="subheading">🩺 Previous Cases</div>
         ${a.cases.length === 0 ? emptyState("No cases recorded.") : a.cases.map(c => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${c.id}'">
-            <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${c.status}</span></div>
-            <div class="meta">${c.symptoms || ""} · ${fmtDate(c.created_at)}</div>
+          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'">
+            <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
+            <div class="meta">${escapeHtml(c.symptoms || "")} · ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
         <div class="subheading">💉 Vaccination History</div>
         ${a.vaccinations.length === 0 ? emptyState("No vaccinations recorded.") : a.vaccinations.map(v => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${v.vaccine}</span><span class="badge badge-blue">Next: ${fmtDate(v.next_due_date)}</span></div>
-            <div class="meta">Given: ${fmtDate(v.date_given)} · By ${v.vet_name || "—"}</div>
+            <div class="row1"><span class="title">${escapeHtml(v.vaccine)}</span><span class="badge badge-blue">Next: ${fmtDate(v.next_due_date)}</span></div>
+            <div class="meta">Given: ${fmtDate(v.date_given)} · By ${escapeHtml(v.vet_name || "—")}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
         <div class="subheading">🧪 Laboratory Reports</div>
         ${a.lab_reports.length === 0 ? emptyState("No lab reports yet.") : a.lab_reports.map(l => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${l.report_no}</span><span class="badge ${l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red'}">${l.result || "Pending"}</span></div>
-            <div class="meta">${l.test_name || ""} · Sample: ${l.sample || "—"} · ${fmtDate(l.test_date)}</div>
+            <div class="row1"><span class="title">${escapeHtml(l.report_no)}</span><span class="badge ${escapeHtml(l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red')}">${escapeHtml(l.result || "Pending")}</span></div>
+            <div class="meta">${escapeHtml(l.test_name || "")} · Sample: ${escapeHtml(l.sample || "—")} · ${fmtDate(l.test_date)}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
         <div class="subheading">💊 Prescriptions</div>
         ${a.prescriptions.length === 0 ? emptyState("No prescriptions yet.") : a.prescriptions.map(p => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.dosage || ""}</span></div>
-            <div class="meta">${p.frequency || ""} · ${p.duration || ""} · By ${p.vet_name || "—"}</div>
+            <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.dosage || "")}</span></div>
+            <div class="meta">${escapeHtml(p.frequency || "")} · ${escapeHtml(p.duration || "")} · By ${escapeHtml(p.vet_name || "—")}</div>
           </div>`).join("")}
       </div>
       ${bottomNav(role === "owner" ? "#/owner/animals" : `#/${role}/dashboard`)}
@@ -3955,16 +3993,16 @@ window.showQrModal = async function(id) {
           <b>🏷️ ${farmer ? ft("qr_tag") : "Digital Animal Health Tag"}</b>
           <button aria-label="${farmer ? ft("close") : "Close"}" style="border:none;background:none;font-size:20px;cursor:pointer" onclick="document.getElementById('qrModal').remove()">✕</button>
         </div>
-        <div style="font-size:17px;font-weight:800;color:var(--primary)">${data.animal_code}</div>
-        <div class="small-muted">${farmer ? ownerAnimalType(data.species) : data.species}${farmer ? "" : ` · Token: ${data.qr_token.slice(0, 16)}…`}</div>
+        <div style="font-size:17px;font-weight:800;color:var(--primary)">${escapeHtml(data.animal_code)}</div>
+        <div class="small-muted">${escapeHtml(farmer ? ownerAnimalType(data.species) : data.species)}${farmer ? "" : ` · Token: ${escapeHtml(data.qr_token.slice(0, 16))}…`}</div>
         <div class="qr-image-wrap">
-          <img src="${data.qr_image}" alt="${farmer ? ft("qr_tag") : "Animal Health Passport QR"}" />
+          <img src="${escapeAttr(data.qr_image)}" alt="${escapeAttr(farmer ? ft("qr_tag") : "Animal Health Passport QR")}" />
         </div>
         <div class="btn-row" style="margin-top:12px">
-          <a class="btn btn-ghost btn-sm" href="${data.qr_image}" download="${data.animal_code}_QR.png" style="flex:1;text-decoration:none">⬇️ ${farmer ? ft("download") : "Download"}</a>
+          <a class="btn btn-ghost btn-sm" href="${escapeAttr(data.qr_image)}" download="${escapeAttr(data.animal_code)}_QR.png" style="flex:1;text-decoration:none">⬇️ ${farmer ? ft("download") : "Download"}</a>
           <button class="btn btn-primary btn-sm" style="flex:1" onclick="window.print()">🖨️ ${farmer ? ft("print") : "Print Card"}</button>
         </div>
-        ${!farmer ? `<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%" onclick="regenAnimalQr(${id})">🔄 Regenerate QR Identity</button>` : ""}
+        ${!farmer ? `<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%" onclick="regenAnimalQr(${safeId(id)})">🔄 Regenerate QR Identity</button>` : ""}
       </div>
     `;
     document.body.appendChild(div);
@@ -4013,7 +4051,7 @@ route("#/owner/report", async ({ animal, voice }) => {
         <div class="field"><label>${ft("animal")}</label>
           <select name="animal_id" required>
             <option value="">${ft("choose_animal")}</option>
-            ${animals.map(a => `<option value="${a.id}" ${defaultAnimal && defaultAnimal.id === a.id ? "selected" : ""}>${a.animal_name || a.animal_code} · ${ownerAnimalType(a.animal_type || a.species)}</option>`).join("")}
+            ${animals.map(a => `<option value="${safeId(a.id)}" ${escapeHtml(defaultAnimal && defaultAnimal.id === a.id ? "selected" : "")}>${escapeHtml(a.animal_name || a.animal_code)} · ${ownerAnimalType(a.animal_type || a.species)}</option>`).join("")}
           </select>
         </div>
         <div class="field"><label>${ft("symptoms")}</label>
@@ -4039,7 +4077,7 @@ route("#/owner/report", async ({ animal, voice }) => {
       if (voice) body.reported_through = "Voice App";
       const c = await api("/cases", { method: "POST", body });
       toast(ft("report_sent", { code: c.case_no }));
-      location.hash = `#/owner/cases/${c.id}`;
+      location.hash = `#/owner/cases/${safeId(c.id)}`;
     } catch (err) { toast(err.message, true); }
   });
 }, ["owner"]);
@@ -4116,10 +4154,10 @@ function casesListView(role) {
         <div class="section-card">
           <button class="btn btn-primary farmer-primary-action" style="margin-bottom:14px" onclick="location.hash='#/owner/report'">＋ ${ft("report_problem")}</button>
           ${cases.length ? cases.map(c => `
-            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${c.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${c.id}'}">
-              <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
-              <div class="meta">${ft("animal_id")}: ${c.animal ? c.animal.animal_code : "—"}</div>
-              <div class="meta">${c.symptoms || "—"}</div>
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${safeId(c.id)}'}">
+              <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
+              <div class="meta">${ft("animal_id")}: ${escapeHtml(c.animal ? c.animal.animal_code : "—")}</div>
+              <div class="meta">${escapeHtml(c.symptoms || "—")}</div>
               <div class="meta">${ft("reported")}: ${fmtDate(c.created_at)}</div>
             </div>`).join("") : emptyState(ft("no_cases_home"))}
         </div>
@@ -4131,10 +4169,10 @@ function casesListView(role) {
       ${header("Active Case Tracking", { back: true })}
       <div class="section-card">
         ${cases.length === 0 ? emptyState("No active cases.") : cases.map(c => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${c.id}'">
-            <div class="row1"><span class="title">${c.case_no}</span><span class="badge ${statusBadgeClass(c.status)}">${c.status}</span></div>
-            <div class="meta"><b>Animal:</b> ${c.animal ? c.animal.animal_code : "—"} · ${c.symptoms || "—"}</div>
-            <div class="meta">Owner: ${c.owner ? c.owner.full_name : "—"} · Reported: ${fmtDate(c.created_at)}</div>
+          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'">
+            <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
+            <div class="meta"><b>Animal:</b> ${escapeHtml(c.animal ? c.animal.animal_code : "—")} · ${escapeHtml(c.symptoms || "—")}</div>
+            <div class="meta">Owner: ${escapeHtml(c.owner ? c.owner.full_name : "—")} · Reported: ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
       </div>
       ${bottomNav(`#/${role}/dashboard`)}
@@ -4151,11 +4189,11 @@ route("#/vet/reports", async () => {
     <div class="section-card">
       <div class="section-title">Farmer Reported Incidents</div>
       ${reports.length === 0 ? emptyState("No reports yet.") : reports.map(r => `
-        <div class="list-card" onclick="location.hash='#/vet/cases/${r.id}'">
-          <div class="row1"><span class="title">${r.case_no}</span><span class="badge ${severityBadgeClass(r.severity)}">${r.severity} severity</span></div>
-          <div class="meta"><b>Symptoms:</b> ${r.symptoms || "—"}</div>
-          <div class="meta">Owner: ${r.owner ? r.owner.full_name + " (" + (r.owner.mobile || "") + ")" : "—"}</div>
-          <div class="meta">Reported: ${fmtDate(r.created_at)} · Status: <span class="badge ${statusBadgeClass(r.status)}">${r.status}</span></div>
+        <div class="list-card" onclick="location.hash='#/vet/cases/${safeId(r.id)}'">
+          <div class="row1"><span class="title">${escapeHtml(r.case_no)}</span><span class="badge ${severityBadgeClass(r.severity)}">${escapeHtml(r.severity)} severity</span></div>
+          <div class="meta"><b>Symptoms:</b> ${escapeHtml(r.symptoms || "—")}</div>
+          <div class="meta">Owner: ${escapeHtml(r.owner ? r.owner.full_name + " (" + (r.owner.mobile || "") + ")" : "—")}</div>
+          <div class="meta">Reported: ${fmtDate(r.created_at)} · Status: <span class="badge ${statusBadgeClass(r.status)}">${escapeHtml(r.status)}</span></div>
         </div>`).join("")}
     </div>
     ${bottomNav("#/vet/reports")}
@@ -4176,19 +4214,19 @@ function ownerCaseDetail(c) {
     ${header(ft("case_detail"), { back: true })}
     <div class="section-card">
       <div class="row1 farmer-case-heading">
-        <span class="owner-case-number">${c.case_no}</span>
+        <span class="owner-case-number">${escapeHtml(c.case_no)}</span>
         <span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span>
       </div>
       <div class="detail-grid farmer-detail-grid" style="margin-top:12px">
-        <div><b>${ft("animal")}</b><a class="link" onclick="location.hash='#/owner/animals/${c.animal?.id}'">${c.animal?.animal_name || c.animal?.animal_code || "—"}</a></div>
+        <div><b>${ft("animal")}</b><a class="link" onclick="location.hash='#/owner/animals/${safeId(c.animal?.id)}'">${escapeHtml(c.animal?.animal_name || c.animal?.animal_code || "—")}</a></div>
         <div><b>${ft("report_date")}</b>${fmtDate(c.created_at)}</div>
         <div><b>${ft("severity")}</b>${ownerSeverityLabel(c.severity)}</div>
-        ${c.vet_name ? `<div><b>${ft("vet")}</b>${c.vet_name}</div>` : ""}
+        ${c.vet_name ? `<div><b>${ft("vet")}</b>${escapeHtml(c.vet_name)}</div>` : ""}
       </div>
-      <div class="owner-case-copy"><b>${ft("symptoms")}</b><p>${c.symptoms || "—"}</p></div>
-      ${c.description ? `<div class="owner-case-copy"><b>${ft("additional_details")}</b><p>${c.description}</p></div>` : ""}
-      ${c.diagnosis ? `<div class="owner-case-copy"><b>${ft("diagnosis")}</b><p>${c.diagnosis}</p></div>` : ""}
-      ${c.treatment ? `<div class="owner-case-copy"><b>${ft("instructions")}</b><p>${c.treatment}</p></div>` : ""}
+      <div class="owner-case-copy"><b>${ft("symptoms")}</b><p>${escapeHtml(c.symptoms || "—")}</p></div>
+      ${c.description ? `<div class="owner-case-copy"><b>${ft("additional_details")}</b><p>${escapeHtml(c.description)}</p></div>` : ""}
+      ${c.diagnosis ? `<div class="owner-case-copy"><b>${ft("diagnosis")}</b><p>${escapeHtml(c.diagnosis)}</p></div>` : ""}
+      ${c.treatment ? `<div class="owner-case-copy"><b>${ft("instructions")}</b><p>${escapeHtml(c.treatment)}</p></div>` : ""}
     </div>
     <div id="trackWrap"></div>
     ${prescriptions.length ? `
@@ -4196,9 +4234,9 @@ function ownerCaseDetail(c) {
         <div class="section-title">💊 ${ft("health_and_treatment")}</div>
         ${prescriptions.map(p => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.dosage || ""}</span></div>
-            <div class="meta">${p.frequency || ""}${p.duration ? ` · ${p.duration}` : ""}</div>
-            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${p.instructions}</div>` : ""}
+            <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.dosage || "")}</span></div>
+            <div class="meta">${escapeHtml(p.frequency || "")}${p.duration ? ` · ${escapeHtml(p.duration)}` : ""}</div>
+            ${p.instructions ? `<div class="meta">${ft("instructions")}: ${escapeHtml(p.instructions)}</div>` : ""}
             <div class="meta">${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
           </div>`).join("")}
       </div>` : ""}
@@ -4209,7 +4247,7 @@ function ownerCaseDetail(c) {
           <div class="list-card" style="cursor:default">
             <div class="row1"><span class="title">${ownerResponseLabel(update.response)}</span><span class="small-muted">${fmtDate(update.response_date)}</span></div>
             ${update.objective_observations ? `<div class="meta">${update.objective_observations}</div>` : ""}
-            ${update.notes ? `<div class="meta">${update.notes}</div>` : ""}
+            ${update.notes ? `<div class="meta">${escapeHtml(update.notes)}</div>` : ""}
           </div>`).join("")}
       </div>` : ""}
     ${labReports.length ? `
@@ -4227,7 +4265,7 @@ function ownerCaseDetail(c) {
         <div class="timeline">${c.updates.map(update => `
           <div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-body">
             <div class="t-status">${ownerCaseStatus(update.status)}</div>
-            ${update.note ? `<div class="t-note">${update.note}</div>` : ""}
+            ${update.note ? `<div class="t-note">${escapeHtml(update.note)}</div>` : ""}
             <div class="t-date">${fmtDate(update.created_at)}</div>
           </div></div>`).join("")}</div>
       </div>` : ""}
@@ -4253,7 +4291,7 @@ function caseDetailView(role) {
       if (feedbackForm) feedbackForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         try {
-          await api(`/cases/${c.id}/farmer-feedback`, { method: "POST", body: Object.fromEntries(new FormData(e.target)) });
+          await api(`/cases/${safeId(c.id)}/farmer-feedback`, { method: "POST", body: Object.fromEntries(new FormData(e.target)) });
           toast(ft("feedback_thanks"));
           router();
         } catch (err) { toast(err.message, true); }
@@ -4265,35 +4303,35 @@ function caseDetailView(role) {
       ${header(c.case_no, { back: true })}
       <div class="section-card">
         <div class="row1" style="justify-content:space-between;display:flex;align-items:center;margin-bottom:8px">
-          <span class="badge ${statusBadgeClass(c.status)}">${c.status}</span>
-          <span class="badge ${severityBadgeClass(c.severity)}">${c.severity} severity</span>
+          <span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span>
+          <span class="badge ${severityBadgeClass(c.severity)}">${escapeHtml(c.severity)} severity</span>
           ${autoEscalatedBadge(c)}
         </div>
         <div class="detail-grid">
-          <div><b>Animal</b><a class="link" onclick="location.hash='#/${role}/animals/${c.animal.id}'">${c.animal.animal_code}</a></div>
-          <div><b>Herd</b>${c.herd ? c.herd.herd_code : "—"}</div>
-          <div><b>Owner</b>${c.owner.full_name} (${c.owner.mobile || ""})</div>
-          <div><b>Reported via</b>${c.reported_through || "Mobile App"}</div>
-          <div><b>Symptoms</b>${c.symptoms || "—"}</div>
-          <div><b>Disease Suspected</b>${c.disease_suspected || "—"}</div>
-          <div><b>Diagnosis</b>${c.diagnosis || "—"}</div>
-          <div><b>Treatment</b>${c.treatment || "—"}</div>
-          <div><b>Vet Assigned</b>${c.vet_name || "Unassigned"}</div>
+          <div><b>Animal</b><a class="link" onclick="location.hash='#/${role}/animals/${safeId(c.animal.id)}'">${escapeHtml(c.animal.animal_code)}</a></div>
+          <div><b>Herd</b>${escapeHtml(c.herd ? c.herd.herd_code : "—")}</div>
+          <div><b>Owner</b>${escapeHtml(c.owner.full_name)} (${escapeHtml(c.owner.mobile || "")})</div>
+          <div><b>Reported via</b>${escapeHtml(c.reported_through || "Mobile App")}</div>
+          <div><b>Symptoms</b>${escapeHtml(c.symptoms || "—")}</div>
+          <div><b>Disease Suspected</b>${escapeHtml(c.disease_suspected || "—")}</div>
+          <div><b>Diagnosis</b>${escapeHtml(c.diagnosis || "—")}</div>
+          <div><b>Treatment</b>${escapeHtml(c.treatment || "—")}</div>
+          <div><b>Vet Assigned</b>${escapeHtml(c.vet_name || "Unassigned")}</div>
           <div><b>Reported On</b>${fmtDate(c.created_at)}</div>
         </div>
-        ${c.description ? `<div style="margin-top:10px"><b class="small-muted">Description:</b><div style="font-size:13.5px">${c.description}</div></div>` : ""}
+        ${c.description ? `<div style="margin-top:10px"><b class="small-muted">Description:</b><div style="font-size:13.5px">${escapeHtml(c.description)}</div></div>` : ""}
       </div>
 
       ${c.helpline_report ? `
         <div class="section-card">
-          <div class="section-title">☎️ Helpline Report ${c.helpline_report.report_no}</div>
+          <div class="section-title">☎️ Helpline Report ${escapeHtml(c.helpline_report.report_no)}</div>
           <div class="detail-grid">
-            <div><b>Source</b>${c.helpline_report.source}</div>
-            <div><b>Report Status</b>${c.helpline_report.status}</div>
-            <div><b>Language</b>${c.helpline_report.language || "Unknown"}</div>
-            <div><b>Location Source</b>${c.helpline_report.location_source}</div>
-            <div><b>Region</b>${c.helpline_report.village || ""}${c.helpline_report.village && c.helpline_report.district ? ", " : ""}${c.helpline_report.district || "Unknown"}</div>
-            <div><b>Urgency</b>${c.helpline_report.urgency || "Not Provided"}</div>
+            <div><b>Source</b>${escapeHtml(c.helpline_report.source)}</div>
+            <div><b>Report Status</b>${escapeHtml(c.helpline_report.status)}</div>
+            <div><b>Language</b>${escapeHtml(c.helpline_report.language || "Unknown")}</div>
+            <div><b>Location Source</b>${escapeHtml(c.helpline_report.location_source)}</div>
+            <div><b>Region</b>${escapeHtml(c.helpline_report.village || "")}${escapeHtml(c.helpline_report.village && c.helpline_report.district ? ", " : "")}${escapeHtml(c.helpline_report.district || "Unknown")}</div>
+            <div><b>Urgency</b>${escapeHtml(c.helpline_report.urgency || "Not Provided")}</div>
           </div>
         </div>` : ""}
 
@@ -4302,7 +4340,7 @@ function caseDetailView(role) {
         <div class="section-card" style="padding:12px">
           <div class="conflict-box" style="margin:0">
             <b>⚠️ Patient Drug Allergy Alert:</b>
-            ${allergies.map(a => `${a.allergen} (${a.allergy_severity}: ${a.reaction})`).join(", ")}
+            ${allergies.map(a => `${escapeHtml(a.allergen)} (${escapeHtml(a.allergy_severity)}: ${escapeHtml(a.reaction)})`).join(", ")}
           </div>
         </div>
       ` : ""}
@@ -4343,14 +4381,14 @@ function caseDetailView(role) {
           samples.map(s => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${s.sample_code} (${s.sample_type})</span>
-              <span class="badge ${statusBadgeClass(s.status)}">${s.status}</span>
+              <span class="title">${escapeHtml(s.sample_code)} (${escapeHtml(s.sample_type)})</span>
+              <span class="badge ${statusBadgeClass(s.status)}">${escapeHtml(s.status)}</span>
             </div>
-            <div class="meta">Collected: ${fmtDate(s.collected_at)} ${s.collection_lat ? `· Lat: ${s.collection_lat.toFixed(4)}, Lng: ${s.collection_lng.toFixed(4)}` : ""}</div>
+            <div class="meta">Collected: ${fmtDate(s.collected_at)} ${s.collection_lat ? `· Lat: ${escapeHtml(s.collection_lat.toFixed(4))}, Lng: ${escapeHtml(s.collection_lng.toFixed(4))}` : ""}</div>
             <div class="row1" style="margin-top:6px">
-              <button class="btn btn-ghost btn-sm" onclick="showSampleQrModal(${s.id})">🔍 QR &amp; Chain of Custody</button>
+              <button class="btn btn-ghost btn-sm" onclick="showSampleQrModal(${safeId(s.id)})">🔍 QR &amp; Chain of Custody</button>
               ${isVet && ["COLLECTED", "READY_FOR_PICKUP"].includes(s.status) ? `
-                <button class="btn btn-outline btn-sm" onclick="advanceTransport(${s.id})">Mark In Transit</button>
+                <button class="btn btn-outline btn-sm" onclick="advanceTransport(${safeId(s.id)})">Mark In Transit</button>
               ` : ""}
             </div>
           </div>
@@ -4400,10 +4438,10 @@ function caseDetailView(role) {
         ${c.lab_reports.length === 0 ? emptyState("No verified laboratory reports released yet.") :
           c.lab_reports.map(l => `
           <div class="list-card" style="cursor:default">
-            <div class="row1"><span class="title">${l.report_no} — ${l.test_name}</span><span class="badge ${l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red'}">${l.result}</span></div>
-            <div class="meta"><b>Method:</b> ${l.test_method || "Standard"} · <b>Status:</b> ${l.verification_status || "VERIFIED"}</div>
-            ${l.quantitative_result !== null ? `<div class="meta"><b>Value:</b> ${l.quantitative_result} ${l.units || ""} (Ref: ${l.reference_range_text || "Normal"})</div>` : ""}
-            ${l.notes || l.comments ? `<div class="small-muted">${l.notes || l.comments}</div>` : ""}
+            <div class="row1"><span class="title">${escapeHtml(l.report_no)} — ${escapeHtml(l.test_name)}</span><span class="badge ${escapeHtml(l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red')}">${escapeHtml(l.result)}</span></div>
+            <div class="meta"><b>Method:</b> ${escapeHtml(l.test_method || "Standard")} · <b>Status:</b> ${escapeHtml(l.verification_status || "VERIFIED")}</div>
+            ${l.quantitative_result !== null ? `<div class="meta"><b>Value:</b> ${escapeHtml(l.quantitative_result)} ${escapeHtml(l.units || "")} (Ref: ${escapeHtml(l.reference_range_text || "Normal")})</div>` : ""}
+            ${l.notes || l.comments ? `<div class="small-muted">${escapeHtml(l.notes || l.comments)}</div>` : ""}
           </div>
         `).join("")}
       </div>
@@ -4414,12 +4452,12 @@ function caseDetailView(role) {
         ${c.prescriptions.length === 0 ? emptyState("No prescriptions issued yet.") : c.prescriptions.map(p => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${p.medicine}</span>
-              <span class="badge badge-blue">${p.dosage || ""}</span>
+              <span class="title">${escapeHtml(p.medicine)}</span>
+              <span class="badge badge-blue">${escapeHtml(p.dosage || "")}</span>
             </div>
-            <div class="meta">${p.frequency || ""} for ${p.duration || ""} · Follow-up: ${fmtDate(p.follow_up_date)}</div>
-            ${p.allergy_override ? `<div class="conflict-box" style="margin:4px 0;padding:6px"><b>⚠️ Allergy Override Granted:</b> ${p.override_reason}</div>` : ""}
-            ${p.instructions ? `<div class="meta">${p.instructions}</div>` : ""}
+            <div class="meta">${escapeHtml(p.frequency || "")} for ${escapeHtml(p.duration || "")} · Follow-up: ${fmtDate(p.follow_up_date)}</div>
+            ${p.allergy_override ? `<div class="conflict-box" style="margin:4px 0;padding:6px"><b>⚠️ Allergy Override Granted:</b> ${escapeHtml(p.override_reason)}</div>` : ""}
+            ${p.instructions ? `<div class="meta">${escapeHtml(p.instructions)}</div>` : ""}
           </div>`).join("")}
       </div>
 
@@ -4431,8 +4469,8 @@ function caseDetailView(role) {
             <div class="timeline-item">
               <div class="timeline-dot"></div>
               <div class="timeline-body">
-                <div class="t-status">${u.status}</div>
-                <div class="t-note">${u.note || ""} — ${u.updated_by || ""}</div>
+                <div class="t-status">${escapeHtml(u.status)}</div>
+                <div class="t-note">${escapeHtml(u.note || "")} — ${escapeHtml(u.updated_by || "")}</div>
                 <div class="t-date">${fmtDate(u.created_at)}</div>
               </div>
             </div>`).join("")}
@@ -4443,7 +4481,7 @@ function caseDetailView(role) {
       <div class="section-card">
         <div class="subheading">🗑 Case Solved — Close-out</div>
         <div class="small-muted" style="margin-bottom:10px">This case is solved. You can remove the report permanently.</div>
-        <button class="btn btn-outline" onclick="deleteCase(${c.id},'${c.case_no}')">Delete Report</button>
+        <button class="btn btn-outline" onclick="deleteCase(${safeId(c.id)},'${escapeJsStr(c.case_no)}')">Delete Report</button>
       </div>` : ""}
 
       <!-- REQ 18: FARMER FEEDBACK SECTION -->
@@ -4465,7 +4503,7 @@ function caseDetailView(role) {
         e.preventDefault();
         try {
           const body = Object.fromEntries(new FormData(e.target));
-          await api(`/cases/${c.id}/farmer-feedback`, { method: "POST", body });
+          await api(`/cases/${safeId(c.id)}/farmer-feedback`, { method: "POST", body });
           toast("Feedback submitted! Thank you.");
           router();
         } catch (err) { toast(err.message, true); }
@@ -4489,15 +4527,15 @@ window.showSampleQrModal = async function(sid) {
           <b>🧪 Digital Biological Sample Tag</b>
           <button style="border:none;background:none;font-size:20px;cursor:pointer" onclick="document.getElementById('sampleQrModal').remove()">✕</button>
         </div>
-        <div style="font-size:16px;font-weight:800;color:var(--primary)">${s.sample_code}</div>
-        <div class="small-muted">${s.sample_type} · Animal: ${s.animal_code}</div>
+        <div style="font-size:16px;font-weight:800;color:var(--primary)">${escapeHtml(s.sample_code)}</div>
+        <div class="small-muted">${escapeHtml(s.sample_type)} · Animal: ${escapeHtml(s.animal_code)}</div>
         <div class="qr-image-wrap">
-          <img src="${s.qr_image}" alt="Sample QR" />
+          <img src="${escapeHtml(s.qr_image)}" alt="Sample QR" />
         </div>
-        <div class="small-muted" style="margin-bottom:8px">Token: ${s.qr_token.slice(0, 16)}…</div>
+        <div class="small-muted" style="margin-bottom:8px">Token: ${escapeHtml(s.qr_token.slice(0, 16))}…</div>
         <div style="text-align:left;max-height:140px;overflow-y:auto;border-top:1px solid #eee;padding-top:6px">
           <b>Chain of Custody:</b>
-          ${(s.custody_events || []).map(e => `<div style="font-size:11px;margin:3px 0">• <b>${e.status}:</b> ${e.action} (${e.actor_name})</div>`).join("")}
+          ${(s.custody_events || []).map(e => `<div style="font-size:11px;margin:3px 0">• <b>${escapeHtml(e.status)}:</b> ${escapeHtml(e.action)} (${escapeHtml(e.actor_name)})</div>`).join("")}
         </div>
         <button class="btn btn-outline btn-sm" style="margin-top:12px;width:100%" onclick="window.print()">🖨️ Print Specimen Label</button>
       </div>
@@ -4571,7 +4609,7 @@ function trackingCardHTML(t, c, role) {
       ${v ? `
         <div class="row1 tracking-meta" style="margin-top:10px;font-size:13px">
           <div><b>${localized ? ft("eta") : "ETA"}:</b> ${v.status === "ON_THE_WAY" ? `${Math.ceil(t.eta_seconds / 60)} ${localized ? ft("minutes") : "mins"}` : v.status === "ARRIVED" ? (localized ? ft("tracking_arrived") : "Arrived") : (localized ? ft("tracking_visit_done") : "Completed")}</div>
-          <div><b>${localized ? ft("vet") : "Veterinarian"}:</b> ${t.vet ? t.vet.full_name : (localized ? ft("assigned") : "Assigned")}</div>
+          <div><b>${localized ? ft("vet") : "Veterinarian"}:</b> ${escapeHtml(t.vet ? t.vet.full_name : (localized ? ft("assigned") : "Assigned"))}</div>
         </div>
       ` : ""}
       ${role === "vet" ? visitControlButtons(v) : ""}
@@ -4609,7 +4647,7 @@ async function loadTracking(c, role) {
   const wrap = document.getElementById("trackWrap");
   if (!wrap) return;
   try {
-    const t = await api(`/cases/${c.id}/track`);
+    const t = await api(`/cases/${safeId(c.id)}/track`);
     wrap.innerHTML = trackingCardHTML(t, c, role);
     if (t.destination) initTrackMap(t, role);
     bindVisitControls(c, role);
@@ -4617,7 +4655,7 @@ async function loadTracking(c, role) {
     if (t.visit && t.visit.status === "ON_THE_WAY") {
       trackTimer = setInterval(async () => {
         try {
-          const fresh = await api(`/cases/${c.id}/track`);
+          const fresh = await api(`/cases/${safeId(c.id)}/track`);
           updateTrackMap(fresh);
           if (fresh.visit && fresh.visit.status !== "ON_THE_WAY") clearInterval(trackTimer);
         } catch (e) {}
@@ -4630,17 +4668,17 @@ function bindVisitControls(c, role) {
   if (role !== "vet") return;
   const startBtn = document.getElementById("btnStartTrip");
   if (startBtn) startBtn.addEventListener("click", async () => {
-    try { await api(`/cases/${c.id}/visit`, { method: "POST" }); toast("Visit started!"); loadTracking(c, role); }
+    try { await api(`/cases/${safeId(c.id)}/visit`, { method: "POST" }); toast("Visit started!"); loadTracking(c, role); }
     catch (err) { toast(err.message, true); }
   });
   const arrBtn = document.getElementById("btnArrived");
   if (arrBtn) arrBtn.addEventListener("click", async () => {
-    try { await api(`/cases/${c.id}/visit`, { method: "PUT", body: { status: "ARRIVED" } }); toast("Arrived at farm!"); loadTracking(c, role); }
+    try { await api(`/cases/${safeId(c.id)}/visit`, { method: "PUT", body: { status: "ARRIVED" } }); toast("Arrived at farm!"); loadTracking(c, role); }
     catch (err) { toast(err.message, true); }
   });
   const compBtn = document.getElementById("btnCompleteTrip");
   if (compBtn) compBtn.addEventListener("click", async () => {
-    try { await api(`/cases/${c.id}/visit`, { method: "PUT", body: { status: "COMPLETED" } }); toast("Visit marked completed!"); loadTracking(c, role); }
+    try { await api(`/cases/${safeId(c.id)}/visit`, { method: "PUT", body: { status: "COMPLETED" } }); toast("Visit marked completed!"); loadTracking(c, role); }
     catch (err) { toast(err.message, true); }
   });
 }
@@ -4651,9 +4689,9 @@ function vetCaseActions(c, allergies = []) {
     <div class="section-card">
       <div class="subheading">✏️ Case Actions &amp; Diagnosis</div>
       <form id="statusForm">
-        <div class="field"><label>Status</label><select name="status">${statuses.map(s => `<option ${s === c.status ? "selected" : ""}>${s}</option>`).join("")}</select></div>
-        <div class="field"><label>Diagnosis</label><input name="diagnosis" value="${c.diagnosis || ""}" /></div>
-        <div class="field"><label>Treatment Notes</label><textarea name="treatment">${c.treatment || ""}</textarea></div>
+        <div class="field"><label>Status</label><select name="status">${statuses.map(s => `<option ${escapeHtml(s === c.status ? "selected" : "")}>${s}</option>`).join("")}</select></div>
+        <div class="field"><label>Diagnosis</label><input name="diagnosis" value="${escapeHtml(c.diagnosis || "")}" /></div>
+        <div class="field"><label>Treatment Notes</label><textarea name="treatment">${escapeHtml(c.treatment || "")}</textarea></div>
         <div class="field"><label>Update Note</label><input name="note" placeholder="What changed?" /></div>
         <button class="btn btn-primary" type="submit">Save Case Update</button>
       </form>
@@ -4661,7 +4699,7 @@ function vetCaseActions(c, allergies = []) {
     <div class="section-card">
       <div class="subheading">💊 Create E-Prescription</div>
       <form id="rxForm">
-        <div class="field"><label>Diagnosis</label><input name="diagnosis" value="${c.diagnosis || ""}" /></div>
+        <div class="field"><label>Diagnosis</label><input name="diagnosis" value="${escapeHtml(c.diagnosis || "")}" /></div>
         <div class="form-row">
           <div class="field"><label>Medicine</label><input name="medicine" id="rxMedicineInput" required /></div>
           <div class="field"><label>Dosage</label><input name="dosage" placeholder="e.g. 0.5 mg/kg" /></div>
@@ -4683,7 +4721,7 @@ function bindVetCaseActions(c, allergies = []) {
   if (sf) {
     sf.addEventListener("submit", async (e) => {
       e.preventDefault();
-      try { await api(`/cases/${c.id}`, { method: "PUT", body: Object.fromEntries(new FormData(e.target)) }); toast("Case updated successfully"); router(); }
+      try { await api(`/cases/${safeId(c.id)}`, { method: "PUT", body: Object.fromEntries(new FormData(e.target)) }); toast("Case updated successfully"); router(); }
       catch (err) { toast(err.message, true); }
     });
   }
@@ -4708,7 +4746,7 @@ function bindVetCaseActions(c, allergies = []) {
       e.preventDefault();
       try {
         const body = Object.fromEntries(new FormData(e.target));
-        await api(`/cases/${c.id}/treatment-responses`, { method: "POST", body });
+        await api(`/cases/${safeId(c.id)}/treatment-responses`, { method: "POST", body });
         toast("Treatment response saved!");
         router();
       } catch (err) { toast(err.message, true); }
@@ -4776,12 +4814,12 @@ route("#/vet/search", () => {
       document.getElementById("searchResults").innerHTML = `
         <div class="subheading">Animals (${res.animals.length})</div>
         ${res.animals.map(a => `
-          <div class="list-card" onclick="location.hash='#/vet/animals/${a.id}'">
-            <div class="row1"><span class="title">${a.animal_code}</span><span class="badge ${a.status === 'Healthy' ? 'badge-green' : 'badge-orange'}">${a.status}</span></div>
-            <div class="meta">${a.animal_name || a.species} · Owner: ${a.owner_name} (${a.mobile})</div>
+          <div class="list-card" onclick="location.hash='#/vet/animals/${safeId(a.id)}'">
+            <div class="row1"><span class="title">${escapeHtml(a.animal_code)}</span><span class="badge ${escapeHtml(a.status === 'Healthy' ? 'badge-green' : 'badge-orange')}">${escapeHtml(a.status)}</span></div>
+            <div class="meta">${escapeHtml(a.animal_name || a.species)} · Owner: ${escapeHtml(a.owner_name)} (${escapeHtml(a.mobile)})</div>
           </div>`).join("")}
         <div class="subheading" style="margin-top:14px">Herds (${res.herds.length})</div>
-        ${res.herds.map(h => `<div class="list-card" style="cursor:default"><div class="row1"><span class="title">${h.herd_code}</span></div><div class="meta">${h.village}, ${h.district}</div></div>`).join("")}
+        ${res.herds.map(h => `<div class="list-card" style="cursor:default"><div class="row1"><span class="title">${escapeHtml(h.herd_code)}</span></div><div class="meta">${escapeHtml(h.village)}, ${escapeHtml(h.district)}</div></div>`).join("")}
       `;
     } catch (err) {}
   });
@@ -4821,11 +4859,11 @@ function prescriptionsView(role) {
         ${header(ft("health_treatment"), { back: true })}
         <div class="section-card">
           ${rx.length === 0 ? emptyState(ft("no_prescriptions")) : rx.map(p => `
-            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${p.case_id}'">
-              <div class="row1"><span class="title">💊 ${p.medicine}</span><span class="badge badge-blue">${p.case_no}</span></div>
-              <div class="meta">${ft("animal_id")}: ${p.animal_code}</div>
-              <div class="meta">${ft("dosage")}: ${p.dosage || ft("unknown")} · ${ft("frequency")}: ${p.frequency || ft("unknown")}</div>
-              <div class="meta">${ft("prescribed_by")}: ${p.vet_name || ft("unknown")} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(p.case_id)}'">
+              <div class="row1"><span class="title">💊 ${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.case_no)}</span></div>
+              <div class="meta">${ft("animal_id")}: ${escapeHtml(p.animal_code)}</div>
+              <div class="meta">${ft("dosage")}: ${escapeHtml(p.dosage || ft("unknown"))} · ${ft("frequency")}: ${escapeHtml(p.frequency || ft("unknown"))}</div>
+              <div class="meta">${ft("prescribed_by")}: ${escapeHtml(p.vet_name || ft("unknown"))} · ${ft("follow_up")}: ${fmtDate(p.follow_up_date)}</div>
             </div>`).join("")}
         </div>
         ${bottomNav("#/owner/prescriptions")}
@@ -4836,10 +4874,10 @@ function prescriptionsView(role) {
       ${header("Prescriptions", { back: true })}
       <div class="section-card">
         ${rx.length === 0 ? emptyState("No prescriptions yet.") : rx.map(p => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${p.case_id}'">
-            <div class="row1"><span class="title">${p.medicine}</span><span class="badge badge-blue">${p.case_no}</span></div>
-            <div class="meta">${p.animal_code} · ${p.dosage || ""} · ${p.frequency || ""}</div>
-            <div class="meta">By ${p.vet_name || "—"} · Follow-up: ${fmtDate(p.follow_up_date)}</div>
+          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(p.case_id)}'">
+            <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.case_no)}</span></div>
+            <div class="meta">${escapeHtml(p.animal_code)} · ${escapeHtml(p.dosage || "")} · ${escapeHtml(p.frequency || "")}</div>
+            <div class="meta">By ${escapeHtml(p.vet_name || "—")} · Follow-up: ${fmtDate(p.follow_up_date)}</div>
           </div>`).join("")}
       </div>
       ${bottomNav(role === "owner" ? "#/owner/prescriptions" : `#/${role}/dashboard`)}
@@ -4859,7 +4897,7 @@ function labReportsView(role) {
         ${header(ft("test_results"), { back: true })}
         <div class="section-card">
           ${reps.length ? reps.map(report => `
-            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${report.case_id}'">
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(report.case_id)}'">
               <div class="row1"><span class="title">${report.test_name || report.report_no}</span><span class="badge ${report.result === "NEGATIVE" ? "badge-green" : "badge-blue"}">${ownerResultLabel(report.result)}</span></div>
               <div class="meta">${ft("animal_id")}: ${report.animal_code}${report.animal_name ? ` · ${report.animal_name}` : ""}</div>
               <div class="meta">${ft("case_number")}: ${report.case_no} · ${fmtDate(report.test_date)}</div>
@@ -4873,11 +4911,11 @@ function labReportsView(role) {
       ${header("Lab Reports", { back: true })}
       <div class="section-card">
         ${reps.length === 0 ? emptyState("No lab reports yet.") : reps.map(l => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${l.case_id}'">
-            <div class="row1"><span class="title">${l.report_no}</span><span class="badge ${l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red'}">${l.result || "Pending"}</span></div>
-            <div class="meta">${l.animal_code}${l.animal_name ? " · " + l.animal_name : ""} · ${l.test_name || ""}</div>
-            <div class="meta">Case ${l.case_no} · Sample: ${l.sample || "—"} · ${fmtDate(l.test_date)}</div>
-            ${l.notes ? `<div class="meta">${l.notes}</div>` : ""}
+          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(l.case_id)}'">
+            <div class="row1"><span class="title">${escapeHtml(l.report_no)}</span><span class="badge ${escapeHtml(l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red')}">${escapeHtml(l.result || "Pending")}</span></div>
+            <div class="meta">${escapeHtml(l.animal_code)}${escapeHtml(l.animal_name ? " · " + l.animal_name : "")} · ${escapeHtml(l.test_name || "")}</div>
+            <div class="meta">Case ${escapeHtml(l.case_no)} · Sample: ${escapeHtml(l.sample || "—")} · ${fmtDate(l.test_date)}</div>
+            ${l.notes ? `<div class="meta">${escapeHtml(l.notes)}</div>` : ""}
           </div>`).join("")}
       </div>
       ${bottomNav(role === "owner" ? "#/owner/lab-reports" : role === "lab" ? "#/lab/lab-reports" : `#/${role}/dashboard`)}
@@ -4944,9 +4982,9 @@ function notificationsView(role) {
         ${header(ft("notifications"), { back: true })}
         <div class="section-card">
           ${notes.length === 0 ? emptyState(ft("no_notifications")) : notes.map(n => `
-            <div class="list-card" style="${n.is_read ? "opacity:0.6" : ""}" onclick="markRead(${n.id})">
-              <div class="row1"><span class="title">${iconForType(n.type)} ${ownerNotificationType(n.type)}</span>${n.is_read ? "" : `<span class="badge badge-red">${ft("new")}</span>`}</div>
-              <div class="meta">${ownerNotificationMessage(n.message)}</div>
+            <div class="list-card" style="${escapeHtml(n.is_read ? "opacity:0.6" : "")}" onclick="markRead(${safeId(n.id)})">
+              <div class="row1"><span class="title">${iconForType(n.type)} ${escapeHtml(ownerNotificationType(n.type))}</span>${n.is_read ? "" : `<span class="badge badge-red">${ft("new")}</span>`}</div>
+              <div class="meta">${escapeHtml(ownerNotificationMessage(n.message))}</div>
               <div class="meta">${fmtDate(n.created_at)}</div>
             </div>`).join("")}
         </div>
@@ -4958,9 +4996,9 @@ function notificationsView(role) {
       ${header("Notifications", { back: true })}
       <div class="section-card">
         ${notes.length === 0 ? emptyState("You're all caught up!") : notes.map(n => `
-          <div class="list-card" style="${n.is_read ? "opacity:0.6" : ""}" onclick="markRead(${n.id})">
-            <div class="row1"><span class="title">${iconForType(n.type)} ${n.type.toUpperCase()}</span>${n.is_read ? "" : '<span class="badge badge-red">NEW</span>'}</div>
-            <div class="meta">${n.message}</div>
+          <div class="list-card" style="${escapeHtml(n.is_read ? "opacity:0.6" : "")}" onclick="markRead(${safeId(n.id)})">
+            <div class="row1"><span class="title">${iconForType(n.type)} ${escapeHtml(n.type.toUpperCase())}</span>${n.is_read ? "" : '<span class="badge badge-red">NEW</span>'}</div>
+            <div class="meta">${escapeHtml(n.message)}</div>
             <div class="meta">${fmtDate(n.created_at)}</div>
           </div>`).join("")}
       </div>
@@ -5047,9 +5085,9 @@ function trendBarChart(trends) {
     ${trends.map(t => {
       const pct = Math.round((t.total / max) * 100);
       return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
-        <div style="font-size:10px;font-weight:700">${t.total}</div>
+        <div style="font-size:10px;font-weight:700">${escapeHtml(t.total)}</div>
         <div style="width:100%;height:${Math.max(pct, 4)}%;background:var(--primary);border-radius:4px 4px 0 0;min-height:4px"></div>
-        <div style="font-size:9px;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap">${t.period_label}</div>
+        <div style="font-size:9px;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap">${escapeHtml(t.period_label)}</div>
       </div>`;
     }).join("")}
   </div>`;
@@ -5103,10 +5141,10 @@ route("#/govt/blocks", async () => {
             <tbody>
               ${a.cases_by_block.map(b => `
                 <tr>
-                  <td>${b.district}</td>
-                  <td><b>${b.block}</b></td>
-                  <td>${b.cases}</td>
-                  <td>${b.active}</td>
+                  <td>${escapeHtml(b.district)}</td>
+                  <td><b>${escapeHtml(b.block)}</b></td>
+                  <td>${escapeHtml(b.cases)}</td>
+                  <td>${escapeHtml(b.active)}</td>
                 </tr>
               `).join("")}
             </tbody>
@@ -5146,9 +5184,9 @@ route("#/vet/advisories", async () => {
           <div class="section-title">🚨 Active Alerts in Your Area</div>
           ${adv.alerts.map(a => `
             <div class="list-card" style="cursor:default">
-              <div class="row1"><span class="title">${a.disease}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${a.risk_level}</span></div>
-              <div class="meta">${a.trigger_reason}</div>
-              <div class="meta" style="color:var(--primary)">Action: ${a.recommended_action || "—"}</div>
+              <div class="row1"><span class="title">${escapeHtml(a.disease)}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${escapeHtml(a.risk_level)}</span></div>
+              <div class="meta">${escapeHtml(a.trigger_reason)}</div>
+              <div class="meta" style="color:var(--primary)">Action: ${escapeHtml(a.recommended_action || "—")}</div>
             </div>
           `).join("")}
         </div>
@@ -5158,8 +5196,8 @@ route("#/vet/advisories", async () => {
           <div class="section-title">💉 Vaccination Campaigns</div>
           ${adv.campaigns.map(c => `
             <div class="list-card" style="cursor:default">
-              <div class="row1"><span class="title">${c.name}</span><span class="badge ${campStatusClass(c.status)}">${c.status}</span></div>
-              <div class="meta">${c.vaccine} · ${c.district}</div>
+              <div class="row1"><span class="title">${escapeHtml(c.name)}</span><span class="badge ${campStatusClass(c.status)}">${escapeHtml(c.status)}</span></div>
+              <div class="meta">${escapeHtml(c.vaccine)} · ${escapeHtml(c.district)}</div>
               <div class="meta">Dates: ${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</div>
             </div>
           `).join("")}
@@ -5168,7 +5206,7 @@ route("#/vet/advisories", async () => {
       ${bottomNav("#/vet/dashboard")}
     `);
   } catch (err) {
-    render(`${header("Local Advisories", { back: true })}<div class="loading">⚠️ ${err.message}</div>${bottomNav("#/vet/dashboard")}`);
+    render(`${header("Local Advisories", { back: true })}<div class="loading">⚠️ ${escapeHtml(err.message)}</div>${bottomNav("#/vet/dashboard")}`);
   }
 }, ["vet"]);
 
@@ -5338,10 +5376,10 @@ route("#/govt/zoonotic", async () => {
         ${data.zoonotic_diseases.map(d => `
           <div class="list-card" style="cursor:default">
             <div class="row1">
-              <span class="title">${d.name} (${d.name_mr})</span>
-              <span class="badge ${riskBadgeClass(d.risk_level)}">${d.risk_level}</span>
+              <span class="title">${escapeHtml(d.name)} (${escapeHtml(d.name_mr)})</span>
+              <span class="badge ${riskBadgeClass(d.risk_level)}">${escapeHtml(d.risk_level)}</span>
             </div>
-            <div class="meta">Category: ${d.category}</div>
+            <div class="meta">Category: ${escapeHtml(d.category)}</div>
           </div>
         `).join("")}
       </div>
@@ -5358,6 +5396,6 @@ route("#/govt/zoonotic", async () => {
       ${bottomNav("#/govt/dashboard")}
     `);
   } catch (err) {
-    render(`${header("Zoonotic Risk", { back: true })}<div class="loading">⚠️ ${err.message}</div>${bottomNav("#/govt/dashboard")}`);
+    render(`${header("Zoonotic Risk", { back: true })}<div class="loading">⚠️ ${escapeHtml(err.message)}</div>${bottomNav("#/govt/dashboard")}`);
   }
 }, ["govt", "vet"]);
