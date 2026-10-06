@@ -88,15 +88,28 @@ def allowed_origins() -> list[str]:
     This deployment deliberately keeps the allow-list explicit. For Vercel
     previews, add each required preview origin to ``SIH_ALLOWED_ORIGINS``; do
     not use a blanket ``*.vercel.app`` wildcard.
+
+    ``SIH_FRONTEND_ORIGINS`` is accepted as an alias for historical
+    compatibility (older docs referenced it). Both variables are merged,
+    duplicates removed, trailing slashes stripped.
     """
-    raw = (os.environ.get("SIH_ALLOWED_ORIGINS") or "").strip()
-    origins = _split_origins(raw)
+    raw_allowed = (os.environ.get("SIH_ALLOWED_ORIGINS") or "").strip()
+    raw_frontend = (os.environ.get("SIH_FRONTEND_ORIGINS") or "").strip()
+    combined = ",".join(part for part in (raw_allowed, raw_frontend) if part)
+    origins = _split_origins(combined)
     # Local development defaults; harmless in production because the deployed
     # origins are always listed explicitly.
     for origin in ("http://localhost:5001", "http://127.0.0.1:5001", "http://localhost:8000"):
         if origin not in origins:
             origins.append(origin)
-    return origins
+    # Preserve order, deduplicate
+    seen = set()
+    deduped = []
+    for o in origins:
+        if o not in seen:
+            seen.add(o)
+            deduped.append(o)
+    return deduped
 
 
 def origin_allowed(origin: str | None) -> bool:

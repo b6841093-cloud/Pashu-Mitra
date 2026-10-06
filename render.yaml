@@ -124,8 +124,12 @@ services:
       - key: SIH_STUN_URLS
         value: stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302
       # Browser origins allowed to open the signaling socket (the Vercel portal).
+      # Supports BOTH the older production origin and the CURRENT preview origin
+      # under test (https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app) so
+      # the deployed vet browser can establish Socket.IO signaling without
+      # breaking the existing production deployment.
       - key: SIH_ALLOWED_ORIGINS
-        value: https://pashu-mitra-smoky.vercel.app
+        value: https://pashu-mitra-smoky.vercel.app,https://pashu-mitra-efyqsdomw-pashu-shield.vercel.app
       # Socket.IO path. MUST keep the leading slash: the browser client appends
       # this value to the origin, so "socket.io" produces
       # "https://hostsocket.io/" (unresolvable) and signaling never connects
