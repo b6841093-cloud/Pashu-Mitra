@@ -74,10 +74,16 @@ motion-dependent, and no text was replaced by an icon.
 | Real two-way audio for a screen-reader user (live captions) | No microphone/browser | Known gap A-9 below — the text call state is provided instead |
 
 **The official logo file (`frontend/assets/pashu-mitra-logo.png`) is not present in
-this checkout.** Every reference is wired (`org-config.js` is the single source;
-`index.html` favicon/apple-touch-icon and `manifest.json` icons point at the same
-path) and the fallback keeps the accessible product name visible, but until the
-file is dropped into `frontend/assets/` the visual result cannot be audited.
+this checkout.** The artwork was attached in the conversation, but the upload did
+not reach the workspace filesystem (there is no `uploads/` directory in the
+sandbox and outbound downloads are blocked), so the bytes could not be copied.
+Every reference is wired (`org-config.js` is the single source; `index.html`
+favicon/apple-touch-icon and `manifest.json` icons point at the same path) and
+the fallback keeps the accessible product name visible; the moment the PNG is
+placed in `frontend/assets/`, `node --test frontend/tests/branding_webcall_states.test.mjs`
+validates it (signature, dimensions, aspect ratio, size) and no code change is
+needed. Until then the rendered result cannot be audited visually and the logo's
+own contrast cannot be measured.
 
 ---
 

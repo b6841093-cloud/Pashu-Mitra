@@ -93,6 +93,28 @@ test("the official logo asset is the single source for every logo location", () 
   assert.match(appSource, /onerror="this\.hidden=true"/);
 });
 
+const LOGO_PATH = path.join(root, "assets", "pashu-mitra-logo.png");
+const logoPresent = fs.existsSync(LOGO_PATH);
+
+test("the official logo file, when present, is a usable PNG", { skip: logoPresent ? false : "assets/pashu-mitra-logo.png is not in this checkout yet" }, () => {
+  const bytes = fs.readFileSync(LOGO_PATH);
+  // PNG signature — the brand asset must be the supplied raster file as-is.
+  assert.deepEqual([...bytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], "not a PNG file");
+  assert.equal(bytes.subarray(12, 16).toString("ascii"), "IHDR", "missing IHDR chunk");
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  assert.ok(width >= 64 && height >= 64, `logo is too small to render crisply (${width}x${height})`);
+  const ratio = width / height;
+  assert.ok(ratio > 0.2 && ratio < 5, `implausible aspect ratio ${ratio.toFixed(2)} (${width}x${height})`);
+  assert.ok(bytes.length <= 2 * 1024 * 1024, `logo is ${(bytes.length / 1024).toFixed(0)} KB — keep it under 2 MB for the PWA`);
+  // No stretch is possible: the CSS never forces a ratio, and the markup only
+  // limits the height. Assert both remain true alongside the asset itself.
+  const css = read("style.css");
+  assert.match(css, /\.pm-logo-img\{[^}]*height:40px; width:auto/);
+  assert.doesNotMatch(css, /\.pm-logo-img\{[^}]*aspect-ratio/);
+  assert.doesNotMatch(shellSource, /pm-logo-img[^>]*aspect-ratio:[0-9]/);
+});
+
 test("deployment identifiers are intentionally NOT renamed", () => {
   // Renaming any of these would break a running service rather than branding.
   const vercel = JSON.parse(read("vercel.json"));

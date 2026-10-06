@@ -103,9 +103,16 @@ lines, all of which are in the table above; **0** are class A.
   that no `emblem` asset/name is referenced, and requires the
   "State Emblem of India is deliberately not used" note.
 * **Asset status:** `frontend/assets/pashu-mitra-logo.png` is **not in this
-  checkout** — the file has to be dropped in by the owner (see
-  `frontend/assets/README.md`). Every reference is already wired, so adding the
-  file is the only remaining step; until then the fallback text is shown.
+  checkout**. The official artwork was shown in the conversation, but the upload
+  never reached the workspace filesystem (no `uploads/` directory exists in the
+  sandbox, and outbound downloads from the sandbox are blocked), so the file
+  could not be copied byte-for-byte. The owner action is one step: place the
+  supplied PNG at `frontend/assets/pashu-mitra-logo.png` (locally or via the
+  GitHub web uploader on this branch). Every reference is already wired, and
+  `frontend/tests/branding_webcall_states.test.mjs` validates the file the
+  moment it appears (PNG signature, ≥64 px, sane aspect ratio, <2 MB, no forced
+  aspect ratio in CSS) — until then that single check skips with a reason and the
+  wordmark fallback is shown.
 
 ---
 

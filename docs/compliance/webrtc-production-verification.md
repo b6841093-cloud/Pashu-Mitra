@@ -355,7 +355,7 @@ sentences must be reported as a defect, not explained away.
 | `render.yaml` | `SIH_ALLOWED_ORIGINS` explicit list + corrected comments |
 | `frontend/call.js` | 12-state labels, human routing wording, origin verdict, retry/reconnect, config refresh on reconnect |
 | `frontend/app.js`, `frontend/shell.js`, `frontend/org-config.js`, `frontend/index.html`, `frontend/manifest.json`, `frontend/sw.js`, `frontend/info-pages.js`, `frontend/style.css`, `frontend/a11y.js`, `frontend/captcha.js` | Pashu-Mitra branding, official logo wiring, demo-access card, web-call translations (en/mr/hi/te) |
-| `frontend/tests/branding_webcall_states.test.mjs` | **new** branding + state-honesty tests |
+| `frontend/tests/branding_webcall_states.test.mjs` | **new** branding + state-honesty tests (incl. the logo asset check: PNG signature, dimensions, aspect ratio, under 2 MB — skipped with a reason while the asset is absent) |
 | `frontend/tests/demo_account_ui.test.mjs` | demo card copy updated to the new (non-warning) wording |
 | `docs/compliance/webrtc-production-verification.md` | this document |
 | `docs/compliance/browser-accessibility-audit.md` | accessibility status for the branding/login changes |
