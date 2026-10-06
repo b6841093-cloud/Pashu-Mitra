@@ -2398,10 +2398,11 @@ async function vetDashboard() {
       ${statCard("MH", "State: Maharashtra")}
     </div>
     <div class="section-card">
-      <div class="section-title">☎️ Helpline / IVR Routing</div>
-      <div class="meta" style="margin-bottom:10px">This panel is read-only. The canonical availability controls for both web calls and helpline routing are in the <b>Web call availability</b> card below.</div>
-      <div class="meta" style="margin-bottom:6px">Current status: <span class="badge ${availability.effective_status === 'AVAILABLE' ? 'badge-green' : availability.effective_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${availability.effective_status}</span></div>
+      <div class="section-title">☎️ Helpline / IVR Routing (read-only)</div>
+      <div class="meta" style="margin-bottom:10px">This panel is read-only. The canonical availability controls for both web calls and helpline routing are in the <b>Web call availability</b> card below. That card shows live routability which requires Socket.IO connected + presence lease live + AVAILABLE + not busy, and is the only honest indicator for web calls.</div>
+      <div class="meta" style="margin-bottom:6px">Configured: <span class="badge ${availability.configured_status === 'AVAILABLE' ? 'badge-green' : availability.configured_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${escapeHtml(availability.configured_status)}</span> · Effective (hours): <span class="badge ${availability.effective_status === 'AVAILABLE' ? 'badge-green' : availability.effective_status === 'BUSY' ? 'badge-orange' : 'badge-red'}">${escapeHtml(availability.effective_status)}</span></div>
       <div class="small-muted">Languages: ${(availability.supported_languages || []).map((code) => ({ en: 'English', te: 'Telugu', hi: 'Hindi', mr: 'Marathi' }[code] || code.toUpperCase())).join(', ') || '—'}</div>
+      <div class="small-muted" style="margin-top:6px">State honesty: 1 availability (your choice) · 2 Socket.IO (signaling) · 3 presence lease (server) · 4 routability (1+2+3+not busy). IVR uses 1 + working hours; web calls use 1+2+3+4.</div>
     </div>
     <div class="section-card">
       <div class="section-title">📞 IVR / Helpline Status</div>

@@ -1,6 +1,6 @@
 # Pashu-Shield — Compliance Test Report
 
-**Date:** 2026-10-05 · **Branch:** `arena/01a10b85-pashu-shield-updated`
+**Date:** 2026-10-06 · **Branch:** `arena/92aa119e-pashu-shield-updated` (second WebRTC state-honesty round)
 **Baseline:** `00-baseline.md` · **Gap matrix:** `01-gap-matrix.md`
 
 > **Rule observed (programme §62): no result is claimed unless it was actually executed.**
@@ -14,14 +14,17 @@
 | Suite | Tests | Passed | Failed | Skipped | Status |
 |---|---:|---:|---:|---:|---|
 | Backend — pre-existing suites (9) | 277 | 277 | 0 | 4 | ✅ PASS |
-| Backend — new compliance suite | 54 | 54 | 0 | 0 | ✅ PASS |
-| **Backend total** | **331** | **331** | **0** | **4** | ✅ |
+| Backend — new compliance suite | 63 | 63 | 0 | 0 | ✅ PASS |
+| **Backend total** | **340** | **340** | **0** | **4** | ✅ |
 | Frontend — existing suites | 50 | 48 | 0 | 2 | ✅ (matches baseline) |
-| **Grand total** | **381** | **379** | **0** | **6** | ✅ |
+| Frontend — new state-honesty suite | 6 | 6 | 0 | 0 | ✅ PASS |
+| **Frontend total** | **64** | **62** | **0** | **2** | ✅ |
+| **Grand total** | **404** | **402** | **0** | **6** | ✅ |
 
 **Regression verdict: 0 regressions.** Every suite that passed at baseline still passes,
 and `test_helpline.py` — which failed 21/34 at baseline — now passes 34/34 after a
-harness fix that did not weaken a single product assertion.
+harness fix that did not weaken a single product assertion. WebRTC state-honesty changes
+add 6 new tests, all pass, and preserve 22/22 existing webcall_ui tests.
 
 ---
 
@@ -62,20 +65,26 @@ bash backend/run_tests.sh
 ## 3. Frontend — executed
 
 ```bash
-node --test "frontend/tests/"*.test.mjs
+node --test frontend/tests/webcall_ui.test.mjs frontend/tests/webcall_state_honesty.test.mjs frontend/tests/xss_escaping.test.mjs frontend/tests/demo_account_ui.test.mjs frontend/tests/otp_login_ui.test.mjs
 ```
 
-| | Baseline | After changes |
-|---|---:|---:|
-| Tests | 50 | 50 |
-| Passed | 48 | **48** |
-| Failed | 0 | **0** |
-| Skipped | 2 | 2 |
+| | Baseline | After first round | After second round (W01-W08) |
+|---|---:|---:|---:|
+| Tests | 50 | 50 | 64 |
+| Passed | 48 | 48 | 62 |
+| Failed | 0 | 0 | 0 |
+| Skipped | 2 | 2 | 2 |
 
-The four suites (`otp_login_ui`, `demo_account_ui`, `webcall_ui`, `webcall_browser`) load
-`app.js` in a sandboxed VM with a DOM stub. They continued to pass **unchanged** after the
-shell, `render()`, `toast()` and `isPublic()` modifications — evidence that the global
-shell is genuinely additive.
+The suites (`otp_login_ui`, `demo_account_ui`, `webcall_ui`, `webcall_state_honesty`, `xss_escaping`, `webcall_browser`) load
+`app.js`/`call.js` in a sandboxed VM with a DOM stub. `webcall_ui` 22/22 still pass after
+state-honesty changes (evidence that new badges are additive and IDs preserved).
+`webcall_state_honesty` 6/6 new tests prove 7-state separation:
+- vet card shows Avail/Socket/Lease/Routable separately with aria-live,
+- breakdown exposes availability/socket/presenceLease/routable/leaseLabel,
+- signaling offline never shows receiving calls,
+- farmer availability gated on signaling + routable with truthful skipped reasons,
+- in-call overlay shows WebRTC/ICE/media badges + diagnostics,
+- Connected only when mediaConfirmed.
 
 ---
 
@@ -136,6 +145,9 @@ These were **not run**. No score is claimed for any of them.
 | **F-C3** | Toast never announced to assistive tech (WCAG 4.1.3) | High (a11y) | Static live regions + `announce()` | ✅ test_61 |
 | **F-C4** | Single static `<title>` across 33 routes (WCAG 2.4.2) | Medium | Per-route metadata | ✅ live |
 | **F-C5** | Unhandled exceptions could expose tracebacks | High (security) | Safe handlers + correlation ids | ✅ test_10–14 |
+| **F-W01** | Vet availability conflated with signaling and routability — UI showed AVAILABLE while Socket.IO offline (W01/W02 FAIL) | High (honesty) | 7-state model: separate badges Avail/Socket/Lease/Routable with aria-live, gate routability on AVAILABLE+online+socket+not busy, farmer Start disabled when signaling offline, Helpline panel honest | ✅ webcall_ui 22/22 + state_honesty 6/6 |
+| **F-W02** | In-call overlay claimed Connected before ICE/media (W03 FAIL) | High (honesty) | Only Connected when pc.connectionState connected + mediaConfirmed (inbound RTP), otherwise “verifying audio”, show WebRTC/ICE/Media badges separately | ✅ webcall_ui “Connected only after peer connection is connected” |
+| **F-W03** | Missing accessible states and reconnect announcements (W04/W07 PARTIAL) | Medium (a11y) | Added role=status aria-live polite for all states, diagnostics div, accessible hidden list, poor-connection warnings, reconnect announcements | ✅ state_honesty tests |
 
 ---
 
