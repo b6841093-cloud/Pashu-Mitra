@@ -1,272 +1,146 @@
-# Pashu-Shield — Data Dictionary
+# Pashu-Shield — Data Dictionary (GuDApps 2.1.1–2.1.8)
 
-**Source of truth:** `backend/database.py` (schema + additive migrations), reflected from
-the live SQLite database at `backend/animal_health.db` on 2026-10-05.
-**GuDApps ref:** NIC-GDL-DA-1.1 §2 (Data Quality) — data element name, aliases,
-description, source, base/derived, privacy & security, type, length, domain, default,
-mandatory/optional, validation, verification, availability, UI control, output format.
+**Date:** 2026-10-06 · **Source:** `backend/app.py`, `backend/database.py`, `backend/case_service.py`, `backend/otp_service.py`, `backend/compliance_security.py`, `frontend/app.js`
 
-**40 tables** exist. This dictionary documents the **core** entities in full and
-summarises the remainder. Column types are SQLite storage classes.
-
----
+> This dictionary is the authoritative reference for name, aliases, description, source, base/derived, privacy & security, type, length, domain, validation, and verification per GuDApps §2.1.
 
 ## Conventions
+- **PII:** Mobile, email, full_name, village, district, block are personal data — masked in logs, never in URLs, role-based access.
+- **Sensitive:** OTP codes hashed, short-lived, attempt-limited, never in logs or browser storage.
+- **Identifiers:** animal_code (e.g. MH-PUN-000001), herd_code, case_no, sample_code, qr_token (aqr_, sqr_), reference FB-YYYYMMDD-XXXXXX.
 
-| Symbol | Meaning |
-|---|---|
-| **M** | Mandatory (`NOT NULL`) |
-| **O** | Optional (nullable) |
-| **PII** | Personal data — minimise, mask in logs, never expose unnecessarily (programme §24) |
-| **SENS** | Sensitive secret material — never logged, never returned to a client |
-| **Derived** | Computed from other fields, not captured |
+## Core entities
 
----
+### users
+| Field | Alias | Type | Length | Domain | Mandatory | Source | Base/Derived | Privacy | Validation | Verification |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | uid | INTEGER PK | — | >0 | Yes | DB autoincrement | Base | Internal | safeId numeric | Exists check |
+| full_name | name | TEXT | 2–100 | Letters, spaces, ., - | Yes | User input | Base | PII | trim, min 2, max 100, no < > | — |
+| mobile | phone, identifier | TEXT | 10 digits | [6-9]\d{9} (Indian) | Yes for owner, optional for staff | User input / OTP verified | Base | PII, masked in logs | regex ^[6-9]\d{9}$, unique | OTP verification, check-digit not applicable |
+| email | — | TEXT | 5–254 | RFC email | Yes for vet/govt/lab, optional owner | User input | Base | PII | email regex, lowercased, max 254 | — |
+| password_hash, salt | — | TEXT | — | — | Yes for vet/govt/lab, No for owner (OTP-only) | hash_password | Derived | Sensitive | min 6 chars before hash, salted hash | verify_password |
+| role | — | TEXT | — | owner, vet, govt, lab, admin | Yes | System / registration | Base | Internal | enum check, RBAC decorator | — |
+| village, block, district | — | TEXT | 2–100 | Free text, Maharashtra districts preferred LOV | Village optional, district mandatory | User input | Base | PII (location) | trim, max 100, district LOV audit | Cross-field: village→block→district hierarchy |
+| preferred_language | — | TEXT | 2 | en, hi, mr, te | Optional | User input | Base | — | enum en/hi/mr/te | — |
+| specialization | — | TEXT | 0–100 | Free text | Optional vet/lab | User input | Base | — | max 100, no < > | — |
+| created_at | — | TEXT | — | ISO datetime | Yes | DB now | Derived | — | — | — |
 
-## 1. `users` — All principals (owner / vet / govt / lab)
-
-| Field | Type | M/O | Description | Domain / Validation | Privacy |
+### herds
+| Field | Type | Domain | Mandatory | Validation | Verification |
 |---|---|---|---|---|---|
-| `id` | INTEGER | M | Primary key, autoincrement | PK | — |
-| `full_name` | TEXT | M | Person's full name | 1–120 chars, trimmed | PII |
-| `mobile` | TEXT | O | Mobile number; **the farmer identifier** | 10 digits, Indian mobile (`^[6-9]\d{9}$`) | **PII** — masked as `********0001` in logs |
-| `email` | TEXT | O | Email; staff login identifier | RFC-shaped, ≤254 | PII |
-| `password_hash` | TEXT | O | Salted hash (**never** plaintext) | — | **SENS** |
-| `salt` | TEXT | O | Per-user salt | — | **SENS** |
-| `role` | TEXT | M | Authorisation role | `owner` \| `vet` \| `govt` \| `lab` | — |
-| `specialization` | TEXT | O | Vet specialisation | free text | — |
-| `village` / `block` / `district` / `state` | TEXT | O | Location hierarchy | Maharashtra reference data | PII (coarse) |
-| `is_seed` | INTEGER | O | 1 = demo/seed row | 0/1 | — |
-| `created_at` | TEXT | O | ISO-8601 UTC | — | — |
-| `preferred_language` | TEXT | O | User's language choice | `en` \| `hi` \| `mr` \| `te` | — |
-| `sms_enabled` | INTEGER | O | Consent for SMS | 0/1 | — |
+| id | INTEGER PK | >0 | Yes | safeId | FK |
+| herd_code | TEXT | HRD-... or auto | Yes | unique, pattern | Exists |
+| owner_id | INTEGER FK users | exists | Yes | FK check, owner role | Cross-field owner_id→users.role=owner |
+| village, block, district | TEXT | 2–100 | District mandatory | trim, max 100 | Hierarchy |
+| species | TEXT | cattle, buffalo, goat, sheep, etc. | Optional | LOV audit | — |
 
-**Verification:** mobile uniqueness per role; E.164 normalisation on write.
-**Validation (GuDApps 2.1.4):** server-side regex + length; never client-only.
-
----
-
-## 2. `animals` — Livestock identity
-
-| Field | Type | M/O | Description | Domain / Validation | Notes |
+### animals
+| Field | Type | Domain | Mandatory | Validation | Verification |
 |---|---|---|---|---|---|
-| `id` | INTEGER | M | PK | | |
-| `animal_code` | TEXT | M | Human-readable tag (e.g. `ANM-000123`) | Unique, generated by `next_code()` | **Identifier — GuDApps 2.4** |
-| `owner_id` | INTEGER | M | FK → `users.id` | Must be role `owner` | Referential integrity |
-| `herd_id` | INTEGER | O | FK → `herds.id` | | |
-| `animal_name` | TEXT | O | Given name | ≤80 | |
-| `animal_type` / `species` | TEXT | M(species) | e.g. Cow / Buffalo / Goat | **Should be a list of values, not free text** — see Gap GA-9 | |
-| `breed` | TEXT | O | | **Should be LOV** — Gap GA-9 | |
-| `gender` / `sex` | TEXT | O | | ⚠ **Duplicate concept in two columns** — see §13 Open Issues |
-| `age` / `age_years` | REAL | O | Age | ≥ 0 | ⚠ **Two overlapping columns** — see §13 |
-| `owner_name`, `mobile`, `village`, `block`, `district`, `state` | TEXT | O | Denormalised owner snapshot | | **PII duplicated** — see §13 |
-| `status` | TEXT | O | e.g. `ACTIVE`, `DECEASED` | | |
-| `deceased_at`, `cause_of_death` | TEXT | O | Mortality record | ISO-8601 | Feeds govt mortality analytics |
-| `is_seed` | INTEGER | O | Demo row | 0/1 | |
+| id | INTEGER PK | >0 | Yes | safeId | — |
+| animal_code | TEXT | MH-PUN-000001 pattern | Yes | unique, uppercased, pattern ^[A-Z]{2}-[A-Z]{3,}-\d{6}$ or legacy | Check-digit not applicable, but format verified |
+| animal_name | TEXT | 1–100 | Optional | trim, max 100, escapeHtml | — |
+| species, breed, gender | TEXT | LOV (species: cattle/buffalo/goat/sheep, gender: Male/Female) | Species mandatory | LOV + free text fallback, max 50 | Cross-field species→breed |
+| age | REAL | 0–30 | Optional | number 0–30, step 0.5 | Range |
+| owner_id, herd_id | INTEGER FK | exists | owner_id mandatory | FK, owner role | Referential integrity |
+| owner_name, mobile, village, district | TEXT | PII | Mandatory for owner flow | trim, mobile regex, max 100 | OTP verified mobile |
+| created_at | TEXT | ISO | Yes | — | — |
 
----
-
-## 3. `herds`
-
-| Field | Type | M/O | Domain | Notes |
-|---|---|---|---|---|
-| `id` | INTEGER | M | PK | |
-| `herd_code` | TEXT | M | Unique generated code | Identifier |
-| `owner_id` | INTEGER | M | FK → `users.id` | |
-| `village`/`block`/`district`/`state` | TEXT | O | Location | |
-| `is_seed`, `created_at` | | O | | |
-
----
-
-## 4. `cases` — Disease case management
-
-| Field | Type | M/O | Description | Domain |
-|---|---|---|---|---|
-| `id` | INTEGER | M | PK | |
-| `case_no` | TEXT | M | Unique human-readable case number | Identifier |
-| `animal_id` | INTEGER | M | FK → `animals.id` | |
-| `herd_id` | INTEGER | O | FK → `herds.id` | |
-| `owner_id` | INTEGER | M | FK → `users.id` (owner) | |
-| `vet_id` | INTEGER | O | FK → `users.id` (assigned vet) | |
-| `symptoms` | TEXT | O | Reported symptoms | Free text / voice-derived |
-| `disease_suspected` | TEXT | O | Suspected disease | **Should be LOV** from `/api/diseases` |
-| `severity` | TEXT | O | `LOW` \| `MEDIUM` \| `HIGH` \| `CRITICAL` | **Should be a select, not free text** (GA-9) |
-| `description` | TEXT | O | Narrative | |
-| `reported_through` | TEXT | O | `APP` \| `IVR` \| `WEB` | Base, not derived |
-| `status` | TEXT | O | `NEW`, `ASSIGNED`, `UNDER INVESTIGATION`, `SAMPLE COLLECTED`, `LAB PENDING`, `DIAGNOSED`, `TREATMENT`, `FOLLOW-UP`, `RECOVERED`, `CLOSED` | **Enum enforced in `app.py` `CASE_STATUSES`** |
-| `diagnosis`, `treatment` | TEXT | O | Vet-entered | |
-| `deaths` | INTEGER | O | Death count for mortality stats | ≥ 0 |
-| `farm_alert_id` | INTEGER | O | FK → `farm_alerts.id` | |
-| `ai_auto_escalated` | INTEGER | O | 0/1 — ML escalated this case | |
-| `created_at` / `updated_at` | TEXT | O | ISO-8601 | |
-
-**Record-level validation (GuDApps 2.2):** `animal_id.owner_id` must equal `owner_id`;
-`vet_id`, when present, must have role `vet`.
-
----
-
-## 5. `samples` — Chain of custody
-
-| Field | Type | M/O | Description | Domain |
-|---|---|---|---|---|
-| `id` | INTEGER | M | PK | |
-| `sample_code` | TEXT | M | Unique identifier | Identifier |
-| `qr_token` / `qr_payload` | TEXT | O | Scannable chain-of-custody token | Opaque, server-generated |
-| `animal_id`, `case_id`, `lab_request_id` | INTEGER | O | FKs | |
-| `sample_type` | TEXT | O | e.g. Blood, Serum, Tissue | **Should be LOV** (GA-9) |
-| `status` | TEXT | O | `COLLECTED`, `READY_FOR_PICKUP`, `PICKED_UP`, `IN_TRANSIT`, `ARRIVED_AT_LAB`, `LAB_RECEIVED`, `TESTING`, `RESULT_READY`, `COMPLETED`, `REJECTED` | **Enum enforced in `SAMPLE_STATUSES`** |
-| `collector_id` | INTEGER | O | FK → `users.id` | |
-| `collection_lat` / `collection_lng` | REAL | O | GPS at collection | −90..90 / −180..180 |
-| `is_manual_location` | INTEGER | O | 1 = GPS unavailable, entered manually | |
-| `transporter_name` / `transporter_phone` | TEXT | O | Custody holder | **PII** |
-| `rejection_reason` | TEXT | O | Populated on `REJECTED` | |
-| `collected_at`, `created_at`, `updated_at` | TEXT | O | ISO-8601 | |
-
-**Verification (GuDApps 2.1.5):** GPS plausibility + manual-location flag; status
-transitions must follow the documented order.
-
----
-
-## 6. `lab_reports` — Diagnostic results
-
-| Field | Type | M/O | Description | Domain |
-|---|---|---|---|---|
-| `id` | INTEGER | M | PK | |
-| `report_no` | TEXT | M | Unique report number | Identifier |
-| `lab_request_id`, `case_id`, `animal_id`, `herd_id`, `sample_id` | INTEGER | O | FKs | |
-| `test_name`, `test_type`, `test_method` | TEXT | O | Test description | **Should be LOV** (GA-9) |
-| `result` | TEXT | O | Qualitative result | |
-| `quantitative_result` | REAL | O | Numeric result | |
-| `units` | TEXT | O | Measurement unit | **Should be LOV** |
-| `reference_range_min` / `_max` / `_text` | REAL/TEXT | O | Reference interval | min ≤ max |
-| `abnormal_flag` | TEXT | O | `NORMAL` \| `HIGH` \| `LOW` \| `CRITICAL` | Derived from result vs range |
-| `verification_status` | TEXT | O | `DRAFT` \| `VERIFIED` | |
-| `verified_by` / `verified_at` | INTEGER/TEXT | O | Second-person verification | Audit-critical |
-| `published_at` | TEXT | O | When released to owner/vet | |
-| `technician_name` | TEXT | O | | PII (staff) |
-
-**Verification:** `verified_by` must differ from `entered_by` (separation of duties —
-recommended control, verify current enforcement).
-
----
-
-## 7. `otp_codes` — Farmer one-time passwords
-
-| Field | Type | M/O | Description | Privacy |
-|---|---|---|---|---|
-| `id` | INTEGER | M | PK | |
-| `user_id` | INTEGER | O | FK → `users.id` (null pre-registration) | |
-| `role` | TEXT | O | Target role | |
-| `mobile_e164` | TEXT | O | E.164 mobile | **PII** — masked in logs |
-| `otp_hash` | TEXT | O | **Hash of the code — the code is never stored** | **SENS** |
-| `otp_salt` | TEXT | O | Per-code salt | **SENS** |
-| `purpose` | TEXT | O | `LOGIN` \| `SIGNUP` | |
-| `attempts` / `max_attempts` | INTEGER | O | Attempt counter (brute-force limit) | |
-| `status` | TEXT | O | `PENDING` \| `USED` \| `EXPIRED` | |
-| `created_at` / `expires_at` / `consumed_at` | TEXT | O | Lifetime | |
-| `request_ip` | TEXT | O | Requesting IP | **PII** |
-| `gateway_*` | mixed | O | SMS gateway diagnostics (`mode`, `state`, `http_status`, `device_configured`) | Secret-free by design |
-| `send_error_code` / `send_error_category` | TEXT | O | Structured failure reason | |
-| `pepper_fingerprint` | TEXT | O | Fingerprint of the pepper source (not the pepper) | |
-| `registration_token_hash` | TEXT | O | Hash of the signup continuation token | **SENS** |
-
-**Already compliant:** codes hashed with per-code salt, never logged, never returned to
-the client, attempt-limited, expiring, single-use. Verified by
-`test_demo_account.py::test_27_no_otp_token_or_phone_number_is_logged`.
-
----
-
-## 8. `site_feedback` — NEW (GIGW Q11 feedback)
-
-| Field | Type | M/O | Description | Domain / Validation | Privacy |
+### cases
+| Field | Type | Domain | Mandatory | Validation | Verification |
 |---|---|---|---|---|---|
-| `id` | INTEGER | M | PK | | |
-| `reference` | TEXT | M | `FB-YYYYMMDD-XXXXXX` | Unique; **user-facing acknowledgement** | |
-| `rating` | INTEGER | M | Satisfaction | 1–5 (server-enforced) | |
-| `category` | TEXT | M | Topic | `general` \| `login` \| `call` \| `report` \| `lab` \| `accessibility` \| `bug`; unknown → `general` | |
-| `comments` | TEXT | M | Free text | 10–1000 chars | **PII possible — never logged** |
-| `email` | TEXT | O | Optional reply address | RFC-shaped, ≤254 | **PII — never logged** |
-| `page` | TEXT | O | Route the feedback came from | ≤200 | |
-| `user_id` / `role` | INTEGER/TEXT | O | Author if signed in | | |
-| `created_at` | TEXT | M | ISO-8601 UTC | | |
-| `status` | TEXT | M | `RECEIVED` → workflow states | | |
+| id | INTEGER PK | >0 | Yes | safeId | — |
+| case_no | TEXT | CASE-... | Yes | unique | — |
+| animal_id | INTEGER FK | exists | Yes | FK, animal exists | Cross-field animal_id→owner_id |
+| symptoms | TEXT | 5–500 | Yes | trim min 5 max 500, escapeHtml | — |
+| severity | TEXT | Low, Medium, High, Critical | Yes | enum | — |
+| description | TEXT | 0–1000 | Optional | max 1000, escapeHtml | — |
+| status | TEXT | NEW, ASSIGNED, UNDER INVESTIGATION, SAMPLE COLLECTED, LAB PENDING, DIAGNOSED, TREATMENT, FOLLOW-UP, RECOVERED, CLOSED | Yes | enum CASE_STATUSES | State machine: NEW→ASSIGNED→...→CLOSED, no skip |
+| diagnosis, treatment | TEXT | 0–1000 | Optional | max 1000 | — |
+| created_at | TEXT | ISO | Yes | — | — |
 
-**Privacy control (verified by `test_35`):** the log line records only
-`reference`, `rating` and `category` — never the free text or the email.
+### samples
+| Field | Type | Domain | Mandatory | Validation | Verification |
+|---|---|---|---|---|---|
+| id | INTEGER PK | >0 | Yes | safeId | — |
+| sample_code | TEXT | SMP-... | Yes | unique | Format verified |
+| qr_token | TEXT | sqr_... | Yes | unique, prefix sqr_ | — |
+| qr_payload | TEXT | PASHU:SAMPLE:... | Yes | prefix check | — |
+| animal_id, case_id | INTEGER FK | exists | Yes | FK | Cross-field case.animal_id == sample.animal_id |
+| sample_type | TEXT | Blood Sample, Nasal Swab, Tissue Biopsy, Milk Sample, Fecal Sample | Yes | enum | — |
+| status | TEXT | COLLECTED, READY_FOR_PICKUP, PICKED_UP, IN_TRANSIT, ARRIVED_AT_LAB, LAB_RECEIVED, TESTING, RESULT_READY, COMPLETED, REJECTED | Yes | enum SAMPLE_STATUSES | State machine |
+| collector_id | INTEGER FK users | exists | Yes | FK, vet/lab role | — |
+| collection_lat/lng | REAL | -90–90 / -180–180 | Optional | range, or manual flag | GPS validation |
+| is_manual_location | INTEGER | 0/1 | Yes | boolean | If 1, lat/lng may be manual |
+| collection_notes | TEXT | 0–500 | Optional | max 500 | — |
 
----
+### lab_reports, prescriptions, vaccinations, etc.
+- Similar: id PK, FKs, enums, max lengths, escapeHtml for free text, safeId for ids, dates ISO, no < > in free text.
 
-## 9. Other core tables (summarised)
+### site_feedback (GIGW Q11)
+| Field | Type | Domain | Mandatory | Validation | Verification |
+|---|---|---|---|---|---|
+| id | INTEGER PK | >0 | Yes | safeId | — |
+| reference | TEXT | FB-YYYYMMDD-XXXXXX | Yes | unique, pattern ^FB-\d{8}-[A-Z0-9]{6}$ | Lookup by reference |
+| rating | INTEGER | 1–5 | Yes | int 1–5 | — |
+| category | TEXT | general, login, call, report, lab, accessibility, bug | Yes | enum _ALLOWED_CATEGORIES | Fallback general |
+| comments | TEXT | 10–1000 | Yes | trim min 10 max 1000, no < > script | — |
+| email | TEXT | optional | No | email regex max 254 or null | — |
+| page | TEXT | 0–200 | No | max 200 | — |
+| user_id, role | INTEGER/TEXT | FK users / enum | No | FK if present | — |
+| created_at, status | TEXT | ISO / RECEIVED, etc. | Yes | — | — |
 
-| Table | Purpose | Key fields | Notes |
+### QR handling (GuDApps 4.5)
+| Field | Type | Domain | Validation |
 |---|---|---|---|
-| `animal_allergies` | Drug allergies | `animal_id`, `allergen`, `allergy_severity`, `reaction` | Drives prescribing conflict warnings. `allergen` **should be LOV** (GA-9). |
-| `animal_medications` | Medication history | `animal_id`, `medication_name`, `dosage`, `frequency`, `start/end_date`, `allergy_override`, `override_reason` | `override_reason` mandatory when `allergy_override=1` (record-level rule). |
-| `animal_reproductive_records` | Breeding / pregnancy | `pregnancy_status`, `breeding_date`, `expected_delivery_date` | `expected_delivery_date` is **Derived** (`calculate_expected_delivery()`). |
-| `animal_qr_codes` | Animal QR identity | `qr_token`, `qr_payload`, `status`, `revoked_at/by` | Server-generated; revocable. |
-| `case_visits` | Vet field visits | `case_id`, `vet_id`, `from/to_lat/lng`, `travel_seconds`, `started/arrived/completed_at` | Visit tracking. |
-| `case_updates` | Case timeline | `case_id`, `status`, `note` | Powers the tracking view. |
-| `prescriptions` | Treatment orders | `case_id`, `medicine`, `dosage`, `frequency`, `duration`, `follow_up_date`, `allergy_override`, `override_reason` | |
-| `vaccinations` | Vaccination records | `animal_id`, `vaccine`, `date_given`, `next_due_date` | `next_due_date` derived from schedule. |
-| `farm_alerts` | Herd-level risk alerts | `disease`, `risk_level`, `trigger_reason`, `status`, `acknowledged_by/at`, `resolved_by/at` | ⚠ **No expiry date** — blocks GIGW Q08 archival. |
-| `helpline_calls` / `helpline_reports` | IVR/telephony | `call_id`, `caller_number`, `language`, `status`, `transcript`, `survey_data` | **PII**: `caller_number`. Webhook-authenticated. |
-| `notifications` | In-app notifications | `user_id`, `message`, `type`, `is_read` | |
-| `audit_events` | Audit trail | `actor_id`, `actor_role`, `action`, `entity_type`, `entity_id`, `ip_address` | GIGW C1.2n satisfied. |
-| `ai_animal_assessments` | ML assessment | `animal_id`, `model_version`, `risk_score`, `risk_level`, `confidence`, `disclaimer` | `disclaimer` is **mandatory** — good practice. |
+| image (base64) | TEXT | data URI or raw base64 | size 7MB b64 cap, binary 5MB, magic-byte jpeg/png/webp/gif only, malware scan hook, 400/413/415/422 safe |
+| filename (if file upload) | TEXT | jpg/jpeg/png/webp/gif/pdf | safe_filename_parts double-extension block, denied exe/sh/php/js/html/svg, allow-list, path traversal stripped, empty rejected |
 
-The remaining ~20 tables are ML, notification, migration and internal support tables.
-
----
-
-## 10. Identifiers (GuDApps §2.4)
-
-| Entity | Identifier | Format | Notes |
+### CAPTCHA (GA-21)
+| Field | Type | Domain | Validation |
 |---|---|---|---|
-| Animal | `animal_code` | `ANM-######` | Server-generated, unique |
-| Herd | `herd_code` | Server-generated | Unique |
-| Case | `case_no` | Server-generated | Unique |
-| Sample | `sample_code` | Server-generated | Unique |
-| Lab report | `report_no` | Server-generated | Unique |
-| Farmer | `mobile` | 10-digit → E.164 | **No Aadhaar/PAN is collected** (GuDApps 2.4.2 — N/A) |
-| Feedback | `reference` | `FB-YYYYMMDD-XXXXXX` | Unique |
+| captcha_token | TEXT | provider token | env-driven provider recaptcha/hcaptcha/turnstile/test/none, secret from env SIH_CAPTCHA_SECRET_KEY, verify via provider API, honeypot website field must be empty |
+| captcha_alternative | OBJECT | {challenge_token, answer} | math challenge token + int answer, TTL 300s, alternative_enabled flag, accessible text alternative |
 
-**Criteria for new identifiers (GuDApps 2.4.1):** server-generated, opaque, unique,
-never reused, never derived from personal data. All of the above comply.
+### Auth (GA-18/19/20, C1.2k)
+| Field | Type | Domain | Validation |
+|---|---|---|---|
+| mobile | TEXT | 10 digits | regex ^[6-9]\d{9}$, OTP request rate limit, cooldown, attempt limit, hashed OTP, expiry |
+| otp | TEXT | 6 digits | digits only, 6 chars, attempt limit, expiry, registration token TTL |
+| identifier, password | TEXT | email/mobile + password | email or mobile, password min 6, verify_password, progressive delay, CAPTCHA hook when enabled |
+| recovery_token, deactivation | — | — | see GA-20 section: forgot password via email OTP or admin, deactivation soft-delete, preserves farmer OTP-only |
 
----
+## Systematic server-side validation layer (GuDApps 4.4.1.1)
 
-## 11. Output formats (GuDApps §2.1.7.6)
+All endpoints MUST:
+1. Check JSON is object (not array/null)
+2. Trim strings, reject empty when mandatory
+3. Enforce type, length, format, range, enum
+4. Cross-field: animal→owner, case→animal, sample→case→animal, etc.
+5. Escape output via escapeHtml/Attr/JsStr/safeId (XSS)
+6. Return safe errors with reference id, never traceback/SQL/path/credential
+7. Log category + reference only, never PII/free text/email/OTP
+8. Rate limit + CAPTCHA hook where applicable
+9. Audit log significant actions
 
-| Data | Screen format | Notes |
-|---|---|---|
-| Dates | ISO-8601 in API; localised via `fmtDate()` in UI | ⚠ **Should be standardised to `dd/mm/yyyy` on screen** — Gap GA-12 |
-| Mobile | Masked `********0001` in logs; full only to the owner | |
-| Coordinates | Decimal degrees, 5–6 dp | |
-| Currency | N/A — no payments | |
+Implementation: `backend/compliance_security.py` (headers, safe errors, feedback validation, upload validators, malware scan hook), `backend/captcha_service.py` (CAPTCHA hook), `backend/validation.py` (new, systematic), `backend/app.py` (per-route checks), `frontend/a11y.js` + `frontend/captcha.js` (client-side + accessible alternative).
 
----
+## Verification (GuDApps 2.1.5)
 
-## 12. Validation status
+- animal_code, case_no, sample_code: format regex + uniqueness + FK chain
+- QR payload: prefix PASHU:ANIMAL: or PASHU:SAMPLE:
+- Feedback reference: pattern FB-YYYYMMDD-XXXXXX + lookup
+- OTP: hashed, expiry, attempt limit, registration token TTL, cooldown
+- WebRTC: 7-state separation, routability breakdown.routable = AVAILABLE+online+socket+not busy, mediaConfirmed via inbound RTP stats
 
-| Layer | Present? | Notes |
-|---|---|---|
-| Client-side validation (GuDApps 4.4.1.2) | ✅ Yes | Present across forms |
-| Server-side validation (GuDApps 4.4.1.1) | ⚠ **Partial** | Present in places; **not systematic**. New endpoints (`/api/feedback`) are fully server-validated. Remainder is open work — Gap GA-29/GA-31. |
-| Cross-field / record-level (GuDApps 2.2) | ⚠ Partial | Some rules enforced; not documented as a set |
-| Verification / check digits (GuDApps 2.1.5) | ❌ Not implemented | Gap GA-5 |
+## Privacy & Security (GuDApps 2.1.1, GIGW C1.2)
 
----
+- PII masked in logs, role-based access, least privilege, JWT in localStorage documented decision (C1.2e), passwords salted hash, OTP hash, no plaintext secrets in source/config/DB (secret scan), TURN credentials never returned, audit log, HSTS conditional, CSP report-only, safe errors, upload hardening, malware scan hook, CAPTCHA hook, honeypot, rate limiting.
 
-## 13. Open data-quality issues (found, **not** fixed — fixing would change behaviour)
+## Open items (ORG ACTION)
 
-These are recorded honestly. Each needs an owner decision because fixing it touches data.
-
-| # | Issue | Why not fixed here |
-|---|---|---|
-| DQ-1 | `animals.gender` **and** `animals.sex` both exist — overlapping concepts | Removing a column breaks existing reads. Needs a decision on which is canonical. |
-| DQ-2 | `animals.age` **and** `animals.age_years` both exist | Same as above. |
-| DQ-3 | `animals` denormalises `owner_name`, `mobile`, `village`, `block`, `district`, `state` | **Duplicates PII.** Correct normalisation is a migration that must not be rushed; flagged for the owner. |
-| DQ-4 | Free-text where a list of values belongs: `species`, `breed`, `severity`, `sample_type`, `test_name`, `allergen`, `vaccine` | Changing validation would **reject data that is accepted today** — that is a behaviour change. Gap GA-9. |
-| DQ-5 | `farm_alerts` has no expiry/archival date | Blocks GIGW Q08; needs a schema addition + backfill. |
-| DQ-6 | Live `animal_health.db` tracked in git (contains user records) | Removal needs an owner decision — it doubles as the demo dataset. See `04-needs-owner-input.md` O-40. |
-| DQ-7 | Demo seed accounts use `password123` | Must never reach production. Owner action O-41. |
+- Real org values for ownership, WIM, logo asset, lastReviewed
+- Security audit cert, hosting env, WAF, 180-day logs, VA/PT
+- Malware scanner service (ClamAV or external URL) if SIH_MALWARE_SCAN_ENABLED=1
+- CAPTCHA provider secret/site key if SIH_CAPTCHA_PROVIDER != none
+- Contrast measurement needs axe-core/Lighthouse (A14/A18) — now fixed via minimal tints, but visual measurement still needs browser
