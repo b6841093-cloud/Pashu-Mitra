@@ -1287,7 +1287,17 @@ function emptyState(msg) {
   if (getUserRole() === "owner") msg = farmerRuntimeText(msg);
   const raw = String(msg);
   const isPlain = !/<[a-z][\s\S]*>/i.test(raw);
-  return `<div class="empty-state">${isPlain ? escapeHtml(raw) : raw}</div>`;
+  return `<div class="empty-state" role="status" aria-live="polite">${isPlain ? escapeHtml(raw) : raw}</div>`;
+}
+function loadingState(msg) {
+  const safe = escapeHtml(msg || "Loading…");
+  if (window.PMA11y && window.PMA11y.announceLoading) window.PMA11y.announceLoading(safe);
+  return `<div class="loading" role="status" aria-live="polite" aria-busy="true">${safe}</div>`;
+}
+function errorState(msg) {
+  const safe = escapeHtml(msg || "Something went wrong");
+  if (window.PMA11y && window.PMA11y.announceError) window.PMA11y.announceError(safe);
+  return `<div class="pm-state pm-state-error" role="alert" aria-live="assertive"><p class="pm-state-title">Error</p><p class="pm-state-body">${safe}</p><div class="btn-row" style="margin-top:10px"><button class="btn btn-outline btn-sm" onclick="location.reload()">Retry</button> <button class="btn btn-ghost btn-sm" onclick="history.back()">Go back</button></div></div>`;
 }
 function statCard(num, lbl) {
   const safeNum = typeof num === "number" || /^\d+(\.\d+)?$/.test(String(num)) ? String(num) : escapeHtml(num);
@@ -1295,7 +1305,7 @@ function statCard(num, lbl) {
 }
 function iconItem(emoji, label, href) {
   const safeHref = String(href).startsWith("#/") ? escapeAttr(href) : "#/";
-  return `<div class="icon-item" onclick="location.hash='${safeHref}'"><div class="icon-circle">${escapeHtml(emoji)}</div><span>${escapeHtml(label)}</span></div>`;
+  return `<div class="icon-item" role="button" tabindex="0" aria-label="${escapeAttr(label)}" onclick="location.hash='${safeHref}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='${safeHref}'}"><div class="icon-circle">${escapeHtml(emoji)}</div><span>${escapeHtml(label)}</span></div>`;
 }
 
 // ---------------------------------------------------------------- shell --
@@ -1322,10 +1332,10 @@ function header(title, opts = {}) {
   }
   return `
   <div class="app-header">
-    ${opts.back ? `<button class="header-icon-btn" onclick="history.back()">←</button>`
-      : `<button class="header-icon-btn" onclick="location.hash='${notifHref}'">🔔${opts.notif ? '<span class="dot"></span>' : ''}</button>`}
+    ${opts.back ? `<button class="header-icon-btn" aria-label="Back" onclick="history.back()">←</button>`
+      : `<button class="header-icon-btn" aria-label="Notifications" onclick="location.hash='${notifHref}'">🔔${opts.notif ? '<span class="dot"></span>' : ''}</button>`}
     <h1>${title}</h1>
-    <button class="header-icon-btn" onclick="location.hash='${profileHref}'">👤</button>
+    <button class="header-icon-btn" aria-label="Profile" onclick="location.hash='${profileHref}'">👤</button>
   </div>
   ${qCount > 0 ? `
     <div style="text-align:center;margin-top:6px">
@@ -1483,7 +1493,7 @@ async function router() {
 
   if (!matched) {
     const farmer = getUserRole() === "owner";
-    render(`${header(farmer ? ft("not_found") : "Not found", { back: true })}<div class="loading">${farmer ? ft("not_found") : "Page not found."} <a class="link" onclick="location.hash='${homeFor(getUserRole() || "owner")}'">${farmer ? ft("go_home") : "Go home"}</a></div>`);
+    render(`${header(farmer ? ft("not_found") : "Not found", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("not_found") : "Page not found."} <a class="link" onclick="location.hash='${homeFor(getUserRole() || "owner")}'">${farmer ? ft("go_home") : "Go home"}</a></div>`);
     return;
   }
 
@@ -1505,7 +1515,7 @@ async function router() {
   } catch (e) {
     console.error(e);
     const farmer = getUserRole() === "owner";
-    render(`${header(farmer ? ft("error") : "Error", { back: true })}<div class="loading">⚠️ ${escapeHtml(farmer ? farmerRuntimeText(e.message) : e.message)}</div>`);
+    render(`${header(farmer ? ft("error") : "Error", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">⚠️ ${escapeHtml(farmer ? farmerRuntimeText(e.message) : e.message)}</div>`);
   }
 }
 window.addEventListener("hashchange", router);
@@ -2245,8 +2255,8 @@ function loginForm(role) {
   // never reach this form: #/login/owner renders the OTP screen instead.
   return `
   <form id="loginForm">
-    <div class="field"><label>${authText(role, "email_or_mobile", "Email or Mobile")}</label><input name="identifier" autocomplete="username" required /></div>
-    <div class="field"><label>${authText(role, "password", "Password")}</label><input name="password" type="password" autocomplete="current-password" required /></div>
+    <div class="field"><label for="pm_identifier">${authText(role, "email_or_mobile", "Email or Mobile")}</label><input id="pm_identifier" name="identifier" autocomplete="username" required /></div>
+    <div class="field"><label for="pm_password">${authText(role, "password", "Password")}</label><input id="pm_password" name="password" type="password" autocomplete="current-password" required /></div>
     <button class="btn btn-primary" type="submit">${t("btn.login")}</button>
     <div class="auth-switch">${t("auth.newHere")} <a onclick="location.hash='#/register/${role}'">${t("auth.createAccount")}</a></div>
     ${demoAccountBox(role)}
@@ -2256,22 +2266,22 @@ function loginForm(role) {
 function registerForm(role) {
   return `
   <form id="registerForm">
-    <div class="field"><label>${authText(role, "full_name", "Full Name")}</label><input name="full_name" autocomplete="name" required /></div>
+    <div class="field"><label for="pm_full_name">${authText(role, "full_name", "Full Name")}</label><input id="pm_full_name" name="full_name" autocomplete="name" required /></div>
     <div class="form-row">
-      <div class="field"><label>${authText(role, "mobile", "Mobile")}</label><input name="mobile" autocomplete="tel" required /></div>
-      <div class="field"><label>${authText(role, "email", "Email")}</label><input name="email" type="email" autocomplete="email" required /></div>
+      <div class="field"><label for="pm_mobile">${authText(role, "mobile", "Mobile")}</label><input id="pm_mobile" name="mobile" autocomplete="tel" required /></div>
+      <div class="field"><label for="pm_email">${authText(role, "email", "Email")}</label><input id="pm_email" name="email" type="email" autocomplete="email" required /></div>
     </div>
     <div class="form-row">
-      <div class="field"><label>${authText(role, "password", "Password")}</label><input name="password" type="password" minlength="6" autocomplete="new-password" required /></div>
-      <div class="field"><label>${authText(role, "confirm_password", "Confirm")}</label><input name="confirm_password" type="password" minlength="6" autocomplete="new-password" required /></div>
+      <div class="field"><label for="pm_password_2">${authText(role, "password", "Password")}</label><input id="pm_password_2" name="password" type="password" minlength="6" autocomplete="new-password" required /></div>
+      <div class="field"><label for="pm_confirm_password">${authText(role, "confirm_password", "Confirm")}</label><input id="pm_confirm_password" name="confirm_password" type="password" minlength="6" autocomplete="new-password" required /></div>
     </div>
-    ${role === "vet" || role === "lab" ? `<div class="field"><label>Specialization</label><input name="specialization" placeholder="e.g. Pathology / Epidemiology" /></div>` : ""}
+    ${role === "vet" || role === "lab" ? `<div class="field"><label for="pm_specialization">Specialization</label><input id="pm_specialization" name="specialization" placeholder="e.g. Pathology / Epidemiology" /></div>` : ""}
     <div class="form-row">
-      <div class="field"><label>${authText(role, "village", "Village")}</label><input name="village" autocomplete="address-level3" /></div>
-      <div class="field"><label>${authText(role, "block", "Block")}</label><input name="block" /></div>
+      <div class="field"><label for="pm_village">${authText(role, "village", "Village")}</label><input id="pm_village" name="village" autocomplete="address-level3" /></div>
+      <div class="field"><label for="pm_block">${authText(role, "block", "Block")}</label><input id="pm_block" name="block" /></div>
     </div>
-    <div class="field"><label>${authText(role, "district", "District")}</label><input name="district" placeholder="${role === "owner" ? ft("district") : "e.g. Pune"}" required /></div>
-    ${role === "owner" ? `<div class="field"><label>${ft("preferred_helpline_language")}</label><select name="preferred_language"><option value="">${ft("ask_language_call")}</option><option value="en">English</option><option value="te">తెలుగు</option><option value="hi">हिन्दी</option><option value="mr">मराठी</option></select></div>` : ""}
+    <div class="field"><label for="pm_district">${authText(role, "district", "District")}</label><input id="pm_district" name="district" placeholder="${role === "owner" ? ft("district") : "e.g. Pune"}" required /></div>
+    ${role === "owner" ? `<div class="field"><label for="pm_preferred_language">${ft("preferred_helpline_language")}</label><select id="pm_preferred_language" name="preferred_language"><option value="">${ft("ask_language_call")}</option><option value="en">English</option><option value="te">తెలుగు</option><option value="hi">हिन्दी</option><option value="mr">मराठी</option></select></div>` : ""}
     <button class="btn btn-primary" type="submit">${t("btn.register")}</button>
     <div class="auth-switch">${t("auth.haveAccount")} <a onclick="location.hash='#/login/${role}'">${t("btn.login")}</a></div>
     ${demoAccountBox(role)}
@@ -2304,7 +2314,7 @@ route("#/govt/dashboard", () => govtDashboard(), ["govt"]);
 route("#/lab/dashboard", () => labDashboard(), ["lab"]);
 
 async function ownerDashboard() {
-  render(`${header(ft("home"))}<div class="loading">${ft("loading_dashboard")}</div>`);
+  render(`${header(ft("home"))}<div class="loading" role="status" aria-live="polite" aria-busy="true">${ft("loading_dashboard")}</div>`);
   const ivrInfo = await getIvrInfo();
   render(`
     ${header(ft("home"))}
@@ -2339,7 +2349,7 @@ async function ownerDashboard() {
 
 route("#/owner/livestock", () => ownerLivestockView(), ["owner"]);
 async function ownerLivestockView() {
-  render(`${header(ft("my_livestock"))}<div class="loading">${ft("loading_livestock")}</div>`);
+  render(`${header(ft("my_livestock"))}<div class="loading" role="status" aria-live="polite" aria-busy="true">${ft("loading_livestock")}</div>`);
   try {
     const [animals, herds] = await Promise.all([api("/animals"), api("/herds")]);
     render(`
@@ -2380,7 +2390,7 @@ async function ownerLivestockView() {
 }
 
 async function vetDashboard() {
-  render(`${header("Vet Dashboard")}<div class="loading">Loading…</div>`);
+  render(`${header("Vet Dashboard")}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
   const [summary, availabilityRows, ivrStatus] = await Promise.all([
     api("/vet/summary"), api("/vet/availability").catch(() => []),
     api("/ivr/status").catch(() => ({ pstn_connected: false, provider_mode: "MOCK" }))
@@ -2442,7 +2452,7 @@ window.saveVetAvailability = async function() {
 };
 
 async function govtDashboard() {
-  render(`${header("Govt Analytics")}<div class="loading">Loading state analytics…</div>`);
+  render(`${header("Govt Analytics")}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading state analytics…</div>`);
   const a = await api("/govt/analytics");
   render(`
     ${header("Govt Analytics")}
@@ -2512,7 +2522,7 @@ async function govtDashboard() {
 }
 
 async function labDashboard() {
-  render(`${header("Laboratory Portal")}<div class="loading">Loading lab workstation…</div>`);
+  render(`${header("Laboratory Portal")}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading lab workstation…</div>`);
   const sum = await api("/lab/summary");
   render(`
     ${header("Laboratory Portal")}
@@ -2539,7 +2549,7 @@ async function labDashboard() {
 // ======================================================== HELPLINE REPORTS ==
 function helplineReportsView(role) {
   route(`#/${role}/helpline`, async () => {
-    render(`${header("Helpline Reports", { back: true })}<div class="loading">Loading helpline reports…</div>`);
+    render(`${header("Helpline Reports", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading helpline reports…</div>`);
     const [reports, analytics] = await Promise.all([
       api("/ivr/reports"), api("/ivr/analytics")
     ]);
@@ -2574,14 +2584,14 @@ helplineReportsView("govt");
 
 // ======================================================== LABORATORY QUEUE & DETAIL ==
 route("#/lab/queue", async () => {
-  render(`${header("Sample Queue", { back: true })}<div class="loading">Loading samples…</div>`);
+  render(`${header("Sample Queue", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading samples…</div>`);
   const queue = await api("/lab/queue");
   render(`
     ${header("Diagnostic Intake & Testing", { back: true })}
     <div class="section-card">
       <div class="section-title">🧪 Biological Specimens Queue (${queue.length})</div>
       ${queue.length === 0 ? emptyState("No samples in queue.") : queue.map(s => `
-        <div class="list-card" onclick="location.hash='#/lab/samples/${safeId(s.id)}'">
+        <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/lab/samples/${safeId(s.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/lab/samples/${safeId(s.id)}'}">
           <div class="row1">
             <span class="title">${escapeHtml(s.sample_code)}</span>
             <span class="badge ${statusBadgeClass(s.status)}">${escapeHtml(s.status)}</span>
@@ -2596,7 +2606,7 @@ route("#/lab/queue", async () => {
 }, ["lab", "vet", "govt"]);
 
 async function labSampleDetailView(id) {
-  render(`${header("Sample Detail", { back: true })}<div class="loading">Loading sample…</div>`);
+  render(`${header("Sample Detail", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading sample…</div>`);
   const s = await api(`/samples/${id}`);
   render(`
     ${header("Sample " + s.sample_code, { back: true })}
@@ -2630,7 +2640,7 @@ async function labSampleDetailView(id) {
           <button class="btn btn-outline" onclick="document.getElementById('rejectBox').style.display='block'">❌ Reject Specimen</button>
         </div>
         <div id="rejectBox" style="display:none;margin-top:10px;background:#fde6e4;padding:12px;border-radius:12px">
-          <div class="field"><label>Rejection Reason</label><input id="rejectReasonInput" placeholder="e.g. Hemolyzed, broken seal, delayed transport" /></div>
+          <div class="field"><label for="rejectReasonInput">Rejection Reason</label><input id="rejectReasonInput" placeholder="e.g. Hemolyzed, broken seal, delayed transport" /></div>
           <button class="btn btn-outline btn-sm" style="background:#fff" onclick="labReject(${safeId(s.id)})">Confirm Rejection</button>
         </div>
       ` : s.status === "LAB_RECEIVED" ? `
@@ -2640,20 +2650,20 @@ async function labSampleDetailView(id) {
         <div class="subheading">🧬 Structured Result Entry</div>
         <form id="labResultForm">
           <div class="form-row">
-            <div class="field"><label>Test Name</label><input name="test_name" placeholder="e.g. HS Culture Test / FMD ELISA" required /></div>
-            <div class="field"><label>Test Type</label><select name="test_type"><option>Serology</option><option>Bacteriology</option><option>Molecular</option><option>Hematology</option></select></div>
+            <div class="field"><label for="pm_test_name">Test Name</label><input id="pm_test_name" name="test_name" placeholder="e.g. HS Culture Test / FMD ELISA" required /></div>
+            <div class="field"><label for="pm_test_type">Test Type</label><select id="pm_test_type" name="test_type"<option>Serology</option><option>Bacteriology</option><option>Molecular</option><option>Hematology</option></select></div>
           </div>
           <div class="form-row">
-            <div class="field"><label>Test Method</label><input name="test_method" placeholder="e.g. ELISA / PCR / Culture" /></div>
-            <div class="field"><label>Qualitative Result</label><select name="result"><option>NEGATIVE</option><option>POSITIVE</option><option>INCONCLUSIVE</option></select></div>
+            <div class="field"><label for="pm_test_method">Test Method</label><input id="pm_test_method" name="test_method" placeholder="e.g. ELISA / PCR / Culture" /></div>
+            <div class="field"><label for="pm_result">Qualitative Result</label><select id="pm_result" name="result"<option>NEGATIVE</option><option>POSITIVE</option><option>INCONCLUSIVE</option></select></div>
           </div>
           <div class="form-row">
-            <div class="field"><label>Quantitative Value</label><input name="quantitative_result" type="number" step="0.01" placeholder="e.g. 0.05" /></div>
-            <div class="field"><label>Units</label><input name="units" placeholder="e.g. OD / g/dL / titer" /></div>
+            <div class="field"><label for="pm_quantitative_result">Quantitative Value</label><input id="pm_quantitative_result" name="quantitative_result" type="number" step="0.01" placeholder="e.g. 0.05" /></div>
+            <div class="field"><label for="pm_units">Units</label><input id="pm_units" name="units" placeholder="e.g. OD / g/dL / titer" /></div>
           </div>
-          <div class="field"><label>Abnormal Flag</label><select name="abnormal_flag"><option>Normal</option><option>Positive</option><option>High</option><option>Low</option><option>Abnormal</option></select></div>
-          <div class="field"><label>Reference Range Note</label><input name="reference_range_text" placeholder="e.g. Cutoff OD &gt; 0.3 is Positive" /></div>
-          <div class="field"><label>Technician Comments</label><textarea name="comments"></textarea></div>
+          <div class="field"><label for="pm_abnormal_flag">Abnormal Flag</label><select id="pm_abnormal_flag" name="abnormal_flag"<option>Normal</option><option>Positive</option><option>High</option><option>Low</option><option>Abnormal</option></select></div>
+          <div class="field"><label for="pm_reference_range_text">Reference Range Note</label><input id="pm_reference_range_text" name="reference_range_text" placeholder="e.g. Cutoff OD &gt; 0.3 is Positive" /></div>
+          <div class="field"><label for="pm_comments">Technician Comments</label><textarea id="pm_comments" name="comments"</textarea></div>
           <button class="btn btn-primary" type="submit">Save Diagnostic Results</button>
         </form>
       ` : s.status === "RESULT_READY" ? `
@@ -2866,7 +2876,7 @@ window.stopCameraScanner = function() {
 
 // ==================================================== GOVT: ANALYTICS ====
 route("#/govt/analytics", async () => {
-  render(`${header("Analytics & Reports", { back: true })}<div class="loading">Loading analytics…</div>`);
+  render(`${header("Analytics & Reports", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading analytics…</div>`);
   const [a, geo] = await Promise.all([api("/govt/analytics"), api("/govt/geo")]);
   const districtRows = geo.map(d => `
     <tr>
@@ -2923,7 +2933,7 @@ route("#/govt/analytics", async () => {
 let gisState = { geo: [], locations: [], outline: null, disease: "All", risks: ["High Risk", "Moderate Risk", "Low Risk"], map: null, layer: null, showClusters: false, clusters: [] };
 
 route("#/govt/gis", async () => {
-  render(`${header("GIS Risk Map", { back: true })}<div class="loading">Loading map & live district data…</div>`);
+  render(`${header("GIS Risk Map", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading map & live district data…</div>`);
   const [geo, locations, outline, clusterData] = await Promise.all([
     api("/govt/geo"),
     fetch("/maharashtra_locations.json").then(r => r.json()).catch(() => []),
@@ -2939,7 +2949,7 @@ route("#/govt/gis", async () => {
     </div>
     <div class="section-card" style="padding-bottom:8px">
       <div class="gis-controls">
-        <div class="field" style="margin-bottom:8px"><label>Disease filter</label>
+        <div class="field" style="margin-bottom:8px"><label for="gisDisease">Disease filter</label>
           <select id="gisDisease">${diseases.map(d => `<option ${d === gisState.disease ? "selected" : ""}>${d}</option>`).join("")}</select>
         </div>
         <div class="gis-risk-toggles">
@@ -3074,7 +3084,7 @@ function drawGis() {
 // ================================================ SURVEILLANCE (govt/vet) =
 function surveillanceView(role) {
   route(`#/${role}/surveillance`, async () => {
-    render(`${header("Surveillance", { back: true })}<div class="loading">Loading surveillance cases…</div>`);
+    render(`${header("Surveillance", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading surveillance cases…</div>`);
     const [cases, geo] = await Promise.all([api("/cases"), api("/govt/geo")]);
     render(`
       ${header("Disease Surveillance", { back: true })}
@@ -3096,7 +3106,7 @@ function surveillanceView(role) {
       <div class="section-card">
         <div class="section-title">📋 Recent Incident Reports</div>
         ${cases.slice(0, 10).map(c => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'">
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(c.id)}'}">
             <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
             <div class="meta">${escapeHtml(c.animal ? c.animal.animal_code : "—")} · ${escapeHtml(c.disease_suspected || c.diagnosis || "Unspecified")} · ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
@@ -3110,7 +3120,7 @@ surveillanceView("govt"); surveillanceView("vet");
 // ======================================================== NATIONAL SURVEILLANCE ==
 function nationalSurveillanceView() {
   route("#/govt/national", async () => {
-    render(`${header("National Surveillance", { back: true })}<div class="loading">Loading national data…</div>`);
+    render(`${header("National Surveillance", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading national data…</div>`);
     const data = await api("/national/surveillance");
     render(`
       ${header("National Surveillance", { back: true })}
@@ -3170,17 +3180,17 @@ function nationalSurveillanceView() {
       <div class="section-card">
         <div class="subheading">+ Issue National Outbreak Alert</div>
         <form id="nationalAlertForm">
-          <div class="field"><label>Alert Title</label><input name="title" placeholder="e.g. Western Zone FMD Movement Advisory" required /></div>
+          <div class="field"><label for="pm_title">Alert Title</label><input id="pm_title" name="title" placeholder="e.g. Western Zone FMD Movement Advisory" required /></div>
           <div class="form-row">
-            <div class="field"><label>Disease</label><input name="disease" placeholder="e.g. FMD" required /></div>
-            <div class="field"><label>State</label><input name="state" value="Maharashtra" required /></div>
+            <div class="field"><label for="pm_disease">Disease</label><input id="pm_disease" name="disease" placeholder="e.g. FMD" required /></div>
+            <div class="field"><label for="pm_state">State</label><input id="pm_state" name="state" value="Maharashtra" required /></div>
           </div>
           <div class="form-row">
-            <div class="field"><label>Severity</label><select name="severity"><option>HIGH</option><option>CRITICAL</option><option>MODERATE</option></select></div>
-            <div class="field"><label>Affected Count</label><input name="affected_count" type="number" value="1" /></div>
+            <div class="field"><label for="pm_severity">Severity</label><select id="pm_severity" name="severity"<option>HIGH</option><option>CRITICAL</option><option>MODERATE</option></select></div>
+            <div class="field"><label for="pm_affected_count">Affected Count</label><input id="pm_affected_count" name="affected_count" type="number" value="1" /></div>
           </div>
-          <div class="field"><label>Alert Description</label><textarea name="description" placeholder="Summary of outbreak pattern and epicenter coordinates"></textarea></div>
-          <div class="field"><label>Recommended Measures</label><input name="recommended_measures" placeholder="e.g. Quarantine border, ring vaccination" /></div>
+          <div class="field"><label for="pm_description">Alert Description</label><textarea id="pm_description" name="description" placeholder="Summary of outbreak pattern and epicenter coordinates"</textarea></div>
+          <div class="field"><label for="pm_recommended_measures">Recommended Measures</label><input id="pm_recommended_measures" name="recommended_measures" placeholder="e.g. Quarantine border, ring vaccination" /></div>
           <button class="btn btn-primary" type="submit">Publish National Alert</button>
         </form>
       </div>
@@ -3203,7 +3213,7 @@ nationalSurveillanceView();
 // ======================================================== FARM ALERTS VIEW ==
 function farmAlertsView(role) {
   route(`#/${role}/farm-alerts`, async () => {
-    render(`${header("Farm Alerts", { back: true })}<div class="loading">Loading farm alerts…</div>`);
+    render(`${header("Farm Alerts", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading farm alerts…</div>`);
     const alerts = await api("/farm-alerts");
     render(`
       ${header("Herd & Farm Intelligence Alerts", { back: true })}
@@ -3249,7 +3259,7 @@ window.resolveFarmAlert = async function(id) {
 // ==================================================== VAX CAMPAIGNS =====
 function campaignsView(role) {
   route(`#/${role}/campaigns`, async () => {
-    render(`${header("Campaigns", { back: true })}<div class="loading">Loading vaccination campaigns…</div>`);
+    render(`${header("Campaigns", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading vaccination campaigns…</div>`);
     const camps = await api("/campaigns");
     const canManage = role === "govt";
     render(`
@@ -3299,30 +3309,33 @@ function bindCampaignManage(camps, role) {
 function renderCampModal(camp, isGovt) {
   const isEdit = !!camp;
   const wrap = document.getElementById("campModalWrap");
+  wrap.setAttribute("role", "dialog");
+  wrap.setAttribute("aria-modal", "true");
+  wrap.setAttribute("aria-label", isEdit ? "Update Campaign" : "Create Campaign");
   wrap.innerHTML = `
     <div class="section-card" style="border:2px solid var(--primary-light)">
       <div class="subheading">${isEdit ? "Update Campaign: " + camp.campaign_code : "Create New Campaign"}</div>
       <form id="campForm">
         ${!isEdit ? `
-          <div class="field"><label>Campaign Name</label><input name="name" required placeholder="e.g. FMD Drive Haveli" /></div>
+          <div class="field"><label for="pm_name">Campaign Name</label><input id="pm_name" name="name" required placeholder="e.g. FMD Drive Haveli" /></div>
           <div class="form-row">
-            <div class="field"><label>District</label><input name="district" required placeholder="e.g. Pune" /></div>
-            <div class="field"><label>Vaccine</label><select name="vaccine"><option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option></select></div>
+            <div class="field"><label for="pm_district_2">District</label><input id="pm_district_2" name="district" required placeholder="e.g. Pune" /></div>
+            <div class="field"><label for="pm_vaccine">Vaccine</label><select id="pm_vaccine" name="vaccine"<option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option></select></div>
           </div>
           <div class="form-row">
-            <div class="field"><label>Target Animals</label><input name="target_animals" type="number" required /></div>
-            <div class="field"><label>Start Date</label><input name="start_date" type="date" required /></div>
+            <div class="field"><label for="pm_target_animals">Target Animals</label><input id="pm_target_animals" name="target_animals" type="number" required /></div>
+            <div class="field"><label for="pm_start_date">Start Date</label><input id="pm_start_date" name="start_date" type="date" required /></div>
           </div>
-          <div class="field"><label>End Date</label><input name="end_date" type="date" required /></div>
+          <div class="field"><label for="pm_end_date">End Date</label><input id="pm_end_date" name="end_date" type="date" required /></div>
         ` : `
           <div class="form-row">
-            <div class="field"><label>Doses Administered</label><input name="doses_administered" type="number" value="${escapeAttr(camp.doses_administered)}" required /></div>
-            <div class="field"><label>Status</label><select name="status">
+            <div class="field"><label for="pm_doses_administered">Doses Administered</label><input id="pm_doses_administered" name="doses_administered" type="number" value="${escapeAttr(camp.doses_administered)}" required /></div>
+            <div class="field"><label for="pm_status">Status</label><select id="pm_status" name="status"
               ${["PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"].map(s => `<option ${s === camp.status ? "selected" : ""}>${s}</option>`).join("")}
             </select></div>
           </div>
         `}
-        <div class="field"><label>Notes</label><textarea name="notes">${isEdit ? camp.notes || "" : ""}</textarea></div>
+        <div class="field"><label for="pm_notes">Notes</label><textarea id="pm_notes" name="notes"${isEdit ? camp.notes || "" : ""}</textarea></div>
         <div class="btn-row">
           <button class="btn btn-primary btn-sm" type="submit">${isEdit ? "Save Changes" : "Create Campaign"}</button>
           <button class="btn btn-outline btn-sm" type="button" onclick="document.getElementById('campModalWrap').innerHTML=''">Cancel</button>
@@ -3356,7 +3369,7 @@ function renderCampModal(camp, isGovt) {
 
 // ======================================================== VACCINE STOCK ==
 route("#/govt/stock", async () => {
-  render(`${header("Vaccine Stock", { back: true })}<div class="loading">Loading stock…</div>`);
+  render(`${header("Vaccine Stock", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading stock…</div>`);
   const a = await api("/govt/analytics");
   const stock = a.vaccine_stock || {};
   render(`
@@ -3376,10 +3389,10 @@ route("#/govt/stock", async () => {
       <div class="subheading">+ Add or Update Stock</div>
       <form id="stockForm">
         <div class="form-row">
-          <div class="field"><label>District</label><input name="district" required placeholder="e.g. Pune" /></div>
-          <div class="field"><label>Vaccine</label><select name="vaccine"><option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option></select></div>
+          <div class="field"><label for="pm_district_3">District</label><input id="pm_district_3" name="district" required placeholder="e.g. Pune" /></div>
+          <div class="field"><label for="pm_vaccine_2">Vaccine</label><select id="pm_vaccine_2" name="vaccine"<option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option></select></div>
         </div>
-        <div class="field"><label>Doses Available</label><input name="doses" type="number" required placeholder="e.g. 1500" /></div>
+        <div class="field"><label for="pm_doses">Doses Available</label><input id="pm_doses" name="doses" type="number" required placeholder="e.g. 1500" /></div>
         <button class="btn btn-primary" type="submit">Update Stock</button>
       </form>
     </div>
@@ -3399,7 +3412,7 @@ route("#/govt/stock", async () => {
 const AI_DISEASES = ["HS", "FMD", "BQ", "LSD", "Brucellosis", "PPR"];
 
 route("#/govt/ai", async () => {
-  render(`${header("AI Early Warning", { back: true })}<div class="loading">Loading AI system…</div>`);
+  render(`${header("AI Early Warning", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading AI system…</div>`);
   const [districts, modelStatus] = await Promise.all([
     api("/govt/ai/districts"),
     api("/govt/ai/status").catch(() => ({ online: false })),
@@ -3417,13 +3430,13 @@ route("#/govt/ai", async () => {
       </div>
       <form id="aiForm">
         <div class="form-row">
-          <div class="field"><label>District</label>
-            <select name="district" required>
+          <div class="field"><label for="pm_district">District</label>
+            <select id="pm_district" name="district" required
               ${districts.length ? districts.map(d => `<option>${d}</option>`).join("") : `<option value="">No districts yet</option>`}
             </select>
           </div>
-          <div class="field"><label>Disease</label>
-            <select name="disease" required>${AI_DISEASES.map(d => `<option>${d}</option>`).join("")}</select>
+          <div class="field"><label for="pm_disease">Disease</label>
+            <select id="pm_disease" name="disease" required${AI_DISEASES.map(d => `<option>${d}</option>`).join("")}</select>
           </div>
         </div>
         <button class="btn btn-primary" type="submit" ${modelStatus.online ? "" : "disabled"}>Predict Risk</button>
@@ -3437,7 +3450,7 @@ route("#/govt/ai", async () => {
     const f = Object.fromEntries(new FormData(e.target));
     if (!f.district) return toast("No district data available yet", true);
     const box = document.getElementById("aiResults");
-    box.innerHTML = `<div class="loading">Running AI prediction on live district & weather data…</div>`;
+    box.innerHTML = `<div class="loading" role="status" aria-live="polite" aria-busy="true">Running AI prediction on live district & weather data…</div>`;
     try {
       const qs = `district=${encodeURIComponent(f.district)}&disease=${encodeURIComponent(f.disease)}`;
       const [pred, outbreak] = await Promise.all([api(`/govt/ai/predict?${qs}`), api(`/govt/ai/outbreak?${qs.split("&")[0]}`).catch(() => null)]);
@@ -3484,7 +3497,7 @@ route("#/govt/ai", async () => {
 // ------------------------------------------------------- disease library --
 function diseasesView(role) {
   route(`#/${role}/diseases`, async () => {
-    render(`${header("Disease Info", { back: true })}<div class="loading">Loading disease library…</div>`);
+    render(`${header("Disease Info", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading disease library…</div>`);
     const diseases = await api("/diseases");
     render(`
       ${header("Disease Information", { back: true })}
@@ -3582,7 +3595,7 @@ route("#/owner/herds", () => { location.hash = "#/owner/livestock"; }, ["owner"]
 
 async function herdDetailView(role, id) {
   const farmer = role === "owner";
-  render(`${header(farmer ? ft("herd_information") : "Herd Intelligence", { back: true })}<div class="loading">${farmer ? ft("loading_herd") : "Loading herd telemetry…"}</div>`);
+  render(`${header(farmer ? ft("herd_information") : "Herd Intelligence", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_herd") : "Loading herd telemetry…"}</div>`);
   const hi = await api(`/herds/${id}/intelligence`);
   if (farmer) {
     const animals = (await api("/animals")).filter(a => Number(a.herd_id) === Number(id));
@@ -3600,7 +3613,7 @@ async function herdDetailView(role, id) {
       <div class="section-card">
         <div class="section-title">🐄 ${ft("herd_animals")} (${animals.length})</div>
         ${animals.length ? animals.map(a => `
-          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${safeId(a.id)}'">
+          <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/animals/${safeId(a.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/animals/${safeId(a.id)}'}">
             <div class="row1"><span class="title">${escapeHtml(a.animal_name || a.animal_code)}</span><span class="badge ${escapeHtml(a.status === "Healthy" ? "badge-green" : "badge-orange")}">${ownerAnimalStatus(a.status)}</span></div>
             <div class="meta">${ownerAnimalType(a.animal_type || a.species)} · ${ft("age")}: ${escapeHtml(a.age ?? a.age_years ?? ft("unknown"))}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
           </div>`).join("") : emptyState(ft("no_herd_animals"))}
@@ -3645,10 +3658,10 @@ route("#/owner/herds/new", () => {
     <div class="section-card">
       <form id="herdForm">
         <div class="form-row">
-          <div class="field"><label>${ft("village")}</label><input name="village" value="${escapeHtml(state.user.village || "")}" autocomplete="address-level3" /></div>
-          <div class="field"><label>${ft("block")}</label><input name="block" value="${escapeAttr(state.user.block || "")}" /></div>
+          <div class="field"><label for="pm_village_2">${ft("village")}</label><input id="pm_village_2" name="village" value="${escapeHtml(state.user.village || "")}" autocomplete="address-level3" /></div>
+          <div class="field"><label for="pm_block_2">${ft("block")}</label><input id="pm_block_2" name="block" value="${escapeAttr(state.user.block || "")}" /></div>
         </div>
-        <div class="field"><label>${ft("district")}</label><input name="district" value="${escapeHtml(state.user.district || "")}" /></div>
+        <div class="field"><label for="pm_district_4">${ft("district")}</label><input id="pm_district_4" name="district" value="${escapeHtml(state.user.district || "")}" /></div>
         <button class="btn btn-primary" type="submit">${ft("create_herd")}</button>
       </form>
     </div>
@@ -3668,7 +3681,7 @@ route("#/owner/herds/new", () => {
 function animalsListView(role) {
   route(`#/${role}/animals`, async () => {
     if (role === "owner") { location.hash = "#/owner/livestock"; return; }
-    render(`${header("Animals", { back: true })}<div class="loading">Loading…</div>`);
+    render(`${header("Animals", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
     const animals = await api("/animals");
     render(`
       ${header(role === "owner" ? "My Animals" : "Animals", { back: true })}
@@ -3676,7 +3689,7 @@ function animalsListView(role) {
         ${role === "owner" ? `<button class="btn btn-primary" style="margin-bottom:14px" onclick="location.hash='#/owner/animals/new'">+ Add Animal</button>` : ""}
         ${animals.length === 0 ? emptyState("No animals registered yet.") :
           animals.map(a => `
-          <div class="list-card" onclick="location.hash='#/${role}/animals/${safeId(a.id)}'">
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/animals/${safeId(a.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/animals/${safeId(a.id)}'}">
             <div class="row1"><span class="title">${escapeHtml(a.animal_code)}</span><span class="badge ${escapeHtml(a.status === 'Healthy' ? 'badge-green' : 'badge-orange')}">${escapeHtml(a.status)}</span></div>
             <div class="meta">${escapeHtml(a.animal_name || "—")} · ${escapeHtml(a.animal_type || a.species || "—")} · ${escapeHtml(a.breed || "—")} · ${escapeHtml((a.gender || a.sex || "—"))} · ${escapeHtml((a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—")}</div>
             ${role === "owner" ? `<div style="margin-top:8px;display:flex;gap:8px">
@@ -3697,25 +3710,25 @@ route("#/owner/animals/new", async () => {
     ${header(ft("add_animal"), { back: true })}
     <div class="section-card">
       <form id="animalForm">
-        <div class="field"><label>${ft("animal_name")}</label><input name="animal_name" autocomplete="off" required /></div>
-        <div class="field"><label>${ft("animal_type")}</label>
-          <select name="animal_type" required><option value="">${ft("select")}</option>
+        <div class="field"><label for="pm_animal_name">${ft("animal_name")}</label><input id="pm_animal_name" name="animal_name" autocomplete="off" required /></div>
+        <div class="field"><label for="pm_animal_type">${ft("animal_type")}</label>
+          <select id="pm_animal_type" name="animal_type" required<option value="">${ft("select")}</option>
             <option value="Cattle">${ft("cattle")}</option><option value="Buffalo">${ft("buffalo")}</option>
             <option value="Goat">${ft("goat")}</option><option value="Sheep">${ft("sheep")}</option><option value="Other">${ft("other")}</option></select>
         </div>
         <div class="form-row">
-          <div class="field"><label>${ft("breed")}</label><input name="breed" placeholder="${ft("breed_placeholder")}" /></div>
-          <div class="field"><label>${ft("gender")}</label><select name="gender"><option value="Female">${ft("female")}</option><option value="Male">${ft("male")}</option></select></div>
+          <div class="field"><label for="pm_breed">${ft("breed")}</label><input id="pm_breed" name="breed" placeholder="${ft("breed_placeholder")}" /></div>
+          <div class="field"><label for="pm_gender">${ft("gender")}</label><select id="pm_gender" name="gender"<option value="Female">${ft("female")}</option><option value="Male">${ft("male")}</option></select></div>
         </div>
-        <div class="field"><label>${ft("age")}</label><input name="age" type="number" step="0.5" min="0" inputmode="decimal" placeholder="${ft("age_placeholder")}" /></div>
-        <div class="field"><label>${ft("herd")} (${ft("optional")})</label>
-          <select name="herd_id"><option value="">${ft("no_herd")}</option>${herds.map(h => `<option value="${safeId(h.id)}">${ft("herd_name")} ${escapeHtml(h.herd_code)}</option>`).join("")}</select>
+        <div class="field"><label for="pm_age">${ft("age")}</label><input id="pm_age" name="age" type="number" step="0.5" min="0" inputmode="decimal" placeholder="${ft("age_placeholder")}" /></div>
+        <div class="field"><label for="pm_herd_id">${ft("herd")} (${ft("optional")})</label>
+          <select id="pm_herd_id" name="herd_id"<option value="">${ft("no_herd")}</option>${herds.map(h => `<option value="${safeId(h.id)}">${ft("herd_name")} ${escapeHtml(h.herd_code)}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>${ft("full_name")}</label><input name="owner_name" value="${escapeHtml(state.user.full_name || "")}" autocomplete="name" required /></div>
-        <div class="field"><label>${ft("mobile")}</label><input name="mobile" value="${escapeAttr(state.user.mobile || "")}" inputmode="tel" autocomplete="tel" required /></div>
+        <div class="field"><label for="pm_owner_name">${ft("full_name")}</label><input id="pm_owner_name" name="owner_name" value="${escapeHtml(state.user.full_name || "")}" autocomplete="name" required /></div>
+        <div class="field"><label for="pm_mobile_2">${ft("mobile")}</label><input id="pm_mobile_2" name="mobile" value="${escapeAttr(state.user.mobile || "")}" inputmode="tel" autocomplete="tel" required /></div>
         <div class="form-row">
-          <div class="field"><label>${ft("village")}</label><input name="village" value="${escapeHtml(state.user.village || "")}" autocomplete="address-level3" /></div>
-          <div class="field"><label>${ft("district")}</label><input name="district" value="${escapeHtml(state.user.district || "")}" /></div>
+          <div class="field"><label for="pm_village_3">${ft("village")}</label><input id="pm_village_3" name="village" value="${escapeHtml(state.user.village || "")}" autocomplete="address-level3" /></div>
+          <div class="field"><label for="pm_district_5">${ft("district")}</label><input id="pm_district_5" name="district" value="${escapeHtml(state.user.district || "")}" /></div>
         </div>
         <button class="btn btn-primary" type="submit">${ft("register_animal")}</button>
       </form>
@@ -3763,7 +3776,7 @@ function ownerAnimalRecord(a) {
     <div class="section-card">
       <div class="section-title">💊 ${ft("health_and_treatment")}</div>
       ${cases.length ? cases.slice(0, 4).map(c => `
-        <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(c.id)}'">
+        <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${safeId(c.id)}'}">
           <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
           <div class="meta">${escapeHtml(c.symptoms || ft("case_detail"))} · ${fmtDate(c.created_at)}</div>
         </div>`).join("") : `<div class="meta">${ft("healthy_message")}</div>`}
@@ -3793,7 +3806,7 @@ function ownerAnimalRecord(a) {
 function animalRecordView(role) {
   route(`#/${role}/animals/:id`, async ({ id }) => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("animal_information") : "Animal Record", { back: true })}<div class="loading">${farmer ? ft("loading_animal") : "Loading health passport…"}</div>`);
+    render(`${header(farmer ? ft("animal_information") : "Animal Record", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_animal") : "Loading health passport…"}</div>`);
     const a = await api(`/animals/${id}`);
     if (farmer) { ownerAnimalRecord(a); return; }
     const isVet = role === "vet";
@@ -3844,14 +3857,14 @@ function animalRecordView(role) {
           <div id="reproFormWrap" style="display:none;margin-top:12px;background:#f8f9fe;padding:12px;border-radius:12px">
             <form id="reproForm">
               <div class="form-row">
-                <div class="field"><label>Event</label><select name="event_type"><option>Pregnancy Check</option><option>AI</option><option>Natural Service</option><option>Calving</option><option>Abortion</option></select></div>
-                <div class="field"><label>Pregnancy Status</label><select name="pregnancy_status"><option>Confirmed Pregnant</option><option>Suspected</option><option>Not Pregnant</option><option>Lactating</option><option>Dry</option><option>Miscarried/Aborted</option></select></div>
+                <div class="field"><label for="pm_event_type">Event</label><select id="pm_event_type" name="event_type"<option>Pregnancy Check</option><option>AI</option><option>Natural Service</option><option>Calving</option><option>Abortion</option></select></div>
+                <div class="field"><label for="pm_pregnancy_status">Pregnancy Status</label><select id="pm_pregnancy_status" name="pregnancy_status"<option>Confirmed Pregnant</option><option>Suspected</option><option>Not Pregnant</option><option>Lactating</option><option>Dry</option><option>Miscarried/Aborted</option></select></div>
               </div>
               <div class="form-row">
-                <div class="field"><label>Breeding / Mating Date</label><input name="breeding_date" type="date" value="${new Date().toISOString().slice(0, 10)}" /></div>
-                <div class="field"><label>Expected Delivery</label><input name="expected_delivery_date" type="date" placeholder="Auto-calculated if blank" /></div>
+                <div class="field"><label for="pm_breeding_date">Breeding / Mating Date</label><input id="pm_breeding_date" name="breeding_date" type="date" value="${new Date().toISOString().slice(0, 10)}" /></div>
+                <div class="field"><label for="pm_expected_delivery_date">Expected Delivery</label><input id="pm_expected_delivery_date" name="expected_delivery_date" type="date" placeholder="Auto-calculated if blank" /></div>
               </div>
-              <div class="field"><label>Notes</label><input name="breeding_notes" placeholder="e.g. AI straw batch #, rectal palpation findings" /></div>
+              <div class="field"><label for="pm_breeding_notes">Notes</label><input id="pm_breeding_notes" name="breeding_notes" placeholder="e.g. AI straw batch #, rectal palpation findings" /></div>
               <button class="btn btn-primary btn-sm" type="submit">Save Reproductive Record</button>
             </form>
           </div>
@@ -3877,11 +3890,11 @@ function animalRecordView(role) {
           <div id="allergyFormWrap" style="display:none;margin-top:12px;background:#f8f9fe;padding:12px;border-radius:12px">
             <form id="allergyForm">
               <div class="form-row">
-                <div class="field"><label>Allergen Name</label><input name="allergen" placeholder="e.g. Penicillin, NSAID, Sulfa" required /></div>
-                <div class="field"><label>Severity</label><select name="allergy_severity"><option>Moderate</option><option>Severe</option><option>Life-Threatening</option><option>Mild</option></select></div>
+                <div class="field"><label for="pm_allergen">Allergen Name</label><input id="pm_allergen" name="allergen" placeholder="e.g. Penicillin, NSAID, Sulfa" required /></div>
+                <div class="field"><label for="pm_allergy_severity">Severity</label><select id="pm_allergy_severity" name="allergy_severity"<option>Moderate</option><option>Severe</option><option>Life-Threatening</option><option>Mild</option></select></div>
               </div>
-              <div class="field"><label>Observed Reaction</label><input name="reaction" placeholder="e.g. Anaphylaxis, facial edema, urticaria" required /></div>
-              <div class="field"><label>Clinical Notes</label><input name="notes" placeholder="Contraindications or cross-reactivity notes" /></div>
+              <div class="field"><label for="pm_reaction">Observed Reaction</label><input id="pm_reaction" name="reaction" placeholder="e.g. Anaphylaxis, facial edema, urticaria" required /></div>
+              <div class="field"><label for="pm_notes_2">Clinical Notes</label><input id="pm_notes_2" name="notes" placeholder="Contraindications or cross-reactivity notes" /></div>
               <button class="btn btn-primary btn-sm" type="submit">Save Allergy Profile</button>
             </form>
           </div>
@@ -3919,7 +3932,7 @@ function animalRecordView(role) {
       <div class="section-card">
         <div class="subheading">🩺 Previous Cases</div>
         ${a.cases.length === 0 ? emptyState("No cases recorded.") : a.cases.map(c => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'">
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(c.id)}'}">
             <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
             <div class="meta">${escapeHtml(c.symptoms || "")} · ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
@@ -3988,11 +4001,14 @@ window.showQrModal = async function(id) {
     const div = document.createElement("div");
     div.id = "qrModal";
     div.className = "qr-modal";
+    div.setAttribute("role", "dialog");
+    div.setAttribute("aria-modal", "true");
+    div.setAttribute("aria-label", "Animal QR Code");
     div.innerHTML = `
       <div class="qr-modal-content">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <b>🏷️ ${farmer ? ft("qr_tag") : "Digital Animal Health Tag"}</b>
-          <button aria-label="${farmer ? ft("close") : "Close"}" style="border:none;background:none;font-size:20px;cursor:pointer" onclick="document.getElementById('qrModal').remove()">✕</button>
+          <button aria-label="${farmer ? ft("close") : "Close"}" data-close-modal style="border:none;background:none;font-size:20px;cursor:pointer" onclick="document.getElementById('qrModal').remove()">✕</button>
         </div>
         <div style="font-size:17px;font-weight:800;color:var(--primary)">${escapeHtml(data.animal_code)}</div>
         <div class="small-muted">${escapeHtml(farmer ? ownerAnimalType(data.species) : data.species)}${farmer ? "" : ` · Token: ${escapeHtml(data.qr_token.slice(0, 16))}…`}</div>
@@ -4007,6 +4023,7 @@ window.showQrModal = async function(id) {
       </div>
     `;
     document.body.appendChild(div);
+    if (window.PMA11y) { window.PMA11y.showAccessibleDialog(div, {labelledBy: null, announce: "QR code dialog opened", onClose: () => { try { div.remove(); } catch(_){} }}); }
   } catch (e) { toast(e.message, true); }
 };
 
@@ -4022,7 +4039,7 @@ window.regenAnimalQr = async function(id) {
 
 // =========================================================== REPORT =====
 route("#/owner/report", async ({ animal, voice }) => {
-  render(`${header(ft("report_title"), { back: true })}<div class="loading">${ft("loading")}</div>`);
+  render(`${header(ft("report_title"), { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${ft("loading")}</div>`);
   const animals = await api("/animals");
   const defaultAnimal = animal ? animals.find(a => a.id === Number(animal)) : null;
   if (!animals.length) {
@@ -4049,20 +4066,20 @@ route("#/owner/report", async ({ animal, voice }) => {
         <div id="voiceTranscriptText"></div>
       </div>` : ""}
       <form id="caseForm">
-        <div class="field"><label>${ft("animal")}</label>
-          <select name="animal_id" required>
+        <div class="field"><label for="pm_animal_id">${ft("animal")}</label>
+          <select id="pm_animal_id" name="animal_id" required
             <option value="">${ft("choose_animal")}</option>
             ${animals.map(a => `<option value="${safeId(a.id)}" ${escapeHtml(defaultAnimal && defaultAnimal.id === a.id ? "selected" : "")}>${escapeHtml(a.animal_name || a.animal_code)} · ${ownerAnimalType(a.animal_type || a.species)}</option>`).join("")}
           </select>
         </div>
-        <div class="field"><label>${ft("symptoms")}</label>
-          <input name="symptoms" id="symptomsInput" placeholder="${ft("symptoms_placeholder")}" required />
+        <div class="field"><label for="symptomsInput">${ft("symptoms")}</label>
+          <input name="symptoms" id="symptomsInput" placeholder="${ft("symptoms_placeholder")}" required /
         </div>
-        <div class="field"><label>${ft("severity")}</label>
-          <select name="severity"><option value="Low">${ft("severity_low")}</option><option value="Medium" selected>${ft("severity_medium")}</option><option value="High">${ft("severity_high")}</option><option value="Critical">${ft("severity_critical")}</option></select>
+        <div class="field"><label for="pm_severity">${ft("severity")}</label>
+          <select id="pm_severity" name="severity"<option value="Low">${ft("severity_low")}</option><option value="Medium" selected>${ft("severity_medium")}</option><option value="High">${ft("severity_high")}</option><option value="Critical">${ft("severity_critical")}</option></select>
         </div>
-        <div class="field"><label>${ft("additional_details")}</label>
-          <textarea name="description" id="descInput" placeholder="${ft("details_placeholder")}"></textarea>
+        <div class="field"><label for="descInput">${ft("additional_details")}</label>
+          <textarea name="description" id="descInput" placeholder="${ft("details_placeholder")}"</textarea>
         </div>
         <button class="btn btn-primary" type="submit">📋 ${ft("submit_report")}</button>
       </form>
@@ -4147,7 +4164,7 @@ function setupVoiceReport() {
 function casesListView(role) {
   route(`#/${role}/cases`, async () => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("cases") : "Cases", { back: true })}<div class="loading">${farmer ? ft("loading_cases") : "Loading cases…"}</div>`);
+    render(`${header(farmer ? ft("cases") : "Cases", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_cases") : "Loading cases…"}</div>`);
     const cases = await api("/cases");
     if (farmer) {
       render(`
@@ -4170,7 +4187,7 @@ function casesListView(role) {
       ${header("Active Case Tracking", { back: true })}
       <div class="section-card">
         ${cases.length === 0 ? emptyState("No active cases.") : cases.map(c => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'">
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(c.id)}'}">
             <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
             <div class="meta"><b>Animal:</b> ${escapeHtml(c.animal ? c.animal.animal_code : "—")} · ${escapeHtml(c.symptoms || "—")}</div>
             <div class="meta">Owner: ${escapeHtml(c.owner ? c.owner.full_name : "—")} · Reported: ${fmtDate(c.created_at)}</div>
@@ -4183,14 +4200,14 @@ function casesListView(role) {
 casesListView("owner"); casesListView("vet"); casesListView("govt");
 
 route("#/vet/reports", async () => {
-  render(`${header("Incoming Reports", { back: true })}<div class="loading">Loading…</div>`);
+  render(`${header("Incoming Reports", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
   const reports = await api("/vet/reports");
   render(`
     ${header("Incoming Reports", { back: true })}
     <div class="section-card">
       <div class="section-title">Farmer Reported Incidents</div>
       ${reports.length === 0 ? emptyState("No reports yet.") : reports.map(r => `
-        <div class="list-card" onclick="location.hash='#/vet/cases/${safeId(r.id)}'">
+        <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/vet/cases/${safeId(r.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/vet/cases/${safeId(r.id)}'}">
           <div class="row1"><span class="title">${escapeHtml(r.case_no)}</span><span class="badge ${severityBadgeClass(r.severity)}">${escapeHtml(r.severity)} severity</span></div>
           <div class="meta"><b>Symptoms:</b> ${escapeHtml(r.symptoms || "—")}</div>
           <div class="meta">Owner: ${escapeHtml(r.owner ? r.owner.full_name + " (" + (r.owner.mobile || "") + ")" : "—")}</div>
@@ -4279,7 +4296,7 @@ function ownerCaseDetail(c) {
 function caseDetailView(role) {
   route(`#/${role}/cases/:id`, async ({ id }) => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("case_detail") : "Case Detail", { back: true })}<div class="loading">${farmer ? ft("loading_cases") : "Loading…"}</div>`);
+    render(`${header(farmer ? ft("case_detail") : "Case Detail", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_cases") : "Loading…"}</div>`);
     const c = await api(`/cases/${id}`);
     const isVet = role === "vet";
     const samples = c.samples || [];
@@ -4361,11 +4378,11 @@ function caseDetailView(role) {
           <div id="sampleCollectWrap" style="display:none;margin-top:12px;background:#f8f9fe;padding:12px;border-radius:12px">
             <form id="sampleCollectForm">
               <div class="form-row">
-                <div class="field"><label>Sample Type</label><select name="sample_type"><option>Blood Sample</option><option>Nasal Swab</option><option>Tissue Biopsy</option><option>Milk Sample</option><option>Fecal Sample</option></select></div>
-                <div class="field"><label>Collection Notes</label><input name="collection_notes" placeholder="e.g. Sterile EDTA tube" /></div>
+                <div class="field"><label for="pm_sample_type">Sample Type</label><select id="pm_sample_type" name="sample_type"<option>Blood Sample</option><option>Nasal Swab</option><option>Tissue Biopsy</option><option>Milk Sample</option><option>Fecal Sample</option></select></div>
+                <div class="field"><label for="pm_collection_notes">Collection Notes</label><input id="pm_collection_notes" name="collection_notes" placeholder="e.g. Sterile EDTA tube" /></div>
               </div>
               <div class="field">
-                <label>Geolocation (GPS)</label>
+                <label id="geoLabel">Geolocation (GPS)</label>
                 <div class="btn-row">
                   <button class="btn btn-outline btn-sm" type="button" onclick="captureSampleGps()">📍 Capture Device GPS</button>
                   <span id="gpsStatusTxt" class="small-muted" style="align-self:center">GPS idle</span>
@@ -4405,8 +4422,8 @@ function caseDetailView(role) {
         ${isVet ? `
           <div id="trFormWrap" style="display:none;margin-top:12px;background:#f8f9fe;padding:12px;border-radius:12px">
             <form id="trForm">
-              <div class="field"><label>Patient Response</label>
-                <select name="response">
+              <div class="field"><label for="pm_response">Patient Response</label>
+                <select id="pm_response" name="response"
                   <option value="improved">Improved</option>
                   <option value="unchanged">Unchanged</option>
                   <option value="worsened">Worsened</option>
@@ -4416,9 +4433,9 @@ function caseDetailView(role) {
                   <option value="follow_up_required">Follow-up Required</option>
                 </select>
               </div>
-              <div class="field"><label>Objective Clinical Observations</label><textarea name="objective_observations" placeholder="e.g. Temp 101.3°F, normal rumination, appetite restored"></textarea></div>
-              <div class="field"><label>Clinical Notes</label><input name="notes" placeholder="e.g. Complete 3-day course" /></div>
-              <div class="field"><label>Productivity Impact</label><input name="productivity_notes" placeholder="e.g. Milk yield dropped 40%" /></div>
+              <div class="field"><label for="pm_objective_observations">Objective Clinical Observations</label><textarea id="pm_objective_observations" name="objective_observations" placeholder="e.g. Temp 101.3°F, normal rumination, appetite restored"</textarea></div>
+              <div class="field"><label for="pm_notes_3">Clinical Notes</label><input id="pm_notes_3" name="notes" placeholder="e.g. Complete 3-day course" /></div>
+              <div class="field"><label for="pm_productivity_notes">Productivity Impact</label><input id="pm_productivity_notes" name="productivity_notes" placeholder="e.g. Milk yield dropped 40%" /></div>
               <button class="btn btn-primary btn-sm" type="submit">Save Treatment Evaluation</button>
             </form>
           </div>
@@ -4542,6 +4559,7 @@ window.showSampleQrModal = async function(sid) {
       </div>
     `;
     document.body.appendChild(div);
+    if (window.PMA11y) { window.PMA11y.showAccessibleDialog(div, {labelledBy: null, announce: "QR code dialog opened", onClose: () => { try { div.remove(); } catch(_){} }}); }
   } catch (e) { toast(e.message, true); }
 };
 
@@ -4690,27 +4708,27 @@ function vetCaseActions(c, allergies = []) {
     <div class="section-card">
       <div class="subheading">✏️ Case Actions &amp; Diagnosis</div>
       <form id="statusForm">
-        <div class="field"><label>Status</label><select name="status">${statuses.map(s => `<option ${escapeHtml(s === c.status ? "selected" : "")}>${s}</option>`).join("")}</select></div>
-        <div class="field"><label>Diagnosis</label><input name="diagnosis" value="${escapeHtml(c.diagnosis || "")}" /></div>
-        <div class="field"><label>Treatment Notes</label><textarea name="treatment">${escapeHtml(c.treatment || "")}</textarea></div>
-        <div class="field"><label>Update Note</label><input name="note" placeholder="What changed?" /></div>
+        <div class="field"><label for="pm_status_2">Status</label><select id="pm_status_2" name="status"${statuses.map(s => `<option ${escapeHtml(s === c.status ? "selected" : "")}>${s}</option>`).join("")}</select></div>
+        <div class="field"><label for="pm_diagnosis">Diagnosis</label><input id="pm_diagnosis" name="diagnosis" value="${escapeHtml(c.diagnosis || "")}" /></div>
+        <div class="field"><label for="pm_treatment">Treatment Notes</label><textarea id="pm_treatment" name="treatment"${escapeHtml(c.treatment || "")}</textarea></div>
+        <div class="field"><label for="pm_note">Update Note</label><input id="pm_note" name="note" placeholder="What changed?" /></div>
         <button class="btn btn-primary" type="submit">Save Case Update</button>
       </form>
     </div>
     <div class="section-card">
       <div class="subheading">💊 Create E-Prescription</div>
       <form id="rxForm">
-        <div class="field"><label>Diagnosis</label><input name="diagnosis" value="${escapeHtml(c.diagnosis || "")}" /></div>
+        <div class="field"><label for="pm_diagnosis_2">Diagnosis</label><input id="pm_diagnosis_2" name="diagnosis" value="${escapeHtml(c.diagnosis || "")}" /></div>
         <div class="form-row">
-          <div class="field"><label>Medicine</label><input name="medicine" id="rxMedicineInput" required /></div>
-          <div class="field"><label>Dosage</label><input name="dosage" placeholder="e.g. 0.5 mg/kg" /></div>
+          <div class="field"><label for="rxMedicineInput">Medicine</label><input name="medicine" id="rxMedicineInput" required /></div>
+          <div class="field"><label for="pm_dosage">Dosage</label><input id="pm_dosage" name="dosage" placeholder="e.g. 0.5 mg/kg" /></div>
         </div>
         <div class="form-row">
-          <div class="field"><label>Frequency</label><input name="frequency" placeholder="e.g. Once daily" /></div>
-          <div class="field"><label>Duration</label><input name="duration" placeholder="e.g. 5 days" /></div>
+          <div class="field"><label for="pm_frequency">Frequency</label><input id="pm_frequency" name="frequency" placeholder="e.g. Once daily" /></div>
+          <div class="field"><label for="pm_duration">Duration</label><input id="pm_duration" name="duration" placeholder="e.g. 5 days" /></div>
         </div>
-        <div class="field"><label>Instructions</label><textarea name="instructions"></textarea></div>
-        <div class="field"><label>Follow-up Date</label><input name="follow_up_date" type="date" /></div>
+        <div class="field"><label for="pm_instructions">Instructions</label><textarea id="pm_instructions" name="instructions"</textarea></div>
+        <div class="field"><label for="pm_follow_up_date">Follow-up Date</label><input id="pm_follow_up_date" name="follow_up_date" type="date" /></div>
         <div id="rxConflictPrompt" style="display:none;margin-bottom:12px"></div>
         <button class="btn btn-primary" id="btnIssueRx" type="submit">Issue Prescription</button>
       </form>
@@ -4800,7 +4818,7 @@ route("#/vet/search", () => {
   render(`
     ${header("Search Herds & Animals", { back: true })}
     <div class="section-card">
-      <div class="field"><label>Search by Tag, Mobile or Owner</label>
+      <div class="field"><label for="searchInput">Search by Tag, Mobile or Owner</label>
         <input id="searchInput" placeholder="e.g. MH-PUN-000123 or 9800000001" />
       </div>
       <div id="searchResults"></div>
@@ -4815,7 +4833,7 @@ route("#/vet/search", () => {
       document.getElementById("searchResults").innerHTML = `
         <div class="subheading">Animals (${res.animals.length})</div>
         ${res.animals.map(a => `
-          <div class="list-card" onclick="location.hash='#/vet/animals/${safeId(a.id)}'">
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/vet/animals/${safeId(a.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/vet/animals/${safeId(a.id)}'}">
             <div class="row1"><span class="title">${escapeHtml(a.animal_code)}</span><span class="badge ${escapeHtml(a.status === 'Healthy' ? 'badge-green' : 'badge-orange')}">${escapeHtml(a.status)}</span></div>
             <div class="meta">${escapeHtml(a.animal_name || a.species)} · Owner: ${escapeHtml(a.owner_name)} (${escapeHtml(a.mobile)})</div>
           </div>`).join("")}
@@ -4831,11 +4849,11 @@ route("#/vet/vaccination/new", () => {
     ${header("Update Vaccination", { back: true })}
     <div class="section-card">
       <form id="vacForm">
-        <div class="field"><label>Animal ID</label><input name="animal_id" placeholder="e.g. MH-PUN-000123" required /></div>
-        <div class="field"><label>Vaccine</label><select name="vaccine"><option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option><option>Other</option></select></div>
+        <div class="field"><label for="pm_animal_id">Animal ID</label><input id="pm_animal_id" name="animal_id" placeholder="e.g. MH-PUN-000123" required /></div>
+        <div class="field"><label for="pm_vaccine_3">Vaccine</label><select id="pm_vaccine_3" name="vaccine"<option>FMD</option><option>HS</option><option>BQ</option><option>Brucellosis</option><option>Other</option></select></div>
         <div class="form-row">
-          <div class="field"><label>Date Given</label><input name="date_given" type="date" value="${new Date().toISOString().slice(0, 10)}" /></div>
-          <div class="field"><label>Next Due Date</label><input name="next_due_date" type="date" /></div>
+          <div class="field"><label for="pm_date_given">Date Given</label><input id="pm_date_given" name="date_given" type="date" value="${new Date().toISOString().slice(0, 10)}" /></div>
+          <div class="field"><label for="pm_next_due_date">Next Due Date</label><input id="pm_next_due_date" name="next_due_date" type="date" /></div>
         </div>
         <button class="btn btn-primary" type="submit">Save Vaccination</button>
       </form>
@@ -4853,14 +4871,14 @@ route("#/vet/vaccination/new", () => {
 function prescriptionsView(role) {
   route(`#/${role}/prescriptions`, async () => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("health_treatment") : "Prescriptions", { back: true })}<div class="loading">${farmer ? ft("loading_treatment") : "Loading…"}</div>`);
+    render(`${header(farmer ? ft("health_treatment") : "Prescriptions", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_treatment") : "Loading…"}</div>`);
     const rx = await api("/prescriptions");
     if (farmer) {
       render(`
         ${header(ft("health_treatment"), { back: true })}
         <div class="section-card">
           ${rx.length === 0 ? emptyState(ft("no_prescriptions")) : rx.map(p => `
-            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(p.case_id)}'">
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(p.case_id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${safeId(p.case_id)}'}">
               <div class="row1"><span class="title">💊 ${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.case_no)}</span></div>
               <div class="meta">${ft("animal_id")}: ${escapeHtml(p.animal_code)}</div>
               <div class="meta">${ft("dosage")}: ${escapeHtml(p.dosage || ft("unknown"))} · ${ft("frequency")}: ${escapeHtml(p.frequency || ft("unknown"))}</div>
@@ -4875,7 +4893,7 @@ function prescriptionsView(role) {
       ${header("Prescriptions", { back: true })}
       <div class="section-card">
         ${rx.length === 0 ? emptyState("No prescriptions yet.") : rx.map(p => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(p.case_id)}'">
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(p.case_id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(p.case_id)}'}">
             <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.case_no)}</span></div>
             <div class="meta">${escapeHtml(p.animal_code)} · ${escapeHtml(p.dosage || "")} · ${escapeHtml(p.frequency || "")}</div>
             <div class="meta">By ${escapeHtml(p.vet_name || "—")} · Follow-up: ${fmtDate(p.follow_up_date)}</div>
@@ -4891,14 +4909,14 @@ prescriptionsView("owner"); prescriptionsView("vet"); prescriptionsView("lab");
 function labReportsView(role) {
   route(`#/${role}/lab-reports`, async () => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("test_results") : "Lab Reports", { back: true })}<div class="loading">${farmer ? ft("loading") : "Loading…"}</div>`);
+    render(`${header(farmer ? ft("test_results") : "Lab Reports", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading") : "Loading…"}</div>`);
     const reps = await api("/lab/reports");
     if (farmer) {
       render(`
         ${header(ft("test_results"), { back: true })}
         <div class="section-card">
           ${reps.length ? reps.map(report => `
-            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(report.case_id)}'">
+            <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(report.case_id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${safeId(report.case_id)}'}">
               <div class="row1"><span class="title">${report.test_name || report.report_no}</span><span class="badge ${report.result === "NEGATIVE" ? "badge-green" : "badge-blue"}">${ownerResultLabel(report.result)}</span></div>
               <div class="meta">${ft("animal_id")}: ${report.animal_code}${report.animal_name ? ` · ${report.animal_name}` : ""}</div>
               <div class="meta">${ft("case_number")}: ${report.case_no} · ${fmtDate(report.test_date)}</div>
@@ -4912,7 +4930,7 @@ function labReportsView(role) {
       ${header("Lab Reports", { back: true })}
       <div class="section-card">
         ${reps.length === 0 ? emptyState("No lab reports yet.") : reps.map(l => `
-          <div class="list-card" onclick="location.hash='#/${role}/cases/${safeId(l.case_id)}'">
+          <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(l.case_id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(l.case_id)}'}">
             <div class="row1"><span class="title">${escapeHtml(l.report_no)}</span><span class="badge ${escapeHtml(l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red')}">${escapeHtml(l.result || "Pending")}</span></div>
             <div class="meta">${escapeHtml(l.animal_code)}${escapeHtml(l.animal_name ? " · " + l.animal_name : "")} · ${escapeHtml(l.test_name || "")}</div>
             <div class="meta">Case ${escapeHtml(l.case_no)} · Sample: ${escapeHtml(l.sample || "—")} · ${fmtDate(l.test_date)}</div>
@@ -4976,14 +4994,14 @@ function ownerNotificationType(type) {
 function notificationsView(role) {
   route(`#/${role}/notifications`, async () => {
     const farmer = role === "owner";
-    render(`${header(farmer ? ft("notifications") : "Notifications", { back: true })}<div class="loading">${farmer ? ft("loading_notifications") : "Loading…"}</div>`);
+    render(`${header(farmer ? ft("notifications") : "Notifications", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">${farmer ? ft("loading_notifications") : "Loading…"}</div>`);
     const notes = await api("/notifications");
     if (farmer) {
       render(`
         ${header(ft("notifications"), { back: true })}
         <div class="section-card">
           ${notes.length === 0 ? emptyState(ft("no_notifications")) : notes.map(n => `
-            <div class="list-card" style="${escapeHtml(n.is_read ? "opacity:0.6" : "")}" onclick="markRead(${safeId(n.id)})">
+            <div class="list-card" role="button" tabindex="0" style="${escapeHtml(n.is_read ? "opacity:0.6" : "")}" onclick="markRead(${safeId(n.id)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();markRead(${safeId(n.id)})}">
               <div class="row1"><span class="title">${iconForType(n.type)} ${escapeHtml(ownerNotificationType(n.type))}</span>${n.is_read ? "" : `<span class="badge badge-red">${ft("new")}</span>`}</div>
               <div class="meta">${escapeHtml(ownerNotificationMessage(n.message))}</div>
               <div class="meta">${fmtDate(n.created_at)}</div>
@@ -4997,7 +5015,7 @@ function notificationsView(role) {
       ${header("Notifications", { back: true })}
       <div class="section-card">
         ${notes.length === 0 ? emptyState("You're all caught up!") : notes.map(n => `
-          <div class="list-card" style="${escapeHtml(n.is_read ? "opacity:0.6" : "")}" onclick="markRead(${safeId(n.id)})">
+          <div class="list-card" role="button" tabindex="0" style="${escapeHtml(n.is_read ? "opacity:0.6" : "")}" onclick="markRead(${safeId(n.id)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();markRead(${safeId(n.id)})}">
             <div class="row1"><span class="title">${iconForType(n.type)} ${escapeHtml(n.type.toUpperCase())}</span>${n.is_read ? "" : '<span class="badge badge-red">NEW</span>'}</div>
             <div class="meta">${escapeHtml(n.message)}</div>
             <div class="meta">${fmtDate(n.created_at)}</div>
@@ -5049,7 +5067,7 @@ window.markDeceased = async function (id, code) {
 // REQ 5: GOVT TREND CHARTS
 // ==========================================================================
 route("#/govt/trends", async () => {
-  render(`${header("Disease Trends", { back: true })}<div class="loading">Loading trends…</div>`);
+  render(`${header("Disease Trends", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading trends…</div>`);
   const data = await api("/govt/trends?period=monthly");
   render(`
     ${header("Disease Trends", { back: true })}
@@ -5129,7 +5147,7 @@ function autoEscalatedBadge(c) {
 // REQ 10: BLOCK-LEVEL ANALYTICS VIEW
 // ==========================================================================
 route("#/govt/blocks", async () => {
-  render(`${header("Block-Level Analytics", { back: true })}<div class="loading">Loading…</div>`);
+  render(`${header("Block-Level Analytics", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
   const a = await api("/govt/analytics");
   render(`
     ${header("Block-Level Analytics", { back: true })}
@@ -5161,7 +5179,7 @@ route("#/govt/blocks", async () => {
 // REQ 11: FARMER ADVISORIES
 // ==========================================================================
 route("#/vet/advisories", async () => {
-  render(`${header("Local Advisories", { back: true })}<div class="loading">Loading advisories…</div>`);
+  render(`${header("Local Advisories", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading advisories…</div>`);
   try {
     const adv = await api("/advisories");
     render(`
@@ -5207,7 +5225,7 @@ route("#/vet/advisories", async () => {
       ${bottomNav("#/vet/dashboard")}
     `);
   } catch (err) {
-    render(`${header("Local Advisories", { back: true })}<div class="loading">⚠️ ${escapeHtml(err.message)}</div>${bottomNav("#/vet/dashboard")}`);
+    render(`${header("Local Advisories", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">⚠️ ${escapeHtml(err.message)}</div>${bottomNav("#/vet/dashboard")}`);
   }
 }, ["vet"]);
 
@@ -5220,8 +5238,8 @@ route("#/govt/export", async () => {
     <div class="section-card">
       <div class="section-title">📊 Export Government Data</div>
       <div class="meta" style="margin-bottom:14px">Download cases, animals, or vaccination campaigns as CSV or JSON.</div>
-      <div class="field"><label>Date From</label><input type="date" id="exportFrom" /></div>
-      <div class="field"><label>Date To</label><input type="date" id="exportTo" /></div>
+      <div class="field"><label for="exportFrom">Date From</label><input type="date" id="exportFrom" /</div>
+      <div class="field"><label for="exportTo">Date To</label><input type="date" id="exportTo" /</div>
       <div class="btn-row" style="margin-top:12px">
         <button class="btn btn-primary btn-sm" onclick="doExport('cases','csv')">📥 Cases CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="doExport('animals','csv')">📥 Animals CSV</button>
@@ -5344,14 +5362,14 @@ function farmerFeedbackSection(c) {
       <div class="subheading">📝 ${localized ? ft("how_is_animal") : "How is your animal?"}</div>
       <div class="meta" style="margin-bottom:10px">${localized ? ft("notes_placeholder") : "Let your veterinarian know the recovery progress."}</div>
       <form id="farmerFeedbackForm">
-        <div class="field"><label>${localized ? ft("recovery_status") : "Recovery Status"}</label>
-          <select name="recovery_status">
+        <div class="field"><label for="pm_recovery_status">${localized ? ft("recovery_status") : "Recovery Status"}</label>
+          <select id="pm_recovery_status" name="recovery_status"
             <option value="improving">✅ ${localized ? ft("improving") : "Improving"}</option>
             <option value="same">↔️ ${localized ? ft("same") : "Same"}</option>
             <option value="worse">⚠️ ${localized ? ft("worse") : "Getting Worse"}</option>
           </select>
         </div>
-        <div class="field"><label>${localized ? ft("notes") : "Notes (optional)"}</label><textarea name="notes" placeholder="${localized ? ft("notes_placeholder") : "Any observations about the animal's condition"}"></textarea></div>
+        <div class="field"><label for="pm_notes_4">${localized ? ft("notes") : "Notes (optional)"}</label><textarea id="pm_notes_4" name="notes" placeholder="${localized ? ft("notes_placeholder") : "Any observations about the animal's condition"}"</textarea></div>
         <button class="btn btn-primary" type="submit">${localized ? ft("submit_feedback") : "Submit Feedback"}</button>
       </form>
     </div>`;
@@ -5361,7 +5379,7 @@ function farmerFeedbackSection(c) {
 // REQ 20: ZOONOTIC RISK VIEW
 // ==========================================================================
 route("#/govt/zoonotic", async () => {
-  render(`${header("Zoonotic Risk", { back: true })}<div class="loading">Loading…</div>`);
+  render(`${header("Zoonotic Risk", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading…</div>`);
   try {
     const data = await api("/govt/zoonotic");
     render(`
@@ -5397,6 +5415,6 @@ route("#/govt/zoonotic", async () => {
       ${bottomNav("#/govt/dashboard")}
     `);
   } catch (err) {
-    render(`${header("Zoonotic Risk", { back: true })}<div class="loading">⚠️ ${escapeHtml(err.message)}</div>${bottomNav("#/govt/dashboard")}`);
+    render(`${header("Zoonotic Risk", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">⚠️ ${escapeHtml(err.message)}</div>${bottomNav("#/govt/dashboard")}`);
   }
 }, ["govt", "vet"]);

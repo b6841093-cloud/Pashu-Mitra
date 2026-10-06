@@ -752,6 +752,50 @@ main#main-content:focus{ outline:none; }
 .pm-state-error .pm-state-title{ color:var(--color-error); }
 .pm-state-success .pm-state-title{ color:var(--color-success); }
 
+/* ---------- form error handling (A44-A47 / GuDApps 4.4) ---------- */
+.pm-error-summary{
+  border:2px solid var(--color-error); border-radius:12px; background:#fff5f5;
+  padding:14px 16px; margin:12px 0 16px; color:#6b1a1a;
+}
+.pm-error-summary:focus{ outline:3px solid var(--pm-focus); outline-offset:2px; }
+.pm-error-title{ margin:0 0 8px; font-weight:800; font-size:calc(14px * var(--pm-text-scale, 1)); color:var(--color-error); }
+.pm-error-summary ul{ margin:0; padding-left:18px; }
+.pm-error-summary li{ margin-bottom:4px; font-size:calc(13px * var(--pm-text-scale, 1)); }
+.pm-error-summary a{ color:var(--color-error); text-decoration:underline; font-weight:700; }
+.pm-field-error{
+  margin:6px 0 0; font-size:calc(12.5px * var(--pm-text-scale, 1)); color:var(--color-error);
+  font-weight:600; line-height:1.4;
+}
+.pm-field-error[hidden]{ display:none; }
+.field input[aria-invalid="true"], .field select[aria-invalid="true"], .field textarea[aria-invalid="true"]{
+  border-color:var(--color-error); box-shadow:0 0 0 2px rgba(226,72,63,.18);
+}
+.pm-help{
+  margin:4px 0 0; font-size:calc(11.5px * var(--pm-text-scale, 1)); color:var(--color-muted); line-height:1.4;
+}
+.pm-req{ color:var(--color-error); font-weight:800; }
+.pm-form{ display:flex; flex-direction:column; gap:12px; }
+.pm-result-count{
+  font-size:calc(12.5px * var(--pm-text-scale, 1)); color:var(--color-muted);
+  margin:4px 0 10px; font-weight:600;
+}
+.pm-placeholder{ background:#fffbe6; border:1px dashed #e6c200; padding:10px 12px; border-radius:8px; font-size:calc(12.5px * var(--pm-text-scale, 1)); }
+.pm-placeholder-tag{ background:#23284a; color:#ffd54f; font-weight:800; padding:1px 6px; border-radius:6px; font-size:calc(10px * var(--pm-text-scale, 1)); margin-right:6px; }
+.pm-placeholder-inline{ background:#fff3a0; padding:1px 5px; border-radius:4px; }
+.pm-list{ margin:8px 0; padding-left:18px; }
+.pm-list li{ margin-bottom:6px; font-size:calc(13px * var(--pm-text-scale, 1)); line-height:1.5; }
+.pm-dl{ display:grid; grid-template-columns:140px 1fr; gap:6px 12px; margin:8px 0; }
+.pm-dl dt{ font-weight:700; font-size:calc(12.5px * var(--pm-text-scale, 1)); }
+.pm-dl dd{ margin:0; font-size:calc(12.5px * var(--pm-text-scale, 1)); }
+.pm-faq-item{ border:1px solid #e2e5f0; border-radius:10px; margin-bottom:8px; padding:8px 12px; background:#fff; }
+.pm-faq-item summary{ cursor:pointer; list-style:none; }
+.pm-faq-item summary::-webkit-details-marker{ display:none; }
+.pm-faq-q{ margin:0; font-size:calc(13.5px * var(--pm-text-scale, 1)); font-weight:700; display:inline; }
+.pm-note{ font-size:calc(11.5px * var(--pm-text-scale, 1)); color:var(--color-muted); }
+.pm-h1{ font-size:calc(20px * var(--pm-text-scale, 1)); font-weight:800; margin:0 0 12px; }
+.pm-h2{ font-size:calc(16px * var(--pm-text-scale, 1)); font-weight:800; margin:18px 0 8px; }
+.pm-page{ max-width:800px; margin:0 auto; }
+
 /* ---------- accessible data tables (GIGW Q19 / programme 31) ---------- */
 .pm-table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .pm-table-scroll table{ border-collapse:collapse; width:100%; min-width:520px; }
@@ -764,6 +808,23 @@ main#main-content:focus{ outline:none; }
 }
 .pm-table-scroll thead th{ background:#f4f5fb; }
 .pm-table-scroll tbody tr:nth-child(even){ background:#fafbfe; }
+
+/* ---------- dialog / modal accessibility (A22/A49) ---------- */
+.qr-modal, .pm-modal-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000;
+  display:flex; align-items:center; justify-content:center; padding:16px;
+}
+.qr-modal-content, .pm-modal-content{
+  background:#fff; border-radius:16px; padding:18px; max-width:420px; width:100%;
+  box-shadow:0 8px 32px rgba(0,0,0,.18); max-height:90vh; overflow-y:auto;
+}
+.qr-modal-content:focus, .pm-modal-content:focus{ outline:3px solid var(--pm-focus); outline-offset:2px; }
+
+/* ---------- list-card keyboard affordance (A21/A29) ---------- */
+.list-card[role="button"]:focus-visible, .role-card[role="button"]:focus-visible, .icon-item[role="button"]:focus-visible{
+  outline:3px solid var(--pm-focus); outline-offset:2px; border-radius:12px;
+}
+.list-card[role="button"]{ cursor:pointer; }
 
 /* ---------- touch targets (UX4G / programme 12 & 39) ---------- */
 @media (pointer:coarse){

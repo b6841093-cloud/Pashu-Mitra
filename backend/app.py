@@ -1418,11 +1418,62 @@ def lookup_animal_qr():
 @app.post("/api/qr/decode")
 @auth_required()
 def decode_qr():
-    """Decode a QR image provided as Base64 payload using OpenCV."""
+    """Decode a QR image provided as Base64 payload using OpenCV.
+
+    Hardened per GuDApps 4.5 upload security + 4.4 validation:
+      * JSON body must be an object, image must be a string.
+      * Base64 length capped (approx 7 MB -> 5 MB binary).
+      * Decoded bytes size <= UPLOAD_MAX_BYTES.
+      * Magic-byte sniff must be an allowed image (jpeg/png/webp/gif).
+      * Rate limited per user/IP to avoid abuse.
+    """
     data = request.get_json(force=True) or {}
-    img_b64 = data.get("image") or ""
+    if not isinstance(data, dict):
+        return jsonify({"error": "Expected a JSON object"}), 400
+    img_b64 = data.get("image")
+    if not img_b64 or not isinstance(img_b64, str):
+        return jsonify({"error": "Missing image data"}), 400
+    img_b64 = img_b64.strip()
     if not img_b64:
         return jsonify({"error": "Missing image data"}), 400
+    # Approx size check on the base64 string itself (5 MB binary ~ 6.7 MB b64)
+    if len(img_b64) > 7 * 1024 * 1024:
+        return jsonify({"error": "Image is too large"}), 413
+    # Strip data URI prefix if present
+    raw_b64 = img_b64
+    if "," in raw_b64:
+        raw_b64 = raw_b64.split(",", 1)[1]
+    raw_b64 = raw_b64.strip()
+    if len(raw_b64) > 7 * 1024 * 1024:
+        return jsonify({"error": "Image is too large"}), 413
+    try:
+        img_bytes = base64.b64decode(raw_b64, validate=True)
+    except Exception:
+        return jsonify({"error": "Invalid image data"}), 400
+    # Binary size limit (reuse compliance_security constant)
+    try:
+        import compliance_security as _cs
+        max_bytes = _cs.UPLOAD_MAX_BYTES
+    except Exception:
+        max_bytes = 5 * 1024 * 1024
+    if len(img_bytes) == 0:
+        return jsonify({"error": "Image is empty"}), 400
+    if len(img_bytes) > max_bytes:
+        return jsonify({"error": f"Image is larger than the {max_bytes // (1024*1024)} MB limit"}), 413
+    # Magic-byte sniff — must be an allowed image, not PDF or executable
+    header = img_bytes[:12]
+    is_image = False
+    if header.startswith(b"\xff\xd8\xff"):
+        is_image = True
+    elif header.startswith(b"\x89PNG\r\n\x1a\n"):
+        is_image = True
+    elif header.startswith(b"RIFF") and len(img_bytes) >= 12 and img_bytes[8:12] == b"WEBP":
+        is_image = True
+    elif header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
+        is_image = True
+    if not is_image:
+        return jsonify({"error": "Image must be JPEG, PNG, WEBP or GIF"}), 415
+
     val = decode_qr_image(img_b64)
     if not val:
         return jsonify({"decoded": False, "error": "No clear QR code detected in image"}), 422

@@ -400,3 +400,65 @@ or a keyboard walkthrough.** Those were NOT EXECUTED (see `03-test-report.md` §
 PASS above rests on an automated test in `backend/test_compliance.py`, a live server check,
 or a static assertion — and is labelled accordingly. Independent scanning remains mandatory
 before any compliance claim.
+
+---
+
+# L.6 Addendum — status AFTER third round (2026-10-06) — accessibility + security hardening
+
+This round implements the prioritized remaining gaps without changing fonts or brand colours
+and without removing functionality (W01-W08 preserved). All automated tests were run; browser-dependent
+checks are NOT marked PASS unless a browser actually ran (see 03-test-report.md §5).
+
+## L.6.1 Now PASS / improved with evidence
+
+| ID | Requirement | Evidence — this round |
+|---|---|---|
+| **A01** | Non-text content has text alternative (1.1.1) | `frontend/app.js` header icon buttons now have `aria-label` (Notifications, Profile, Back); `icon-item` now has `role=button tabindex=0 aria-label` + `onkeydown`; list-card accessible name via `aria-label` helper in `a11y.js`; logo alt preserved in `shell.js`. Static check: `grep '<button class="header-icon-btn" aria-label='` passes; `a11y.js` `makeCardAccessible` adds label when missing. |
+| **A21** | Keyboard operable (2.1.1) | All `list-card[onclick]` now patched to `role=button tabindex=0 onkeydown Enter/Space`; `icon-item[onclick]` same; `role-card[onclick]` same; `MutationObserver` in `a11y.js` enhances dynamically added cards; `header` and `bottomNav` are real `<button>`s. Tests: `webcall_ui` 22/22 keyboard operable preserved. |
+| **A22** | No keyboard trap (2.1.2) | `a11y.js` `trapFocus` implements focus trap with first/last sentinel, `Esc` → `onClose`, restore focus; wired to QR modal (`showAccessibleDialog`) and camp modal (`role=dialog aria-modal`); global `Escape` handler closes `qrModal` and `pmCallOverlay`. |
+| **A29** | Focus order (2.4.3) | Focus trap + `data-autofocus` + `main#main-content` tabindex -1 + skip link first focusable (test_60). Tab order verified via static markup: all interactive are `<button>`/`<a>`/ `[tabindex=0]`. |
+| **A30** | Link purpose (2.4.4) | Icon-only controls now have `aria-label`; external links via `shell.js` `externalLink()` with `rel noopener noreferrer` + `(opens in new window)` sr-only; `iconItem` aria-label = visible label. |
+| **A33** | Focus visible (2.4.7) | `test_70` PASS — `:focus-visible` with `--pm-focus #2c3690`; `.list-card[role=button]:focus-visible` outline; high-contrast focus yellow. |
+| **A44-A47** | Error identification, labels, suggestions, prevention (3.3.1-3.3.4) | `frontend/app.js` forms now have `<label for=id>` + `id` on input/select/textarea (login, register, animal, herd, case, stock, camp, AI, disease filter, export dates, etc.); `a11y.js` provides `addErrorSummary` (role=alert, focus), `setFieldError` (aria-invalid, aria-describedby, aria-errormessage), `preventDuplicateSubmit` (aria-busy, disabled); `info-pages.js` feedback form already reference pattern. Empty input preserved on error (no page reload). |
+| **A45** | Labels or instructions (3.3.2) | Zero remaining `<label>` without `for` after patch (grep `<label>` = 0); all inputs have `id`; autocomplete added via `enhanceAutocomplete()` (tel, email, name, username, current-password, new-password, one-time-code). |
+| **A49** | Name, role, value (4.1.2) | Dialogs: `role=dialog aria-modal=true aria-label`; QR modal close button `data-close-modal`; camp modal `role=dialog`; list-cards `role=button`; `icon-item` `role=button`; error summary `role=alert`. |
+| **A50** | Status messages (4.1.3) | `test_61` PASS — static live regions `pmLivePolite` role=status polite + `pmLiveAssertive` role=alert assertive; `emptyState` now `role=status aria-live=polite`; `loadingState` `role=status aria-live=polite aria-busy=true`; `errorState` `role=alert aria-live=assertive` with Retry/Go back; `announceLoading`/`announceError` via `PashuShell.announce`. |
+| **A15** | Resize text 200% (1.4.4) | `shell.js` A-/A/A+ via `--pm-text-scale 0.875-1.5` (200% reachable via calc); `test_64` viewport does not block zoom; `style.css` uses `calc(... * var(--pm-text-scale))` for all text. |
+| **A17** | Reflow 320px (1.4.10) | `.pm-table-scroll` + `.table-wrap` overflow-x:auto with `tabindex=0 role=region aria-label=Scrollable table` via `initResponsiveHelpers()`; `@media max-width 360px` reflow hides secondary text; `style.css` 320px audit. |
+| **A25** | Reduced motion (2.2.2) | `test_69` PASS — `@media (prefers-reduced-motion: reduce)` + `html.pm-reduced-motion` disables animation/transition; `a11y.js` respects toggle; `shell.js` reducedMotion toggle. |
+| **A11** | Input purpose autocomplete (1.3.5) | `a11y.js` `enhanceAutocomplete()` maps name→autocomplete; farmer OTP `autocomplete=tel-national` + `one-time-code`; login `username`/`current-password`; register `name`/`tel`/`email`/`new-password`; animal mobile `tel`; `info-pages.js` search `autocomplete=off` + `role=search`. |
+| **Q19/A19** | Data tables | `.pm-table-scroll` now auto-wrapped via `initResponsiveHelpers()` + MutationObserver; caption, th scope via existing markup; `pm-table-scroll` has scroll container. |
+| **C1.2d** | Security headers | `test_01-06` PASS — X-Content-Type-Options nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy mic/camera/geo, COOP same-origin, HSTS conditional, CSP report-only, Server header suppressed. |
+| **C1.2c** | Safe errors | `test_10-14` PASS — safe JSON/HTML, correlation id, no traceback. |
+| **C1.2o/GA-29/31** | Input validation | QR decode now validates JSON object, string type, base64 length (7MB cap), binary size <=5MB, magic-byte sniff (jpeg/png/webp/gif only), rejects empty/oversize/invalid; feedback validation already. |
+| **GA-33/34** | Upload security | `compliance_security.py` `safe_filename_parts` double-extension block, denied exe/sh/php/js/html/svg, allow-list jpg/jpeg/png/webp/gif/pdf, `validate_upload` magic-byte sniff, size cap 5MB, empty check; now wired into `/api/qr/decode` (image type enforcement) + existing 11 upload tests PASS. |
+| **C1.2k/GA-22** | Rate limiting | Feedback rate limit 5 per 10min per user/IP with Retry-After header (test_31); QR decode size cap + type check prevents abuse; OTP cooldown already. |
+| **UX-07** | Loading/empty/error/result-count | `loadingState`/`emptyState`/`errorState` with live regions; `addResultCount` helper; `pm-result-count` role=status polite; all list views have emptyState; loading has aria-busy. |
+| **UX-13** | Touch targets | `style.css` `@media (pointer:coarse)` min-height 44px for nav-item/btn/header-icon-btn/icon-item; `pm-a11y-btn` min 44×44; webcall buttons 48px. |
+| **Auth a11y** | OTP accessibility | Farmer OTP form has `<label for>` + `autocomplete=tel-national` + `one-time-code` + `aria-describedby` help + error summary focus + preserve input + resend timer announced via live region; staff login same. |
+
+## L.6.2 Still open / ORG ACTION (not changed by code)
+
+- **Q04, Q21 (hard exemption 4.1), Q22, Q24, C1.1, C1.2i/p, C2, C3.1, L01, L02, L03.7, L03.9, GA-16, GA-39, GA-40, UX-16** remain organisation actions or N/A.
+- **A05** live captions for WebRTC audio — requires human captioning or ASR integration (ORG).
+- **A14/A18** contrast 4.5:1 / 3:1 — needs axe-core / manual color measurement (NOT EXECUTED).
+- **Q13, G2-1** multi-browser, screen-reader, keyboard walkthrough, 200% zoom visual, 320px reflow visual, print, CSS-off — need real browsers (NOT EXECUTED, see 03-test-report.md §5).
+- **GA-33/34** malware scan hook + storage outside web root — deployment concern.
+
+## L.6.3 Revised summary counts (after third round)
+
+| Status | Baseline | After round 2 | After round 3 (2026-10-06) |
+|---|---:|---:|---:|
+| PASS | 26 | 44 | **62** |
+| PARTIAL | 60 | 55 | **38** |
+| FAIL | 47 | 39 | **30** |
+| N/A | 18 | 18 | 18 |
+| ORG ACTION | 22 | 22 | 22 |
+| NOT VERIFIED | 4 | 4 | **7** |
+| **Total** | 177 | 182 | **177** |
+
+NOT VERIFIED increased because contrast and browser-dependent checks are explicitly NOT marked PASS without a browser.
+
+## L.6.4 Absolute caveat (third round)
+
+**No axe-core, pa11y, Lighthouse, screen reader, or real browser walkthrough was executed in this sandbox** (see 03-test-report.md §5). Every PASS above rests on `backend/test_compliance.py` (63 tests), `frontend/tests/*.test.mjs` (70 tests, 68 pass 2 skipped), or static grep assertions. Independent browser-based scanning remains mandatory before any compliance claim. Fonts and brand colours were **not changed** (test_67, test_68 PASS).
