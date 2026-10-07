@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>Pashu Shield — Logo concepts (pick one)</title>
+<style>
+  :root { --key: #0F5757; --ink: #150202; --linen: #EBEAEA; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Noto Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #fff; color: var(--ink); line-height: 1.5; }
+  header { background: var(--key); color: #fff; padding: 28px 20px; }
+  header h1 { margin: 0 0 6px; font-size: 30px; }
+  header p { margin: 4px 0; max-width: 60rem; }
+  main { max-width: 70rem; margin: 0 auto; padding: 20px; }
+  .concept { border: 2px solid var(--key); border-radius: 16px; margin: 0 0 28px; overflow: hidden; }
+  .concept-head { background: var(--linen); padding: 16px 20px; }
+  .concept-head h2 { margin: 0 0 4px; font-size: 22px; }
+  .concept-head p { margin: 4px 0; }
+  .swatches { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    padding: 20px; }
+  .sw { border: 1px solid #C6C6C6; border-radius: 12px; padding: 16px; text-align: center; }
+  .sw--light { background: #fff; color: #000; }
+  .sw--dark { background: var(--key); color: #fff; }
+  .sw figcaption { font-size: 14px; margin-top: 10px; }
+  .lockup { display: flex; align-items: center; gap: 14px; justify-content: center; text-align: left; }
+  .lockup .wm { font-weight: 700; letter-spacing: 2px; font-size: 20px; line-height: 1.2; }
+  .lockup .tag { font-size: 12px; letter-spacing: .5px; opacity: .85; }
+  .sizes { display: flex; align-items: flex-end; gap: 22px; justify-content: center; padding: 6px 0 2px; }
+  .sizes figure { margin: 0; text-align: center; }
+  .sizes figcaption { font-size: 12px; margin-top: 6px; color: #606060; }
+  footer { max-width: 70rem; margin: 0 auto; padding: 0 20px 40px; font-size: 14px; color: #606060; }
+  svg { display: inline-block; vertical-align: middle; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pashu Shield — mark concepts</h1>
+  <p>Three original, single-colour, geometric directions (DBIM 5; brief §2.1). No national symbols, no gradients, no photography, no 3D. <strong>Pick one</strong> — the winner gets finalised into SVG masters, outlined wordmark, lockups, favicons, PWA icons and social card, plus the Logo component, <code>/brand</code> page and rule tests.</p>
+  <p>Concept art uses layered knockouts for presentation; the finalised mark ships as true single-colour artwork (compound path / mask).</p>
+</header>
+<main>
+
+  <!-- ================= CONCEPT A ================= -->
+  <section class="concept" aria-labelledby="cA">
+    <div class="concept-head">
+      <h2 id="cA">Concept A — Horn Shield</h2>
+      <p><strong>Idea:</strong> a solid protection shield with cattle horns and a muzzle dot in negative space. Reads as “livestock under protection” even at 30&nbsp;px. Most literal for farmers.</p>
+      <p><strong>Risk:</strong> horns + dot is a common livestock trope — ownability rests on the exact geometry.</p>
+    </div>
+    <div class="swatches">
+      <figure class="sw sw--light">
+        <svg width="120" height="120" viewBox="0 0 64 64" role="img" aria-label="Concept A mark, black on white">
+          <path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#000"/>
+          <path d="M26.5 32 C22.5 29 20.5 25 21 20.5" stroke="#fff" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+          <path d="M37.5 32 C41.5 29 43.5 25 43 20.5" stroke="#fff" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+          <circle cx="32" cy="43" r="3" fill="#fff"/>
+        </svg>
+        <figcaption>Black on white (header lockup tone)</figcaption>
+      </figure>
+      <figure class="sw sw--dark">
+        <svg width="120" height="120" viewBox="0 0 64 64" role="img" aria-label="Concept A mark, white on key green">
+          <path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#fff"/>
+          <path d="M26.5 32 C22.5 29 20.5 25 21 20.5" stroke="#0F5757" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+          <path d="M37.5 32 C41.5 29 43.5 25 43 20.5" stroke="#0F5757" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+          <circle cx="32" cy="43" r="3" fill="#0F5757"/>
+        </svg>
+        <figcaption>White on key green (footer lockup tone)</figcaption>
+      </figure>
+      <figure class="sw sw--light">
+        <div class="lockup">
+          <svg width="57" height="57" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#000"/>
+            <path d="M26.5 32 C22.5 29 20.5 25 21 20.5" stroke="#fff" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+            <path d="M37.5 32 C41.5 29 43.5 25 43 20.5" stroke="#fff" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+            <circle cx="32" cy="43" r="3" fill="#fff"/>
+          </svg>
+          <span><span class="wm">PASHU SHIELD</span><br /><span class="tag">Animal health, protected</span></span>
+        </div>
+        <figcaption>Lockup 3B mock (57&nbsp;px min height; wordmark becomes outlined paths)</figcaption>
+      </figure>
+      <figure class="sw sw--light">
+        <div class="sizes">
+          <figure><svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#000"/><path d="M26.5 32 C22.5 29 20.5 25 21 20.5" stroke="#fff" stroke-width="6.5" fill="none" stroke-linecap="round"/><path d="M37.5 32 C41.5 29 43.5 25 43 20.5" stroke="#fff" stroke-width="6.5" fill="none" stroke-linecap="round"/><circle cx="32" cy="43" r="3.4" fill="#fff"/></svg><figcaption>30&nbsp;px (mark min)</figcaption></figure>
+          <figure><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#000"/><path d="M26.5 32 C22.5 29 20.5 25 21 20.5" stroke="#fff" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M37.5 32 C41.5 29 43.5 25 43 20.5" stroke="#fff" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="32" cy="43" r="3.6" fill="#fff"/></svg><figcaption>16&nbsp;px (favicon)</figcaption></figure>
+        </div>
+        <figcaption>Small-size legibility (strokes opened up for the small master)</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================= CONCEPT B ================= -->
+  <section class="concept" aria-labelledby="cB">
+    <div class="concept-head">
+      <h2 id="cB">Concept B — Pasture Shield</h2>
+      <p><strong>Idea:</strong> shield + leaf over a ground line — animal <em>husbandry</em> (grazing, growth, care of the herd). Calmest and most distinctive silhouette of the three.</p>
+      <p><strong>Risk:</strong> reads “agri/organic” first, “animal health” second — the wordmark must carry the veterinary meaning.</p>
+    </div>
+    <div class="swatches">
+      <figure class="sw sw--light">
+        <svg width="120" height="120" viewBox="0 0 64 64" role="img" aria-label="Concept B mark, black on white">
+          <path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#000"/>
+          <path d="M32 15 C40.5 23.5 40.5 33.5 32 41.5 C23.5 33.5 23.5 23.5 32 15 Z" fill="#fff"/>
+          <path d="M32 18.5 V38" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M21 46.5 H43" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+        </svg>
+        <figcaption>Black on white (header lockup tone)</figcaption>
+      </figure>
+      <figure class="sw sw--dark">
+        <svg width="120" height="120" viewBox="0 0 64 64" role="img" aria-label="Concept B mark, white on key green">
+          <path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#fff"/>
+          <path d="M32 15 C40.5 23.5 40.5 33.5 32 41.5 C23.5 33.5 23.5 23.5 32 15 Z" fill="#0F5757"/>
+          <path d="M32 18.5 V38" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M21 46.5 H43" stroke="#0F5757" stroke-width="3.5" stroke-linecap="round"/>
+        </svg>
+        <figcaption>White on key green (footer lockup tone)</figcaption>
+      </figure>
+      <figure class="sw sw--light">
+        <div class="lockup">
+          <svg width="57" height="57" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#000"/>
+            <path d="M32 15 C40.5 23.5 40.5 33.5 32 41.5 C23.5 33.5 23.5 23.5 32 15 Z" fill="#fff"/>
+            <path d="M32 18.5 V38" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M21 46.5 H43" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+          </svg>
+          <span><span class="wm">PASHU SHIELD</span><br /><span class="tag">Animal health, protected</span></span>
+        </div>
+        <figcaption>Lockup 3B mock (57&nbsp;px min height; wordmark becomes outlined paths)</figcaption>
+      </figure>
+      <figure class="sw sw--light">
+        <div class="sizes">
+          <figure><svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#000"/><path d="M32 15 C40.5 23.5 40.5 33.5 32 41.5 C23.5 33.5 23.5 23.5 32 15 Z" fill="#fff"/><path d="M21 46.5 H43" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg><figcaption>30&nbsp;px (vein dropped)</figcaption></figure>
+          <figure><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 5 L53 12.5 V30 C53 43 43.5 52 32 59 C20.5 52 11 43 11 30 V12.5 Z" fill="#000"/><path d="M32 15 C40.5 23.5 40.5 33.5 32 41.5 C23.5 33.5 23.5 23.5 32 15 Z" fill="#fff"/><path d="M21 46.5 H43" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/></svg><figcaption>16&nbsp;px (favicon)</figcaption></figure>
+        </div>
+        <figcaption>Small-size legibility (simplified small master)</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================= CONCEPT C ================= -->
+  <section class="concept" aria-labelledby="cC">
+    <div class="concept-head">
+      <h2 id="cC">Concept C — Ear Tag</h2>
+      <p><strong>Idea:</strong> a livestock ear-tag (the universal on-farm ID object) with a knocked-out hole and ID slot. Zero shield cliché, instantly “livestock”, and it owns the QR/animal-ID story the platform already has.</p>
+      <p><strong>Risk:</strong> drops the “shield = protection” metaphor — protection is carried by the wordmark instead.</p>
+    </div>
+    <div class="swatches">
+      <figure class="sw sw--light">
+        <svg width="120" height="120" viewBox="0 0 64 64" role="img" aria-label="Concept C mark, black on white">
+          <path d="M23 12 H41 V35 L32 48 L23 35 Z" fill="#000" stroke="#000" stroke-width="5" stroke-linejoin="round"/>
+          <circle cx="32" cy="21.5" r="3.5" fill="#fff"/>
+          <path d="M27 31 H37" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <figcaption>Black on white (header lockup tone)</figcaption>
+      </figure>
+      <figure class="sw sw--dark">
+        <svg width="120" height="120" viewBox="0 0 64 64" role="img" aria-label="Concept C mark, white on key green">
+          <path d="M23 12 H41 V35 L32 48 L23 35 Z" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
+          <circle cx="32" cy="21.5" r="3.5" fill="#0F5757"/>
+          <path d="M27 31 H37" stroke="#0F5757" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <figcaption>White on key green (footer lockup tone)</figcaption>
+      </figure>
+      <figure class="sw sw--light">
+        <div class="lockup">
+          <svg width="57" height="57" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M23 12 H41 V35 L32 48 L23 35 Z" fill="#000" stroke="#000" stroke-width="5" stroke-linejoin="round"/>
+            <circle cx="32" cy="21.5" r="3.5" fill="#fff"/>
+            <path d="M27 31 H37" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+          <span><span class="wm">PASHU SHIELD</span><br /><span class="tag">Animal health, protected</span></span>
+        </div>
+        <figcaption>Lockup 3B mock (57&nbsp;px min height; wordmark becomes outlined paths)</figcaption>
+      </figure>
+      <figure class="sw sw--light">
+        <div class="sizes">
+          <figure><svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><path d="M23 12 H41 V35 L32 48 L23 35 Z" fill="#000" stroke="#000" stroke-width="5" stroke-linejoin="round"/><circle cx="32" cy="21.5" r="4" fill="#fff"/></svg><figcaption>30&nbsp;px (slot dropped)</figcaption></figure>
+          <figure><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><path d="M23 12 H41 V35 L32 48 L23 35 Z" fill="#000" stroke="#000" stroke-width="5" stroke-linejoin="round"/><circle cx="32" cy="21.5" r="4.5" fill="#fff"/></svg><figcaption>16&nbsp;px (favicon)</figcaption></figure>
+        </div>
+        <figcaption>Small-size legibility (simplified small master)</figcaption>
+      </figure>
+    </div>
+  </section>
+
+</main>
+<footer>
+  <p>Tagline shown (“Animal health, protected”) is a concept placeholder — confirm or replace (P-BRAND-02). Hindi/regional lockups (“पशु शील्ड”…), clear-space unit, minimum-size switching, favicons, PWA icons and the 1200×630 social card are built at finalisation. No certification claimed: designed to conform to DBIM 3.0 and GIGW 3.0; CQW/STQC certification pending audit.</p>
+</footer>
+</body>
+</html>
