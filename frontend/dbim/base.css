@@ -1,0 +1,239 @@
+/* ==========================================================================
+ * Pashu-Shield — DBIM base layer (Phase 1)
+ * --------------------------------------------------------------------------
+ * DBIM 2 (colour) + DBIM 4 (typography) + DBIM 1.4 (components).
+ * Strategy: the legacy app skin is driven by CSS variables, so the DBIM
+ * re-skin is done by REMAPPING those variables onto dbim tokens. No legacy
+ * rule is edited; every override below cites its DBIM/WCAG reason.
+ * Load order (index.html): style.css -> tokens.css -> fonts.css -> base.css
+ * -> components.css. Later phases style NEW chrome directly with dbim tokens.
+ * ========================================================================== */
+
+/* ------------------------------------------------- 1. legacy var remap --
+ * Every legacy --primary/--bg/... value becomes a DBIM token (DBIM 2).
+ * Prior exemptions 4.2/4.3 are SUPERSEDED by owner decision D-03. */
+:root {
+  --primary:       var(--dbim-key);        /* buttons, active states */
+  --primary-dark:  var(--dbim-key-ink);    /* pressed / headings on light */
+  --primary-light: var(--dbim-key-mid);    /* large fills, borders on white */
+  --bg:            var(--dbim-surface-page); /* pages: Inclusive White (DBIM 1.4) */
+  --card:          var(--dbim-white);
+  --text:          var(--dbim-ink);        /* Deep Earthy Brown */
+  --muted:         var(--dbim-grey-700);   /* #606060: 6.29:1 (DBIM trap fix) */
+  --green:         var(--dbim-success);
+  --green-bg:      var(--dbim-success-bg);
+  --orange:        var(--dbim-ink);        /* warning TEXT is always ink... */
+  --orange-bg:     var(--dbim-warning-bg); /* ...on a Mustard background (12.37:1) */
+  --red:           var(--dbim-error);
+  --red-bg:        var(--dbim-error-bg);
+  --blue:          var(--dbim-info);
+  --blue-bg:       var(--dbim-info-bg);
+  --radius-lg:     var(--dbim-radius-lg);
+  --radius-md:     var(--dbim-radius-md);
+  --radius-sm:     var(--dbim-radius-sm);
+  --shadow:        var(--dbim-shadow-md);
+  --pm-focus:      var(--dbim-focus);
+
+  /* Shell aliases (shell.js chrome reads these). */
+  --color-primary:       var(--dbim-key);
+  --color-primary-dark:  var(--dbim-key-ink);
+  --color-primary-light: var(--dbim-key-mid);
+  --color-surface:       var(--dbim-white);
+  --color-bg:            var(--dbim-surface-page);
+  --color-text:          var(--dbim-ink);
+  --color-muted:         var(--dbim-grey-700);
+  --color-success:       var(--dbim-success);
+  --color-warning:       var(--dbim-warning-bg);
+  --color-error:         var(--dbim-error);
+  --color-info:          var(--dbim-info);
+}
+
+/* ------------------------------------------------------- 2. typography --
+ * DBIM 4: Noto Sans everywhere, left-aligned, LH 1.5 body, real text. */
+body {
+  font-family: var(--dbim-font);
+  font-size: var(--dbim-p1);
+  line-height: var(--dbim-lh-body);
+  background: var(--dbim-surface-page);
+  color: var(--dbim-ink);
+  text-align: left;
+}
+/* Numeric data uses tabular figures (DBIM 4 tables). */
+td[data-num], td.num, .dbim-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+/* DBIM type utilities for content pages (info pages, homepage, policies). */
+.dbim-h1 { font-size: var(--dbim-h1); line-height: var(--dbim-lh-heading);
+  font-weight: 700; margin: 0 0 var(--dbim-space-4); }
+.dbim-h2 { font-size: var(--dbim-h2); line-height: var(--dbim-lh-heading);
+  font-weight: 700; margin: var(--dbim-space-6) 0 var(--dbim-space-3); }
+.dbim-h3, .dbim-subtitle { font-size: var(--dbim-h3); line-height: var(--dbim-lh-heading);
+  font-weight: 600; margin: var(--dbim-space-4) 0 var(--dbim-space-2); }
+.dbim-p1 { font-size: var(--dbim-p1); line-height: var(--dbim-lh-body); margin: 0 0 1em; }
+.dbim-p2 { font-size: var(--dbim-p2); line-height: var(--dbim-lh-body); }
+/* Small (12/10px): NON-ESSENTIAL captions only (DBIM 4). */
+.dbim-caption { font-size: var(--dbim-small); line-height: 1.4; color: var(--dbim-grey-700); }
+
+/* Map legacy content headings onto the DBIM scale (additive: class names kept). */
+.pm-h1 { font-size: var(--dbim-h1) !important; line-height: var(--dbim-lh-heading) !important; }
+.pm-h2, .section-title { font-size: var(--dbim-h3) !important;
+  line-height: var(--dbim-lh-heading) !important; font-weight: 600 !important; }
+/* Essential text >= P2 floor on desktop / P1 floor where it instructs (DBIM 4:
+ * "Essential content uses Paragraph 1 or larger"). Labels + help + footer + hints. */
+.field label { font-size: var(--dbim-p1) !important; font-weight: 600 !important;
+  color: var(--dbim-ink) !important; }
+.pm-help, .otp-hint, .pm-note { font-size: var(--dbim-p2) !important; }
+.pm-footer-text, .pm-footer-list a, .pm-footer-line { font-size: var(--dbim-p2) !important; }
+.list-card .meta, .timeline-body .t-note, .small-muted, .empty-state,
+.demo-box-note, .auth-logo p, .auth-switch { font-size: var(--dbim-p2) !important; }
+.detail-grid div b, .data-table th, .stat-card .lbl { font-size: var(--dbim-p2) !important; }
+/* No all-caps for sentences/labels (DBIM 4). */
+.data-table th, .demo-box-title { text-transform: none !important; letter-spacing: 0 !important; }
+/* Table headers centred; body text left (DBIM 4). */
+.pm-table-scroll thead th, .data-table th { text-align: center !important; }
+.pm-table-scroll td, .data-table td { text-align: left; }
+
+/* ------------------------------------------------------------ 3. links --
+ * DBIM 2/§1.1: links underlined, never colour-alone. Body links use the
+ * darker info-blue (5.84:1, D-09); key-green links only large/bold. */
+a.link, .auth-switch a, .pm-crumb-link, .pm-page a, .pm-state a,
+.pm-footer-list a, .pm-footer a {
+  color: var(--dbim-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+a.link:hover, .auth-switch a:hover, .pm-page a:hover {
+  color: var(--dbim-key-ink);
+  text-decoration-thickness: 2px;
+}
+
+/* ----------------------------------------------------------- 4. buttons --
+ * DBIM 4/§1.2: consistent size/padding, distinct enabled/hover/focus/disabled,
+ * noticeable hover, >= 44px targets (DBIM 1.4). */
+.btn { min-height: var(--dbim-touch-min); font-family: var(--dbim-font); }
+.btn-primary { background: var(--dbim-key); color: var(--dbim-white); }
+.btn-primary:hover { background: var(--dbim-key-ink); }           /* was: no hover */
+.btn-outline { border-color: var(--dbim-key); color: var(--dbim-key); }
+.btn-outline:hover { background: var(--dbim-key-pale); }
+.btn-ghost { background: var(--dbim-info-bg); color: var(--dbim-key-ink); }
+.btn-ghost:hover { background: var(--dbim-key-pale); }
+/* Disabled: never opacity-alone — tone + border + cursor (DBIM states). */
+.btn[disabled], .btn[aria-disabled="true"] {
+  opacity: 1; background: var(--dbim-grey-300); color: var(--dbim-ink);
+  border: 2px solid var(--dbim-grey-700); cursor: not-allowed;
+}
+.btn-outline[disabled], .btn-ghost[disabled] {
+  background: transparent; color: var(--dbim-grey-700);
+  border: 2px dashed var(--dbim-grey-700);
+}
+
+/* ------------------------------------------------------------- 5. forms --
+ * DBIM B: borders #606060 (3:1+), visible focus, full-size inputs. */
+.field input, .field select, .field textarea {
+  border: 1.5px solid var(--dbim-grey-700) !important;  /* was #dfe2f0 (~1.3:1) */
+  background: var(--dbim-white);
+  font-size: var(--dbim-p1);
+  min-height: var(--dbim-touch-min);
+}
+.field input:focus, .field select:focus, .field textarea:focus,
+.otp-mobile-row input:focus {
+  outline: var(--dbim-focus-width) solid var(--dbim-focus) !important;
+  outline-offset: var(--dbim-focus-offset);
+}
+.otp-mobile-row { border-color: var(--dbim-grey-700) !important; }
+.otp-mobile-row input { min-height: 0; }  /* row carries the 44px height */
+.otp-mobile-row:focus-within {
+  outline: var(--dbim-focus-width) solid var(--dbim-focus);
+  outline-offset: var(--dbim-focus-offset);
+}
+/* Global focus fallback: any focusable element, 3px ring (WCAG 2.4.7). */
+:focus-visible {
+  outline: var(--dbim-focus-width) solid var(--dbim-focus);
+  outline-offset: var(--dbim-focus-offset);
+}
+
+/* ---------------------------------------------------------- 6. surfaces --
+ * DBIM 1.4: pages white, cards/quote blocks linen, functional outlines. */
+#app { background: var(--dbim-surface-page); }
+.section-card { background: var(--dbim-surface-card); }  /* linen content cards */
+.list-card, .stat-card, .service-select, .owner-action-card,
+.qr-image-wrap, .pm-state {
+  background: var(--dbim-white);
+  border: 1px solid var(--dbim-outline-soft);
+}
+.topbar { background: var(--dbim-surface-page); }
+.bottom-nav { border-top: 1px solid var(--dbim-outline-soft); }
+/* Bottom-nav labels: essential nav text >= P2-ish floor (was 8.8-11px). */
+.nav-item { font-size: var(--dbim-p2) !important; min-height: var(--dbim-touch-min);
+  min-width: var(--dbim-touch-min); line-height: 1.2; }
+body.farmer-portal .owner-bottom-nav .nav-item { font-size: var(--dbim-p2) !important; }
+
+/* ------------------------------------------------- 7. status + alerts --
+ * Status never colour-alone (WCAG 1.4.1): tinted bg + dark ink + keep the
+ * existing pm-badge-prefix glyph convention from the GIGW programme. */
+.badge, .status-badge, .pm-badge { font-size: var(--dbim-p2); font-weight: 700; }
+.badge-green { background: var(--dbim-success-bg); color: var(--dbim-success-ink); }
+.badge-red   { background: var(--dbim-error-bg);   color: var(--dbim-error-ink); }
+.badge-blue  { background: var(--dbim-info-bg);    color: var(--dbim-info-ink); }
+.badge-orange, .gis-status.offline {
+  background: var(--dbim-warning-bg); color: var(--dbim-warning-ink); }
+.farmer-health-warning {
+  background: var(--dbim-warning-bg); color: var(--dbim-warning-ink) !important;
+  padding: 2px 10px; border-radius: var(--dbim-radius-sm);
+}
+.farmer-health-ok { color: var(--dbim-success-ink) !important; }  /* 4.5:1+ on white */
+.conflict-box { background: var(--dbim-error-bg); border-color: var(--dbim-error);
+  color: var(--dbim-error-ink); }
+.conflict-box b { color: var(--dbim-error-ink); }
+.otp-sent-note { background: var(--dbim-success-bg); color: var(--dbim-success-ink); }
+.advisory-card { background: var(--dbim-key-pale); border-left-color: var(--dbim-key); }
+.auto-escalated-badge { background: var(--dbim-error); }
+.ml-status-dot.online { background: var(--dbim-success); }
+.ml-status-dot.offline { background: var(--dbim-error); }
+.risk-chip .dot-red { background: var(--dbim-error); }
+.risk-chip .dot-green { background: var(--dbim-success); }
+/* Mustard dot (decorative; adjacent label carries meaning) ringed in ink so
+ * it is perceivable on white. */
+.risk-chip .dot-orange { background: var(--dbim-warning-bg);
+  outline: 2px solid var(--dbim-ink); outline-offset: -2px; }
+/* Demo-credentials box: mustard/ink (DBIM warning pattern). */
+.demo-box-otp { background: var(--dbim-warning-bg); border-color: var(--dbim-ink);
+  border-left-color: var(--dbim-ink); color: var(--dbim-ink); }
+.demo-box-title, .demo-box-label, .demo-box-note { color: var(--dbim-ink); }
+.demo-box-value { border-color: var(--dbim-ink); color: var(--dbim-ink); }
+.demo-box-btn { border-color: var(--dbim-ink) !important; color: var(--dbim-ink) !important; }
+.demo-box-btn:hover { background: var(--dbim-white); }
+
+/* --------------------------------------------------- 8. touch targets --
+ * DBIM 1.4 / WCAG 2.5.5: primary controls >= 44x44 (was 36-40px). */
+.header-icon-btn, .owner-app-header .header-icon-btn {
+  min-width: var(--dbim-touch-min); min-height: var(--dbim-touch-min); }
+.topbar .back { min-width: var(--dbim-touch-min); min-height: var(--dbim-touch-min); }
+.role-toggle button, .lang-toggle button { min-height: var(--dbim-touch-min); }
+.btn-sm { min-height: var(--dbim-touch-min); }
+.farmer-language-control { min-height: var(--dbim-touch-min); }
+.icon-item { min-height: var(--dbim-touch-min); min-width: var(--dbim-touch-min); }
+.pm-footer-list a { min-height: var(--dbim-touch-min); display: inline-flex;
+  align-items: center; }
+
+/* --------------------------------------------- 9. app header + icons --
+ * Header gradient is now within-group green (DBIM 2). Emoji icon grid keeps
+ * working; Phase 3 replaces it with the DBIM line set (dbim/icons.svg). */
+.app-header { background: linear-gradient(135deg, var(--dbim-key),
+  var(--dbim-key-ink)); }
+.icon-circle { border-color: var(--dbim-key-mid); background: var(--dbim-key-pale); }
+.icon-item span { color: var(--dbim-key-ink); font-size: var(--dbim-p2); }
+/* DBIM line icons (dbim.js `DBIM.icon()` + icons.svg sprite). */
+.dbim-icon { width: 24px; height: 24px; flex: none; vertical-align: -6px; }
+.dbim-icon--32 { width: 32px; height: 32px; }
+.dbim-icon--48 { width: 48px; height: 48px; }
+.dbim-icon--64 { width: 64px; height: 64px; }
+
+/* -------------------------------------------------- 10. reduced motion --
+ * Covers DBIM classes too (legacy rule in style.css is kept, not replaced). */
+@media (prefers-reduced-motion: reduce) {
+  .dbim-modal, .dbim-toast, .dbim-cookie, .dbim-tabs [role="tabpanel"] {
+    animation: none !important; transition: none !important; scroll-behavior: auto !important;
+  }
+}

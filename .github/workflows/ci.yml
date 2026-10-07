@@ -1,0 +1,54 @@
+# Pashu-Shield — CI (DBIM/GIGW redesign, brief Phase 10, stood up in Phase 1).
+# Gates grow each phase: axe, logo-rule, image budgets, link check, Lighthouse
+# CI and pip-audit are added in Phases 2/4/7/8/9. Nothing here claims
+# certification — see docs/compliance/*.md.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  dbim-gates:
+    name: DBIM gates (contrast + static rules)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Contrast gate (WCAG 1.4.3/1.4.11, GIGW 5.2.14)
+        run: python3 tools/check_contrast.py
+      - name: DBIM static rules (colour reserve, tokens, budgets, icons)
+        run: python3 tools/check_dbim.py
+
+  frontend-tests:
+    name: Frontend tests (zero-regression)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax-check shipped JS
+        run: |
+          for f in frontend/app.js frontend/call.js frontend/info-pages.js frontend/shell.js frontend/org-config.js frontend/dbim/dbim.js frontend/sw.js; do
+            node --check "$f" || exit 1
+          done
+      - name: Frontend suites
+        run: node --test "frontend/tests/"*.test.mjs
+
+  backend-tests:
+    name: Backend tests (zero-regression)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend deps
+        run: pip install -r backend/requirements.txt
+      - name: Full backend regression (isolated DB per suite)
+        run: bash backend/run_tests.sh

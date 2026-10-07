@@ -397,9 +397,17 @@ class FrontendComplianceTest(unittest.TestCase):
 
     def test_63_lang_and_metadata_are_declared(self):
         html = read_frontend("index.html")
-        self.assertIn('<html lang="en">', html)
+        # lang must be declared on <html> (other attributes, e.g. the DBIM
+        # data-dbim-theme switch, may legitimately sit alongside it).
+        self.assertIsNotNone(re.search(r'<html[^>]*\blang="en"', html))
         self.assertIn('name="description"', html)
         self.assertIn('rel="canonical"', html)
+        # DBIM Phase 1: the single-token theme switch must name a real group.
+        theme = re.search(r'data-dbim-theme="([a-z-]+)"', html)
+        self.assertIsNotNone(theme)
+        self.assertIn(theme.group(1),
+                        ["green", "blue", "burgundy", "purple",
+                         "chrome-yellow", "cinnamon-red"])
 
     def test_64_viewport_does_not_block_zoom(self):
         """WCAG 1.4.4 — user zoom must not be disabled."""

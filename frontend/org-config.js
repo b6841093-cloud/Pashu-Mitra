@@ -21,8 +21,19 @@
   // Set to true only once the owning organisation has approved the values.
   const OWNER_DETAILS_APPROVED = false;
 
+  // DBIM redesign flags (brief Hard Constraints + Phase 3).
+  // OFFICIAL_GOV_PORTAL: true ONLY for an officially government-run deployment
+  // with authorisation. When false, the footer lineage must read "This is an
+  // independent initiative and not an official Government of India website."
+  const OFFICIAL_GOV_PORTAL = false;
+  // CCPS (Central Content Publishing System) needs DBIM Toolkit credentials
+  // and is for government organisations: slot stays empty until enabled.
+  const CCPS_ENABLED = false;
+
   const ORG = {
     approved: OWNER_DETAILS_APPROVED,
+    officialGovPortal: OFFICIAL_GOV_PORTAL,
+    ccpsEnabled: CCPS_ENABLED,
 
     // Application / service identity (safe: it is the product's own name).
     appName: "Pashu-Shield",

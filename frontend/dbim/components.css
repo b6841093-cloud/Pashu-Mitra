@@ -1,0 +1,195 @@
+/* ==========================================================================
+ * Pashu-Shield — DBIM components (Phase 1)
+ * --------------------------------------------------------------------------
+ * DBIM 1.4: every component keyboard-operable, 3px focus ring, >= 44px
+ * targets, reduced-motion safe, no flashing. Behaviour in dbim.js; all
+ * strings live there for translation. Statuses never colour-alone: each
+ * variant pairs tint + dark ink + icon + text label (WCAG 1.4.1).
+ * ========================================================================== */
+
+/* ------------------------------------------------------------- buttons -- */
+.dbim-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--dbim-space-2);
+  min-height: var(--dbim-touch-min);
+  padding: var(--dbim-space-3) var(--dbim-space-5);
+  border-radius: var(--dbim-radius-md);
+  font-family: var(--dbim-font); font-size: var(--dbim-p1); font-weight: 600;
+  cursor: pointer; border: 2px solid transparent; text-decoration: none;
+}
+.dbim-btn--primary { background: var(--dbim-key); color: var(--dbim-white); }
+.dbim-btn--primary:hover { background: var(--dbim-key-ink); }
+.dbim-btn--secondary { background: var(--dbim-white); color: var(--dbim-key);
+  border-color: var(--dbim-key); }
+.dbim-btn--secondary:hover { background: var(--dbim-key-pale); }
+.dbim-btn--quiet { background: transparent; color: var(--dbim-link);
+  text-decoration: underline; }
+.dbim-btn--danger { background: var(--dbim-error); color: var(--dbim-white); }
+.dbim-btn--danger:hover { background: var(--dbim-error-ink); }
+/* aria-disabled pattern (DBIM B + D-07): focusable, announced, blocked. */
+.dbim-btn[aria-disabled="true"] {
+  background: var(--dbim-grey-300); color: var(--dbim-ink);
+  border: 2px solid var(--dbim-grey-700); cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* -------------------------------------------------------------- alerts -- */
+.dbim-alert {
+  display: flex; gap: var(--dbim-space-3); align-items: flex-start;
+  padding: var(--dbim-space-4); border-radius: var(--dbim-radius-md);
+  border: 1.5px solid var(--dbim-grey-700);
+  font-size: var(--dbim-p1); line-height: var(--dbim-lh-body);
+  margin: 0 0 var(--dbim-space-4);
+}
+.dbim-alert .dbim-icon { margin-top: 2px; }
+.dbim-alert--success { background: var(--dbim-success-bg); color: var(--dbim-success-ink);
+  border-color: var(--dbim-success); }
+.dbim-alert--warning { background: var(--dbim-warning-bg); color: var(--dbim-warning-ink);
+  border-color: var(--dbim-ink); }
+.dbim-alert--error { background: var(--dbim-error-bg); color: var(--dbim-error-ink);
+  border-color: var(--dbim-error); }
+.dbim-alert--info { background: var(--dbim-info-bg); color: var(--dbim-info-ink);
+  border-color: var(--dbim-info); }
+.dbim-alert strong { font-weight: 700; }
+
+/* ---------------------------------------------------------------- modal -- */
+.dbim-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(21, 2, 2, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--dbim-space-4); z-index: 100;
+}
+.dbim-modal {
+  background: var(--dbim-white); color: var(--dbim-ink);
+  border-radius: var(--dbim-radius-lg); box-shadow: var(--dbim-shadow-md);
+  max-width: 34rem; width: 100%; max-height: 90vh; overflow: auto;
+  padding: var(--dbim-space-6);
+}
+.dbim-modal h2 { font-size: var(--dbim-h2); margin: 0 0 var(--dbim-space-3); }
+.dbim-modal-actions { display: flex; gap: var(--dbim-space-3); flex-wrap: wrap;
+  margin-top: var(--dbim-space-5); }
+
+/* ---------------------------------------------------------------- tabs -- */
+.dbim-tabs [role="tablist"] {
+  display: flex; gap: var(--dbim-space-2); flex-wrap: wrap;
+  border-bottom: 2px solid var(--dbim-outline-soft); margin-bottom: var(--dbim-space-4);
+}
+.dbim-tabs [role="tab"] {
+  appearance: none; background: transparent; border: none;
+  border-bottom: 3px solid transparent; margin-bottom: -2px;
+  min-height: var(--dbim-touch-min); padding: var(--dbim-space-2) var(--dbim-space-3);
+  font-family: var(--dbim-font); font-size: var(--dbim-p1); font-weight: 600;
+  color: var(--dbim-link); cursor: pointer; text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.dbim-tabs [role="tab"][aria-selected="true"] {
+  color: var(--dbim-ink); border-bottom-color: var(--dbim-key);
+  text-decoration: none;
+}
+
+/* ----------------------------------------------------------- accordion -- */
+.dbim-accordion { border-top: 1px solid var(--dbim-outline-soft); }
+.dbim-accordion > div { border-bottom: 1px solid var(--dbim-outline-soft); }
+.dbim-accordion button {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dbim-space-3); background: var(--dbim-white); border: none;
+  min-height: var(--dbim-touch-min); padding: var(--dbim-space-3) var(--dbim-space-2);
+  font-family: var(--dbim-font); font-size: var(--dbim-p1); font-weight: 600;
+  color: var(--dbim-ink); cursor: pointer; text-align: left;
+}
+.dbim-accordion button:hover { background: var(--dbim-key-pale); }
+.dbim-accordion .dbim-acc-panel { padding: 0 var(--dbim-space-2) var(--dbim-space-4); }
+.dbim-accordion .dbim-icon { transition: transform var(--dbim-motion-fast); }
+.dbim-accordion button[aria-expanded="true"] .dbim-icon { transform: rotate(180deg); }
+
+/* ---------------------------------------------------------- pagination -- */
+.dbim-pagination { display: flex; gap: var(--dbim-space-2); flex-wrap: wrap;
+  list-style: none; margin: var(--dbim-space-5) 0 0; padding: 0; align-items: center; }
+.dbim-pagination a, .dbim-pagination span {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--dbim-touch-min); min-height: var(--dbim-touch-min);
+  padding: 0 var(--dbim-space-3); border-radius: var(--dbim-radius-sm);
+  border: 1.5px solid var(--dbim-grey-700); color: var(--dbim-link);
+  font-size: var(--dbim-p1); font-weight: 600; text-decoration: underline;
+  background: var(--dbim-white);
+}
+.dbim-pagination a:hover { background: var(--dbim-key-pale); }
+.dbim-pagination [aria-current="page"] {
+  background: var(--dbim-key); border-color: var(--dbim-key);
+  color: var(--dbim-white); text-decoration: none;
+}
+.dbim-pagination .dbim-page-gap { border: none; text-decoration: none;
+  color: var(--dbim-ink); }
+
+/* ------------------------------------------------------------- stepper -- */
+.dbim-stepper { list-style: none; margin: 0 0 var(--dbim-space-5); padding: 0; }
+.dbim-stepper li { display: flex; gap: var(--dbim-space-3); align-items: flex-start;
+  padding: var(--dbim-space-2) 0; font-size: var(--dbim-p1); }
+.dbim-step-dot {
+  flex: none; width: 32px; height: 32px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 700; border: 2px solid var(--dbim-grey-700);
+  background: var(--dbim-white); color: var(--dbim-ink);
+}
+.dbim-stepper li[aria-current="step"] .dbim-step-dot {
+  background: var(--dbim-key); border-color: var(--dbim-key); color: var(--dbim-white);
+}
+.dbim-stepper li.dbim-step-done .dbim-step-dot {
+  background: var(--dbim-success-bg); border-color: var(--dbim-success);
+  color: var(--dbim-success-ink);
+}
+.dbim-step-label { padding-top: 4px; }
+.dbim-stepper li[aria-current="step"] .dbim-step-label { font-weight: 700; }
+
+/* ------------------------------------------------------------- tooltip -- */
+.dbim-tip { position: relative; }
+.dbim-tip:hover::after, .dbim-tip:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--dbim-ink); color: var(--dbim-white);
+  font-size: var(--dbim-p2); font-weight: 400; padding: 6px 10px;
+  border-radius: var(--dbim-radius-sm); white-space: nowrap; z-index: 60;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------- cookie banner -- */
+/* DBIM 7.6 + DPDP Act 2023: bottom banner, Accept / Reject / Customise,
+ * no pre-ticked boxes, consent in the user's language (dbim.js strings). */
+.dbim-cookie {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+  background: var(--dbim-ink); color: var(--dbim-white);
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.25);
+}
+.dbim-cookie-inner {
+  max-width: 60rem; margin: 0 auto; padding: var(--dbim-space-4);
+  display: flex; gap: var(--dbim-space-4); flex-wrap: wrap; align-items: center;
+}
+.dbim-cookie p { flex: 1 1 24rem; margin: 0; font-size: var(--dbim-p1);
+  line-height: var(--dbim-lh-body); }
+.dbim-cookie a { color: var(--dbim-warning-bg); }
+.dbim-cookie-actions { display: flex; gap: var(--dbim-space-2); flex-wrap: wrap; }
+.dbim-cookie .dbim-btn--primary { background: var(--dbim-warning-bg);
+  color: var(--dbim-ink); }
+.dbim-cookie .dbim-btn--primary:hover { background: var(--dbim-white); }
+.dbim-cookie .dbim-btn--secondary { border-color: var(--dbim-white);
+  color: var(--dbim-white); background: transparent; }
+.dbim-cookie .dbim-btn--secondary:hover { background: rgba(255, 255, 255, 0.15); }
+.dbim-cookie :focus-visible { outline-color: var(--dbim-focus-on-dark); }
+/* Consent choices inside the Customise modal. */
+.dbim-consent-row { display: flex; gap: var(--dbim-space-3); align-items: flex-start;
+  padding: var(--dbim-space-3) 0; border-bottom: 1px solid var(--dbim-outline-soft); }
+.dbim-consent-row input { width: 24px; height: 24px; flex: none; margin-top: 2px;
+  accent-color: var(--dbim-key); }
+.dbim-consent-row strong { display: block; font-size: var(--dbim-p1); }
+.dbim-consent-row span { font-size: var(--dbim-p2); color: var(--dbim-grey-700); }
+
+/* ----------------------------------------------------- toasts (dbim) ---- */
+.dbim-toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: var(--dbim-space-6); z-index: 95; max-width: min(92vw, 36rem);
+  background: var(--dbim-ink); color: var(--dbim-white);
+  padding: var(--dbim-space-3) var(--dbim-space-4);
+  border-radius: var(--dbim-radius-md); font-size: var(--dbim-p1);
+  box-shadow: var(--dbim-shadow-md);
+}
+.dbim-toast--error { background: var(--dbim-error); }
+.dbim-toast--success { background: var(--dbim-success); }

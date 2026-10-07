@@ -1,0 +1,150 @@
+/* ==========================================================================
+ * Pashu-Shield — DBIM design tokens (Phase 1)
+ * --------------------------------------------------------------------------
+ * PRIMARY authority: DBIM 3.0 §2 (colour). This file is the single source of
+ * truth for colour, type, spacing, focus and motion. Every later phase
+ * consumes these tokens; no phase may hard-code a brand colour elsewhere.
+ *
+ * THEME SWITCH (brief §1.1): exactly ONE primary group is active at a time.
+ * Change ONE line — the `data-dbim-theme` attribute on <html> (default
+ * "green") or the fallback :root block below — to re-skin the portal.
+ * Only `green` and `blue` groups carry brief-supplied hexes; the remaining
+ * groups are declared but intentionally UNVALUED until verified against the
+ * DBIM Toolkit (https://dbimtoolkit.digifootprint.gov.in). See D-08.
+ * Verified contrast pairs are enforced by tools/check_contrast.py in CI.
+ * ========================================================================== */
+
+/* ---------------------------------------------------------------- green --
+ * DBIM 2 primary group, default for animal husbandry.
+ * Hexes per brief (scanned-PDF extraction): UNVERIFIED vs DBIM Toolkit (D-08).
+ * Contrast (white text): key 8.33 PASS; mid 4.32 FAIL -> white text ONLY on
+ * --dbim-key / darker (DBIM 2 + WCAG 1.4.3, GIGW 5.2.14).
+ */
+:root,
+:root[data-dbim-theme="green"] {
+  --dbim-key:        #0f5757;  /* darkest shade: header-solid/footer bg, primary buttons */
+  --dbim-key-mid:    #2d8686;  /* decorative fills / large graphics ONLY (4.32:1 — no text) */
+  --dbim-key-soft:   #a6d9d9;  /* tinted bands with dark text */
+  --dbim-key-pale:   #d9f2f2;  /* page bands / selected-row wash with dark text */
+  --dbim-key-ink:    #0b3d3d;  /* darker key for hover/pressed on light (computed safe) */
+}
+
+/* ----------------------------------------------------------------- blue --
+ * Brief-supplied alternate group (DBIM 2). Swap: <html data-dbim-theme="blue">.
+ */
+:root[data-dbim-theme="blue"] {
+  --dbim-key:        #162f6a;
+  --dbim-key-mid:    #214aab;
+  --dbim-key-soft:   #a3bbf3;
+  --dbim-key-pale:   #d2dfff;
+  --dbim-key-ink:    #101f4a;
+}
+
+/* --------------------------------------- groups pending Toolkit values --
+ * Burgundy / Purple / Chrome Yellow / Cinnamon Red: NO hexes invented here.
+ * They fall back to the green group until the Toolkit values are recorded
+ * (PLACEHOLDERS.md P-TOK-01..04). Selecting one logs a console warning.
+ */
+:root[data-dbim-theme="burgundy"],
+:root[data-dbim-theme="purple"],
+:root[data-dbim-theme="chrome-yellow"],
+:root[data-dbim-theme="cinnamon-red"] {
+  --dbim-key:        #0f5757;
+  --dbim-key-mid:    #2d8686;
+  --dbim-key-soft:   #a6d9d9;
+  --dbim-key-pale:   #d9f2f2;
+  --dbim-key-ink:    #0b3d3d;
+}
+
+/* ------------------------------------------------------- functional (DBIM 2)
+ * The ONLY other colours permitted. Never Deep Blue #1D0A69 (reserved for
+ * the Gov.in root site) — CI fails the build if it appears (tools/check_dbim.py).
+ */
+:root {
+  --dbim-linen:          #ebeAEA;
+  --dbim-white:          #ffffff;
+  --dbim-ink:            #150202;  /* Deep Earthy Brown: default text on light (20.16:1) */
+  --dbim-black:          #000000;
+  --dbim-success:        #198754;  /* Liberty Green: 4.53:1 on white, 4.53 white-on-fill */
+  --dbim-warning-bg:     #ffc107;  /* Mustard: BACKGROUND ONLY with --dbim-ink text (12.37:1) */
+  --dbim-error:          #dc3545;  /* Coral Red: 4.53:1 on white */
+  --dbim-info:           #0d6efd;  /* Blue: large/bold/UI use (4.50:1 on white — zero margin) */
+  --dbim-link:           #0b5ed7;  /* Darker info-blue for BODY links: 5.84:1 on white (D-09) */
+  --dbim-grey-300:       #c6c6c6;  /* decorative ONLY (1.71:1 — never text/borders) */
+  --dbim-grey-500:       #8e8e8e;  /* decorative ONLY (3.28:1 — never text/borders) */
+  --dbim-grey-700:       #606060;  /* input borders + secondary text (6.29:1 / 5.24 on linen) */
+
+  /* Surfaces (brief §1.4): pages white, cards/quote blocks linen. */
+  --dbim-surface-page:   var(--dbim-white);
+  --dbim-surface-card:   var(--dbim-linen);
+  --dbim-surface-wash:   var(--dbim-key-pale);
+  --dbim-outline:        var(--dbim-grey-700);
+  --dbim-outline-soft:   var(--dbim-grey-300);  /* hairlines between large regions only */
+
+  /* Status tints: functional colour at low alpha over white, dark text on top.
+   * Computed pairs all exceed 7:1 — enforced in tools/check_contrast.py. */
+  --dbim-success-bg:     #e6f4ec;
+  --dbim-success-ink:    #0c4a2a;
+  --dbim-warning-ink:    var(--dbim-ink);
+  --dbim-error-bg:       #fbe7e9;
+  --dbim-error-ink:      #7a1f28;
+  --dbim-info-bg:        #e3edfd;
+  --dbim-info-ink:       #0a3d91;
+
+  /* Focus (DBIM component rules + WCAG 2.4.7): visible 3px ring, 3:1+ everywhere.
+   * Mustard #FFC107 on key = 5.11:1; key on white = 8.33:1. */
+  --dbim-focus:          var(--dbim-key);
+  --dbim-focus-on-dark:  var(--dbim-warning-bg);
+  --dbim-focus-width:    3px;
+  --dbim-focus-offset:   2px;
+
+  /* Touch targets (DBIM 1.4 / WCAG 2.5.5): >= 44x44 px. */
+  --dbim-touch-min:      44px;
+
+  /* Type (DBIM 4): Noto Sans everywhere (see fonts.css). Weights allowed:
+   * 400 Regular, 500 Medium, 600 Semi-Bold, 700 Bold. No italic brand use. */
+  --dbim-font:           "Noto Sans", "Noto Sans Telugu", -apple-system,
+                         BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --dbim-font-mono:      ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --dbim-lh-body:        1.5;   /* DBIM 4: 1.2-1.5x, 1.5 for body */
+  --dbim-lh-heading:     1.25;
+
+  /* Desktop scale (DBIM 4): H1 36 H2 24 H3/Sub 20 P1 16 P2 14 Small 12. */
+  --dbim-h1: 36px;  --dbim-h2: 24px;  --dbim-h3: 20px;
+  --dbim-p1: 16px;  --dbim-p2: 14px;  --dbim-small: 12px;
+
+  /* Shape + elevation: calm, consistent. */
+  --dbim-radius-sm: 8px;
+  --dbim-radius-md: 12px;
+  --dbim-radius-lg: 18px;
+  --dbim-shadow-sm: 0 1px 3px rgba(21, 2, 2, 0.10);
+  --dbim-shadow-md: 0 4px 14px rgba(21, 2, 2, 0.10);
+
+  /* Spacing scale (4px base). */
+  --dbim-space-1: 4px;  --dbim-space-2: 8px;  --dbim-space-3: 12px;
+  --dbim-space-4: 16px; --dbim-space-5: 20px; --dbim-space-6: 24px;
+  --dbim-space-8: 32px; --dbim-space-10: 40px;
+
+  /* Motion: calm; killed under prefers-reduced-motion (base.css). */
+  --dbim-motion-fast: 120ms;
+  --dbim-motion-med:  200ms;
+}
+
+/* Mobile scale (DBIM 4): H1 24 H2 20 H3 16 P1 14 P2 12 Small 10.
+ * Small (10px) is NON-ESSENTIAL captions only — enforced by review + CI grep
+ * that flags var(--dbim-small) outside .dbim-caption (tools/check_dbim.py). */
+@media (max-width: 768px) {
+  :root {
+    --dbim-h1: 24px;  --dbim-h2: 20px;  --dbim-h3: 16px;
+    --dbim-p1: 14px;  --dbim-p2: 12px;  --dbim-small: 10px;
+  }
+}
+
+/* High-contrast preference: keep DBIM hues, push to max-legibility ink.
+ * The in-app .pm-high-contrast opt-in remains the stronger override. */
+@media (prefers-contrast: more) {
+  :root {
+    --dbim-link: #063fa0;
+    --dbim-grey-700: #3f3f3f;
+  }
+}

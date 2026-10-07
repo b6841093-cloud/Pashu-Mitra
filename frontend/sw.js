@@ -9,13 +9,23 @@
    v8 (GIGW/GuDApps/UX compliance) adds the global shell: org-config.js,
    shell.js and info-pages.js. The fetch strategy is unchanged; no
    authenticated data is added to the offline cache.
+
+   v9 (DBIM Phase 1) adds the design system: dbim/*.css, dbim.js, icons.svg.
+   Font files are NOT precached — the cache-first runtime branch below caches
+   whichever subsets the device actually needs (latin ~27 KB for English).
    ================================================================= */
 
-const CACHE_NAME = "pashu-mitra-v8";  // bumped: global shell + GIGW info pages
+const CACHE_NAME = "pashu-mitra-v9";  // bumped: DBIM design system
 const STATIC_ASSETS = [
   "/",
   "/index.html",
   "/style.css",
+  "/dbim/tokens.css",
+  "/dbim/fonts.css",
+  "/dbim/base.css",
+  "/dbim/components.css",
+  "/dbim/dbim.js",
+  "/dbim/icons.svg",
   "/app.js",
   "/org-config.js",
   "/shell.js",
