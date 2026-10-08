@@ -1749,25 +1749,75 @@ function brandLogoHtml(options) {
 
 function renderRoleSelect() {
   render(`
-  <div class="auth-wrap">
-    <div class="auth-logo">
-      ${brandLogoHtml({ className: "auth-logo-img" })}
-      <h2>Pashu-Mitra</h2>
-      <p>${t("app.tagline")}</p>
-    </div>
-    <div class="section-title" style="text-align:center;margin-bottom:14px">${t("auth.choose")}</div>
-    <div class="role-cards">
-      ${ROLES.map(r => `
-        <div class="role-card" style="border-left:6px solid ${ROLE_META[r].color}" onclick="location.hash='#/login/${r}'">
-          <div class="role-card-emoji">${ROLE_META[r].emoji}</div>
-          <div class="role-card-body">
-            <div class="role-card-title">${t(ROLE_META[r].label)}</div>
-            <div class="role-card-desc">${t(ROLE_META[r].label + ".desc")}</div>
+  <div class="pm-landing-grid">
+    <div class="pm-landing-hero">
+      <div class="pm-portal-badge">Digital Animal Health Portal · पशु स्वास्थ्य सेवा</div>
+      <h1 class="pm-landing-title">Integrated Livestock Healthcare & Surveillance Network</h1>
+      <p class="pm-landing-sub">Comprehensive animal health management platform providing door-step telemedicine, disease early warning, real-time diagnostic reporting, and outbreak monitoring for farmers and veterinarians.</p>
+      
+      <div class="pm-service-pillars">
+        <div class="pm-pillar-item">
+          <div class="pm-pillar-icon" aria-hidden="true">🐄</div>
+          <div class="pm-pillar-text">
+            <strong>Citizen Livestock Services (पशु पालक सेवा)</strong>
+            <span>Direct OTP login, health card records, tele-consultations, and symptom reporting.</span>
           </div>
-          <div class="role-card-go">→</div>
-        </div>`).join("")}
+        </div>
+        <div class="pm-pillar-item">
+          <div class="pm-pillar-icon" aria-hidden="true">🩺</div>
+          <div class="pm-pillar-text">
+            <strong>Veterinary Clinical Operations (चिकित्सक सेवा)</strong>
+            <span>Case triage, digital prescriptions, vaccination records, and audio telemedicine.</span>
+          </div>
+        </div>
+        <div class="pm-pillar-item">
+          <div class="pm-pillar-icon" aria-hidden="true">🏛️</div>
+          <div class="pm-pillar-text">
+            <strong>Epidemiology & State Surveillance (प्रशासन)</strong>
+            <span>Syndromic disease mapping, GIS outbreak analytics, and preventive advisory distribution.</span>
+          </div>
+        </div>
+        <div class="pm-pillar-item">
+          <div class="pm-pillar-icon" aria-hidden="true">🔬</div>
+          <div class="pm-pillar-text">
+            <strong>Diagnostic Laboratory Network (प्रयोगशाला)</strong>
+            <span>Sample intake tracking, pathology reports, and antimicrobial resistance monitoring.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pm-helpline-banner" role="region" aria-label="Toll-free Animal Health Helpline">
+        <div class="pm-helpline-details">
+          <strong>National Animal Disease Emergency Helpline</strong>
+          <span class="pm-helpline-num">1962 / 1800-180-1551</span>
+          <span style="font-size:12px;color:#92400E">Toll-free 24x7 livestock support in regional languages</span>
+        </div>
+        <a href="tel:1962" class="pm-helpline-btn" aria-label="Call Helpline 1962">
+          <span aria-hidden="true">📞</span> Call 1962
+        </a>
+      </div>
     </div>
-    ${langToggle()}
+
+    <div class="auth-wrap" style="margin:0;width:100%;max-width:100%">
+      <div class="auth-logo">
+        ${brandLogoHtml({ className: "auth-logo-img" })}
+        <h2>Pashu-Mitra</h2>
+        <p>${t("app.tagline")}</p>
+      </div>
+      <div class="section-title" style="text-align:center;margin-bottom:14px">${t("auth.choose")}</div>
+      <div class="role-cards">
+        ${ROLES.map(r => `
+          <div class="role-card" style="border-left:6px solid ${ROLE_META[r].color}" onclick="location.hash='#/login/${r}'" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' ')location.hash='#/login/${r}'">
+            <div class="role-card-emoji">${ROLE_META[r].emoji}</div>
+            <div class="role-card-body">
+              <div class="role-card-title">${t(ROLE_META[r].label)}</div>
+              <div class="role-card-desc">${t(ROLE_META[r].label + ".desc")}</div>
+            </div>
+            <div class="role-card-go">→</div>
+          </div>`).join("")}
+      </div>
+      ${langToggle()}
+    </div>
   </div>`);
 }
 
