@@ -1,8 +1,9 @@
 /* ==========================================================================
- * Pashu-Mitra — Global shell: accessibility bar, preferences, announcements,
- *                page metadata, site footer, breadcrumbs.
+ * Pashu-Mitra — Global Shell: Government Utility Bar, Accessibility Controls,
+ *                Institutional Brand Header, Primary Navigation, Breadcrumbs,
+ *                Announcements, Page Metadata, and Government Service Footer.
  * --------------------------------------------------------------------------
- * GIGW 3.0 mapping
+ * Indian Government Digital Service / GIGW 3.0 / WCAG 2.1 AA Compliance
  *   A27 (2.4.1) skip link / bypass blocks      -> skipLink() + #site-header
  *   A50 (4.1.3) status messages                -> announce()
  *   A15 (1.4.4) resize text 200%               -> textScale() (A- / A / A+)
@@ -10,19 +11,9 @@
  *   A25 (2.2.2) pause animation                -> reducedMotion toggle
  *   A38 (3.1.1) language of page               -> language select + <html lang>
  *   A28 (2.4.2) page titled                    -> setPageMeta()
- *   Q02 ownership, Q05 last updated, Q09-Q12, Q18 minimum content -> footer
+ *   Q01 (emblem/logo), Q02 (ownership)         -> header
+ *   Q05 (last updated), Q09-Q12, Q18 minimum   -> footer
  *   L04 external link indication               -> externalLink()
- *
- * ZERO-REGRESSION RULE
- *   This file is purely ADDITIVE. It never removes or replaces an existing
- *   Pashu-Mitra feature. The existing `.app-header` and `.bottom-nav`
- *   (app.js) are left untouched; a slim global bar is layered above them and
- *   a global footer below the existing app container.
- *
- * BRAND EXEMPTIONS (4.2 fonts, 4.3 colours)
- *   Text scaling changes font-SIZE only, never font-family.
- *   High-contrast mode is opt-in and uses its own palette; the default
- *   brand theme is byte-for-byte unchanged when it is off.
  * ========================================================================== */
 
 /* global document, window, localStorage, location */
@@ -64,7 +55,7 @@
   function applyPrefs() {
     const root = document.documentElement;
 
-    // Text scale — font-size only. The font FAMILY is never modified (ex. 4.2).
+    // Text scale — font-size only. The font FAMILY is never modified.
     root.style.setProperty("--pm-text-scale", String(SCALES[prefs.scaleIndex]));
 
     root.classList.toggle("pm-high-contrast", prefs.highContrast);
@@ -113,18 +104,36 @@
     }
   }
 
+  function setLanguage(lang) {
+    if (!["en", "hi", "mr", "te"].includes(lang)) return;
+    prefs.lang = lang;
+    savePrefs();
+    if (window.state) {
+      window.state.lang = lang;
+      try { localStorage.setItem("lang", lang); } catch (_) {}
+    }
+    document.documentElement.lang = lang;
+    const select = document.getElementById("pmGlobalLangSelect");
+    if (select) select.value = lang;
+    const selectMobile = document.getElementById("pmGlobalLangSelectMobile");
+    if (selectMobile) selectMobile.value = lang;
+
+    if (typeof window.router === "function") {
+      window.router();
+    }
+    updateNavigation();
+    const langNames = { en: "English", hi: "Hindi", mr: "Marathi", te: "Telugu" };
+    announce("Language changed to " + (langNames[lang] || lang));
+  }
+
   /* ------------------------------------------------- screen-reader announcer
    * WCAG 4.1.3 Status Messages (GIGW A50).
-   * IMPORTANT: the live regions must exist in the DOM before text is written
-   * into them, otherwise screen readers do not announce the first message.
-   * They are therefore declared statically in index.html.
    */
   let politeTimer = null;
   function announce(message, assertive) {
     const id = assertive ? "pmLiveAssertive" : "pmLivePolite";
     const region = document.getElementById(id);
     if (!region) return;
-    // Clearing first forces re-announcement of an identical message.
     region.textContent = "";
     window.clearTimeout(politeTimer);
     politeTimer = window.setTimeout(function () {
@@ -146,11 +155,9 @@
     setMeta("name", "keywords", o.keywords ||
       "animal health, livestock, disease reporting, veterinary, laboratory, surveillance, Pashu-Mitra");
 
-    // lang: keep <html lang> in step with the selected language (A38 / 3.1.1).
     const lang = (o.lang || (window.state && window.state.lang) || "en");
     document.documentElement.lang = lang;
 
-    // Canonical URL — the SPA uses hash routes, so the canonical is the hash URL.
     let link = document.getElementById("pmCanonical");
     if (!link) {
       link = document.createElement("link");
@@ -160,7 +167,6 @@
     }
     link.href = window.location.href;
 
-    // Open Graph (only where meaningful; never misleading).
     setMeta("property", "og:title", title);
     setMeta("property", "og:description", o.description || "Animal disease reporting and veterinary care platform.");
     setMeta("property", "og:type", "website");
@@ -264,7 +270,7 @@
           '<section class="pm-footer-col" aria-labelledby="pm-f-about">' +
             '<h2 id="pm-f-about" class="pm-footer-h">About this service</h2>' +
             '<p class="pm-org-name">' + escapeHtml(org.appName || "Pashu-Mitra") + "</p>" +
-            '<p class="pm-footer-text">' + escapeHtml(org.tagline || "") + "</p>" +
+            '<p class="pm-footer-text">' + escapeHtml(org.tagline || "Animal Health & Livestock Services Platform") + "</p>" +
             (pending
               ? '<p class="pm-owner-note"><strong>Ownership:</strong> ' + escapeHtml(owner.name || "") +
                 ' — <em>placeholder pending confirmation by the owning organisation</em></p>'
@@ -275,8 +281,8 @@
             '<h2 id="pm-f-contact" class="pm-footer-h">Contact</h2>' +
             '<p class="pm-footer-text">' + escapeHtml(owner.address || "") + "</p>" +
             '<p class="pm-footer-text">Email: ' + escapeHtml(owner.email || "") + "</p>" +
-            '<p class="pm-footer-text">Phone: ' + escapeHtml(owner.phone || "") + "</p>" +
-            '<p class="pm-footer-text">Hours: ' + escapeHtml(owner.workingHours || "") + "</p>" +
+            '<p class="pm-footer-text">Emergency Animal Helpline: <strong>7382210251</strong></p>' +
+            '<p class="pm-footer-text">Hours: ' + escapeHtml(owner.workingHours || "Mon–Sat 09:00–18:00 IST") + "</p>" +
             '<p class="pm-footer-text"><a href="#/contact">Full contact directory</a></p>' +
           "</section>" +
 
@@ -317,31 +323,60 @@
       "</footer>";
   }
 
-  /* ------------------------------------------------------------ the bar */
+  /* ------------------------------------------------------------ the bar
+   * Government Utility Bar (GIGW 3.0 / NIC guidelines):
+   * Left: Government / Service Identity
+   * Right: Skip link, Font resizer (A-/A/A+), High contrast, Reduce motion, Language, Help, Contact, Search
+   */
   function renderA11yBar() {
+    const currentLang = (window.state && window.state.lang) || prefs.lang || "en";
     return '' +
       '<div class="pm-a11y-bar" id="pmA11yBar">' +
+        '<div class="pm-flag-stripe" aria-hidden="true"></div>' +
         '<div class="pm-a11y-inner">' +
-          '<div class="pm-a11y-group" role="group" aria-label="Text size">' +
-            '<span class="pm-a11y-label" id="pmScaleLabel">Text size</span>' +
-            '<button type="button" class="pm-a11y-btn" onclick="PashuShell.setScaleIndex(PashuShell.getScaleIndex()-1)" ' +
-              'aria-label="Decrease text size">A<span class="pm-a11y-smaller">-</span></button>' +
-            '<button type="button" class="pm-a11y-btn" onclick="PashuShell.setScaleIndex(1)" ' +
-              'aria-label="Reset text size to normal">A</button>' +
-            '<button type="button" class="pm-a11y-btn" onclick="PashuShell.setScaleIndex(PashuShell.getScaleIndex()+1)" ' +
-              'aria-label="Increase text size">A<span class="pm-a11y-bigger">+</span></button>' +
-            '<span class="pm-a11y-value" id="pmScaleValue">Normal (100%)</span>' +
+          '<div class="pm-util-identity">' +
+            '<span class="pm-util-title">Animal Health &amp; Livestock Services</span>' +
+            '<span class="pm-util-sub" lang="hi">पशु स्वास्थ्य एवं पशुधन सेवा</span>' +
           "</div>" +
+          '<div class="pm-util-tools">' +
+            '<a class="pm-skip-link-inline" href="#main-content">Skip to Main Content</a>' +
+            '<div class="pm-a11y-group" role="group" aria-label="Text size">' +
+              '<span class="pm-a11y-label" id="pmScaleLabel">Text size</span>' +
+              '<button type="button" class="pm-a11y-btn" onclick="PashuShell.setScaleIndex(PashuShell.getScaleIndex()-1)" ' +
+                'aria-label="Decrease text size">A<span class="pm-a11y-smaller">-</span></button>' +
+              '<button type="button" class="pm-a11y-btn" onclick="PashuShell.setScaleIndex(1)" ' +
+                'aria-label="Reset text size to normal">A</button>' +
+              '<button type="button" class="pm-a11y-btn" onclick="PashuShell.setScaleIndex(PashuShell.getScaleIndex()+1)" ' +
+                'aria-label="Increase text size">A<span class="pm-a11y-bigger">+</span></button>' +
+              '<span class="pm-a11y-value" id="pmScaleValue">Normal (100%)</span>' +
+            "</div>" +
 
-          '<div class="pm-a11y-group">' +
-            '<button type="button" class="pm-a11y-btn pm-a11y-wide" data-a11y-toggle="highContrast" ' +
-              'data-a11y-label="High contrast mode" data-a11y-label-on="High contrast mode is on" ' +
-              'aria-pressed="false" onclick="PashuShell.togglePref(\'highContrast\')">' +
-              '<span aria-hidden="true">◐</span> High contrast</button>' +
-            '<button type="button" class="pm-a11y-btn pm-a11y-wide" data-a11y-toggle="reducedMotion" ' +
-              'data-a11y-label="Reduce animation" data-a11y-label-on="Animation is reduced" ' +
-              'aria-pressed="false" onclick="PashuShell.togglePref(\'reducedMotion\')">' +
-              '<span aria-hidden="true">⏸</span> Reduce motion</button>' +
+            '<div class="pm-a11y-group">' +
+              '<button type="button" class="pm-a11y-btn pm-a11y-wide" data-a11y-toggle="highContrast" ' +
+                'data-a11y-label="High contrast mode" data-a11y-label-on="High contrast mode is on" ' +
+                'aria-pressed="false" onclick="PashuShell.togglePref(\'highContrast\')">' +
+                '<span aria-hidden="true">◐</span> High contrast</button>' +
+              '<button type="button" class="pm-a11y-btn pm-a11y-wide" data-a11y-toggle="reducedMotion" ' +
+                'data-a11y-label="Reduce animation" data-a11y-label-on="Animation is reduced" ' +
+                'aria-pressed="false" onclick="PashuShell.togglePref(\'reducedMotion\')">' +
+                '<span aria-hidden="true">⏸</span> Reduce motion</button>' +
+            "</div>" +
+
+            '<div class="pm-util-links">' +
+              '<a href="#/help" class="pm-util-link">Help</a>' +
+              '<a href="#/contact" class="pm-util-link">Contact</a>' +
+              '<a href="#/search" class="pm-util-link">Search</a>' +
+            "</div>" +
+
+            '<div class="pm-util-lang">' +
+              '<label for="pmGlobalLangSelect" class="sr-only">Portal Language</label>' +
+              '<select id="pmGlobalLangSelect" class="pm-lang-select" onchange="PashuShell.setLanguage(this.value)" aria-label="Portal Language">' +
+                '<option value="en"' + (currentLang === "en" ? ' selected' : '') + '>English</option>' +
+                '<option value="hi"' + (currentLang === "hi" ? ' selected' : '') + '>हिन्दी</option>' +
+                '<option value="mr"' + (currentLang === "mr" ? ' selected' : '') + '>मराठी</option>' +
+                '<option value="te"' + (currentLang === "te" ? ' selected' : '') + '>తెలుగు</option>' +
+              '</select>' +
+            "</div>" +
           "</div>" +
         "</div>" +
       "</div>";
@@ -350,23 +385,145 @@
   /* ---------------------------------------------------------- site header
    * GIGW Q01 (logo in proper ratio, prominent, alt text, links home)
    *      Q02 (ownership on every important entry page)
+   * Government Main Brand Header + Role-specific Primary Navigation Bar
    */
+  function getActiveUser() {
+    try {
+      if (window.state && window.state.user) return window.state.user;
+      const raw = localStorage.getItem("user");
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return null;
+  }
+
+  function getNavItemsForRole(role) {
+    if (role === "owner") {
+      return [
+        { href: "#/owner/dashboard", label: "Home", icon: "🏠" },
+        { href: "#/owner/livestock", label: "My Livestock", icon: "🐄" },
+        { href: "#/owner/cases", label: "Cases", icon: "📋" },
+        { href: "#/owner/prescriptions", label: "Health & Treatment", icon: "💊" },
+        { href: "#/owner/webcall", label: "Web Call", icon: "📞" },
+        { href: "#/owner/notifications", label: "Notifications", icon: "🔔" },
+        { href: "#/owner/profile", label: "Profile", icon: "👤" },
+      ];
+    }
+    if (role === "vet") {
+      return [
+        { href: "#/vet/dashboard", label: "Dashboard", icon: "📊" },
+        { href: "#/vet/cases", label: "Cases", icon: "🩺" },
+        { href: "#/vet/calls", label: "Web Calls", icon: "📞" },
+        { href: "#/vet/advisories", label: "Advisories", icon: "📢" },
+        { href: "#/vet/search", label: "Livestock", icon: "🔍" },
+        { href: "#/vet/campaigns", label: "Campaigns", icon: "💉" },
+        { href: "#/vet/reports", label: "Reports", icon: "📋" },
+        { href: "#/vet/profile", label: "Profile", icon: "👤" },
+      ];
+    }
+    if (role === "govt") {
+      return [
+        { href: "#/govt/dashboard", label: "Dashboard", icon: "📊" },
+        { href: "#/govt/surveillance", label: "Surveillance", icon: "🌐" },
+        { href: "#/govt/blocks", label: "Districts", icon: "🏘️" },
+        { href: "#/govt/trends", label: "Trends", icon: "📈" },
+        { href: "#/govt/gis", label: "GIS Map", icon: "🗺️" },
+        { href: "#/govt/ai", label: "AI Outbreak", icon: "🧠" },
+        { href: "#/govt/export", label: "Reports & Export", icon: "📥" },
+        { href: "#/govt/profile", label: "Profile", icon: "👤" },
+      ];
+    }
+    if (role === "lab") {
+      return [
+        { href: "#/lab/dashboard", label: "Dashboard", icon: "📊" },
+        { href: "#/lab/queue", label: "Sample Queue", icon: "🧪" },
+        { href: "#/scan", label: "QR Scanner", icon: "📷" },
+        { href: "#/lab/lab-reports", label: "Reports", icon: "📋" },
+        { href: "#/lab/notifications", label: "Alerts", icon: "🔔" },
+        { href: "#/lab/profile", label: "Profile", icon: "👤" },
+      ];
+    }
+    // Public / Visitor navigation
+    return [
+      { href: "#/", label: "Home", icon: "🏛️" },
+      { href: "#/login/owner", label: "Farmer Portal", icon: "🧑‍🌾" },
+      { href: "#/login/vet", label: "Veterinary Officer", icon: "🩺" },
+      { href: "#/login/govt", label: "Government Official", icon: "🏛️" },
+      { href: "#/login/lab", label: "Diagnostic Laboratory", icon: "🧪" },
+      { href: "#/about", label: "About Us", icon: "ℹ️" },
+      { href: "#/contact", label: "Contact", icon: "📞" },
+      { href: "#/help", label: "Help", icon: "❓" },
+    ];
+  }
+
+  function renderPrimaryNavigation() {
+    const user = getActiveUser();
+    const role = user ? user.role : null;
+    const items = getNavItemsForRole(role);
+    const currentHash = (window.location && window.location.hash) || "#/";
+
+    const linksHtml = items.map((item) => {
+      const isExact = currentHash === item.href;
+      const isParent = item.href !== "#/" && currentHash.startsWith(item.href);
+      const isActive = isExact || isParent;
+      return (
+        '<a href="' + escapeHtml(item.href) + '" class="pm-nav-link' + (isActive ? ' active' : '') + '"' +
+          (isActive ? ' aria-current="page"' : '') + '>' +
+          '<span class="pm-nav-icon" aria-hidden="true">' + item.icon + '</span> ' +
+          '<span>' + escapeHtml(item.label) + '</span>' +
+        '</a>'
+      );
+    }).join("");
+
+    return (
+      '<nav class="pm-primary-nav" id="pmPrimaryNav" aria-label="Primary Navigation">' +
+        '<div class="pm-nav-inner">' +
+          linksHtml +
+        '</div>' +
+      '</nav>'
+    );
+  }
+
   function renderSiteHeader() {
     const org = window.ORG || {};
     const logo = org.logo || {};
-    const mark = logo.mark || "🐄";
-    // The logo is an <img> so the official asset is used as-is (never redrawn,
-    // stretched or cropped): the file's own ratio is kept because no aspect
-    // ratio is forced and CSS limits only the height. If the asset is missing
-    // the image hides itself and the accessible product name stays visible —
-    // a broken-image icon is never shown to a user.
-    const logoInner = logo.src
-      ? '<img class="pm-logo-img" src="' + escapeHtml(logo.src) + '" alt="' +
-        escapeHtml(logo.alt || org.appName || "") + '"' +
-        (logo.aspectRatio && logo.aspectRatio !== "auto"
-          ? ' style="aspect-ratio:' + escapeHtml(logo.aspectRatio) + '"' : "") +
-        ' onerror="this.style.display=\'none\'">'
-      : '<span class="pm-logo-mark" aria-hidden="true">' + mark + "</span>";
+    const user = getActiveUser();
+    const role = user ? user.role : null;
+
+    const logoInner = (
+      '<img class="pm-logo-img" src="' + escapeHtml(logo.src || 'assets/pashu-mitra-logo.png') + '" alt="' +
+      escapeHtml(logo.alt || org.appName || "Pashu-Mitra") + '"' +
+      (logo.aspectRatio && logo.aspectRatio !== "auto"
+        ? ' style="aspect-ratio:' + escapeHtml(logo.aspectRatio) + '"' : "") +
+      ' onerror="this.style.display=\'none\'">'
+    );
+
+    let userSection = "";
+    if (user) {
+      const roleBadge = {
+        owner: "Farmer",
+        vet: "Veterinarian",
+        govt: "Government Officer",
+        lab: "Laboratory Diagnostician"
+      }[role] || role;
+      const notifHref = "#/" + role + "/notifications";
+      userSection = (
+        '<div class="pm-header-user-panel">' +
+          '<a href="' + notifHref + '" class="pm-header-icon-btn" aria-label="View notifications">🔔</a>' +
+          '<div class="pm-user-badge-wrap">' +
+            '<span class="pm-user-role-chip">' + escapeHtml(roleBadge) + '</span>' +
+            '<span class="pm-user-name-text">' + escapeHtml(user.full_name || "") + '</span>' +
+          '</div>' +
+          '<button type="button" class="pm-header-logout-btn" onclick="logout()" aria-label="Sign out of Pashu-Mitra">Sign out</button>' +
+        '</div>'
+      );
+    } else {
+      userSection = (
+        '<div class="pm-header-auth-actions">' +
+          '<a href="#/login/owner" class="pm-auth-cta-farmer">Farmer OTP Login</a>' +
+          '<a href="#/" class="pm-auth-cta-staff">Officer Access</a>' +
+        '</div>'
+      );
+    }
 
     return '' +
       '<header class="pm-site-header" id="site-header" role="banner">' +
@@ -376,15 +533,27 @@
             logoInner +
             '<span class="pm-brand-text">' +
               '<span class="pm-brand-name">' + escapeHtml(org.appName || "Pashu-Mitra") + "</span>" +
-              '<span class="pm-brand-tag">' + escapeHtml(org.tagline || "") + "</span>" +
+              '<span class="pm-brand-tag">' + escapeHtml(org.tagline || "Animal Health & Livestock Services") + "</span>" +
             "</span>" +
           "</a>" +
+          '<div class="pm-header-actions">' +
+            '<button type="button" class="pm-header-search-btn" onclick="location.hash=\'#/search\'" aria-label="Search animal health portal">🔍 <span class="pm-search-label">Search</span></button>' +
+            userSection +
+          "</div>" +
           '<p class="pm-owner">' +
             '<span class="sr-only">Owned by: </span>' +
             escapeHtml((org.owner && org.owner.name) || "") +
           "</p>" +
         "</div>" +
+        renderPrimaryNavigation() +
       "</header>";
+  }
+
+  function updateNavigation() {
+    const headerHost = document.getElementById("pmSiteHeaderHost");
+    if (headerHost) {
+      headerHost.innerHTML = renderSiteHeader();
+    }
   }
 
   /* --------------------------------------------------------- boot / init */
@@ -402,8 +571,11 @@
 
     applyPrefs();
 
-    // Honour the OS-level preference the first time (never overrides a choice
-    // the user has explicitly made and stored).
+    // Listen for hash changes to update active navigation tabs
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("hashchange", updateNavigation);
+    }
+
     try {
       if (!localStorage.getItem(STORE)) {
         const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -412,7 +584,7 @@
     } catch (_) {}
   }
 
-  // Export a small, stable API for app.js and inline handlers.
+  // Export stable API
   window.PashuShell = {
     init: init,
     announce: announce,
@@ -423,6 +595,8 @@
     setScaleIndex: setScaleIndex,
     getScaleIndex: function () { return prefs.scaleIndex; },
     togglePref: togglePref,
+    setLanguage: setLanguage,
+    updateNavigation: updateNavigation,
     prefs: prefs,
     renderFooter: renderFooter,
   };
