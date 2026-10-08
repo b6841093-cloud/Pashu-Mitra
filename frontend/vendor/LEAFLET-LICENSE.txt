@@ -1,0 +1,7 @@
+
+Leaflet 1.9.4 (vendored from npm, BSD-2-Clause)
+Files: leaflet.min.js, leaflet.css, leaflet-images/*
+Source: https://registry.npmjs.org/leaflet/-/leaflet-1.9.4.tgz
+Why vendored: the Government GIS Risk Map must render even when the
+unpkg CDN is unreachable (offline/restricted networks); Leaflet is a
+small (~42 KB gzipped) library, so a local copy does not bloat the page.

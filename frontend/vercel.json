@@ -44,7 +44,7 @@
       ]
     },
     {
-      "source": "/(index.html|app.js|call.js|style.css|sw.js|whisper-worker.js)",
+      "source": "/(index.html|app.js|shell.js|info-pages.js|a11y.js|call.js|style.css|sw.js|whisper-worker.js)",
       "headers": [
         {
           "key": "Cache-Control",

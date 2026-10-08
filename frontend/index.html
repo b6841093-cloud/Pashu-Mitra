@@ -11,14 +11,25 @@
 <link rel="preload" href="fonts/NotoSans-latin-400.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="fonts/NotoSans-devanagari-400.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="stylesheet" href="style.css" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+<link rel="stylesheet" href="vendor/leaflet.css" />
 <link rel="manifest" href="manifest.json" />
 <!-- Official product logo (assets/pashu-mitra-logo.png). Used as the favicon
      and the app icon; if the file is absent the browser simply shows no icon
      and never a broken image. -->
 <link rel="icon" type="image/png" href="assets/pashu-mitra-logo.png" />
 <link rel="apple-touch-icon" href="assets/pashu-mitra-logo.png" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<!-- Leaflet is vendored locally (vendor/leaflet.min.js) so the Government GIS
+     Risk Map does not depend on a third-party CDN; the CDN copy below is only
+     a fallback for deployments that serve the frontend without the vendor
+     directory. -->
+<script src="vendor/leaflet.min.js"></script>
+<script>
+  // Fallback: if the vendored copy failed to load, try the CDN once.
+  if (typeof window.L === "undefined") {
+    document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""><\\/script>');
+  }
+</script>
+
 </head>
 <body>
   <!-- GIGW 3.0 A27 / WCAG 2.4.1 — bypass blocks. The skip link is the FIRST

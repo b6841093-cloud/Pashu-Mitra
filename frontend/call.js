@@ -2163,7 +2163,7 @@
       : "";
 
     box.innerHTML = `
-      <div role="status" aria-live="polite"><span class="badge ${badgeClass}" id="pmCallStateBadge">${esc(badgeText)}</span> <span class="badge badge-blue" id="pmCallSignalBadge">${esc(t("webcall.signaling", "Signaling"))}: ${esc(callStateLabel(sigOnline ? "AVAILABLE" : (sig === "error" ? "FAILED" : sig.toUpperCase())))}</span></div>
+      <div role="status" aria-live="polite"><span class="badge ${badgeClass}" id="pmCallStateBadge">${esc(badgeText)}</span> <span class="badge badge-blue" id="pmCallSignalBadge">${esc(t("webcall.signaling_label", t("webcall.signaling", "Signaling")))}: ${esc(callStateLabel(sigOnline ? "AVAILABLE" : (sig === "error" ? "FAILED" : sig.toUpperCase())))}</span></div>
       <div class="meta" style="margin-top:6px" role="status" aria-live="polite" id="pmCallAvailabilityMessage">${esc(primaryMessage)}</div>
       ${selected}
       ${others}
@@ -2228,7 +2228,7 @@
     const start = document.getElementById("pmCallStart");
     if (start) start.disabled = true;
     if (box && !opts.keepExisting) {
-      box.innerHTML = `<span class="badge badge-orange">Checking availability…</span>`;
+      box.innerHTML = `<span class="badge badge-orange">${esc(t("webcall.checking_availability", ft("checking_availability", "Checking availability…")))}</span>`;
     }
     const query = new URLSearchParams();
     const request = farmerAvailabilityParams(params);
@@ -2248,9 +2248,9 @@
       if (box) {
         const helpline = currentHelpline();
         box.innerHTML = `
-          <div><span class="badge badge-orange">Could not check availability</span></div>
+          <div><span class="badge badge-orange">${esc(t("webcall.availability_check_failed", ft("availability_check_failed", "Could not check availability")))}</span></div>
           <div class="meta" style="margin-top:6px">${esc(err.message || "Could not check whether a veterinarian is online.")}</div>
-          ${helpline.number ? `<div class="small-muted" style="margin-top:6px">If this continues, call the helpline <b>${esc(helpline.number)}</b>.</div>` : ""}`;
+          ${helpline.number ? `<div class="small-muted" style="margin-top:6px">${esc(t("webcall.availability_helpline_hint", ft("availability_helpline_hint", "If this continues, call the helpline {number}.")).replace("{number}", helpline.number))}</div>` : ""}`;
       }
       return null;
     }

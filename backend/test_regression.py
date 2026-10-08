@@ -81,6 +81,22 @@ class TestRegressionExistingFeatures(unittest.TestCase):
         resp_g = self.client.get("/api/govt/geo", headers=self.auth_headers(self.govt_token))
         self.assertEqual(resp_g.status_code, 200)
         self.assertIsInstance(resp_g.get_json(), list)
+        # GIS Risk Map contract: every district row carries the fields the map
+        # and its accessible table render. Coordinates are PUBLIC district
+        # centroids (from weather.DISTRICT_COORDS) — never animal locations.
+        for row in resp_g.get_json():
+            self.assertIn("district", row)
+            self.assertIn("latitude", row)
+            self.assertIn("longitude", row)
+            self.assertIn("cases", row)
+            self.assertIn("active", row)
+            self.assertIn("mortality", row)
+            self.assertIn("risk_level", row)
+            self.assertIn("risk", row)
+            self.assertIn(row["risk"], ("LOW", "MODERATE", "HIGH", "CRITICAL"))
+            if row["latitude"] is not None:
+                self.assertIsInstance(row["latitude"], float)
+                self.assertIsInstance(row["longitude"], float)
 
     def test_r10_campaigns_and_diseases(self):
         resp_c = self.client.get("/api/campaigns", headers=self.auth_headers(self.vet_token))
