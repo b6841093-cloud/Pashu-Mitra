@@ -208,6 +208,12 @@ const I18N = {
     "farmer.verify_and_login": "Verify & Login", "farmer.verifying_otp": "Verifying…",
     "farmer.resend_otp": "Resend OTP", "farmer.resending_otp": "Resending…",
     "farmer.resend_in": "Resend in {seconds}s", "farmer.resend_ready": "Didn't get the OTP?",
+    "farmer.livestock_overview": "Your livestock overview — {animals} · {cases}", "farmer.quick_report": "Quick report",
+    "farmer.print": "Print", "farmer.print_list": "Print list", "farmer.export_csv": "Export CSV",
+    "farmer.checking_availability": "Checking availability…", "farmer.availability_check_failed": "Could not check availability",
+    "farmer.animals_count": "{n} animals", "farmer.active_cases_count": "{n} active cases",
+    "farmer.no_herd_alerts": "No active alerts for this herd.",
+    "farmer.availability_helpline_hint": "If this continues, call the helpline {number}.",
     "farmer.change_mobile": "Change mobile number",
     // Honest delivery wording: a 200 only means the request was accepted. The
     // same sentence is shown for registered and unknown numbers (no enumeration).
@@ -269,6 +275,8 @@ const I18N = {
     "webcall.retry_signaling": "Retry connection",
     "webcall.vet_available_now": "Veterinarian available",
     "webcall.no_vet_now": "No veterinarian available right now",
+    "webcall.checking_availability": "Checking availability…", "webcall.availability_check_failed": "Could not check availability",
+    "webcall.availability_helpline_hint": "If this continues, call the helpline {number}.", "webcall.signaling_label": "Signaling",
     "webcall.no_vet_online": "No veterinarian for {language} is online right now. Try another language or call the helpline.",
     "webcall.vet_online": "A veterinarian is online now.",
     "webcall.matched_vet": "Matched veterinarian",
@@ -445,6 +453,12 @@ const I18N = {
     "farmer.verify_and_login": "तपासा व लॉगिन करा", "farmer.verifying_otp": "तपासत आहे…",
     "farmer.resend_otp": "OTP पुन्हा पाठवा", "farmer.resending_otp": "पुन्हा पाठवत आहे…",
     "farmer.resend_in": "{seconds} सेकंदांनी पुन्हा पाठवा", "farmer.resend_ready": "OTP मिळाला नाही?",
+    "farmer.livestock_overview": "तुमच्या पशुधनाचा आढावा — {animals} · {cases}", "farmer.quick_report": "झटपट तक्रार",
+    "farmer.print": "प्रिंट", "farmer.print_list": "यादी प्रिंट करा", "farmer.export_csv": "CSV निर्यात करा",
+    "farmer.checking_availability": "उपलब्धता तपासली जात आहे…", "farmer.availability_check_failed": "उपलब्धता तपासता आली नाही",
+    "farmer.animals_count": "{n} पशु", "farmer.active_cases_count": "{n} सुरू असलेली प्रकरणे",
+    "farmer.no_herd_alerts": "या कळपासाठी कोणतीही सक्रिय सूचना नाही.",
+    "farmer.availability_helpline_hint": "हे सुरू राहिल्यास हेल्पलाइन {number} वर कॉल करा.",
     "farmer.change_mobile": "मोबाईल क्रमांक बदला",
     "farmer.otp_sent": "+91 {mobile} पशुमित्रात नोंदणीकृत असल्यास OTP पाठवला आहे. तो ५ मिनिटांसाठी वैध आहे.",
     "farmer.otp_resent": "+91 {mobile} नोंदणीकृत असल्यास नवीन OTP पाठवला आहे. तो ५ मिनिटांसाठी वैध आहे.",
@@ -502,6 +516,8 @@ const I18N = {
     "webcall.retry_signaling": "कनेक्शन पुन्हा जोडा",
     "webcall.vet_available_now": "पशुवैद्यक उपलब्ध आहे",
     "webcall.no_vet_now": "आत्ता कोणतेही पशुवैद्यक उपलब्ध नाहीत",
+    "webcall.checking_availability": "उपलब्धता तपासली जात आहे…", "webcall.availability_check_failed": "उपलब्धता तपासता आली नाही",
+    "webcall.availability_helpline_hint": "हे सुरू राहिल्यास हेल्पलाइन {number} वर कॉल करा.", "webcall.signaling_label": "सिग्नलिंग",
     "webcall.no_vet_online": "{language} साठी आत्ता कोणीही पशुवैद्यक ऑनलाइन नाही. दुसरी भाषा निवडा किंवा हेल्पलाइनवर कॉल करा.",
     "webcall.vet_online": "एक पशुवैद्यक आत्ता ऑनलाइन आहे.",
     "webcall.matched_vet": "निवडलेले पशुवैद्यक",
@@ -678,6 +694,12 @@ const I18N = {
     "farmer.verify_and_login": "सत्यापित करें और लॉगिन करें", "farmer.verifying_otp": "सत्यापित किया जा रहा है…",
     "farmer.resend_otp": "OTP दोबारा भेजें", "farmer.resending_otp": "दोबारा भेजा जा रहा है…",
     "farmer.resend_in": "{seconds} सेकंड में दोबारा भेजें", "farmer.resend_ready": "OTP नहीं मिला?",
+    "farmer.livestock_overview": "आपके पशुधन का विवरण — {animals} · {cases}", "farmer.quick_report": "त्वरित रिपोर्ट",
+    "farmer.print": "प्रिंट", "farmer.print_list": "सूची प्रिंट करें", "farmer.export_csv": "CSV निर्यात करें",
+    "farmer.checking_availability": "उपलब्धता जाँची जा रही है…", "farmer.availability_check_failed": "उपलब्धता जाँच नहीं हो सकी",
+    "farmer.animals_count": "{n} पशु", "farmer.active_cases_count": "{n} सक्रिय मामले",
+    "farmer.no_herd_alerts": "इस झुंड के लिए कोई सक्रिय अलर्ट नहीं है.",
+    "farmer.availability_helpline_hint": "यदि समस्या बनी रहे तो हेल्पलाइन {number} पर कॉल करें।",
     "farmer.change_mobile": "मोबाइल नंबर बदलें",
     "farmer.otp_sent": "यदि +91 {mobile} पशुमित्र में पंजीकृत है, तो OTP भेजा गया है। यह 5 मिनट तक मान्य है।",
     "farmer.otp_resent": "यदि +91 {mobile} पंजीकृत है, तो नया OTP भेजा गया है। यह 5 मिनट तक मान्य है।",
@@ -735,6 +757,8 @@ const I18N = {
     "webcall.retry_signaling": "कनेक्शन फिर से जोड़ें",
     "webcall.vet_available_now": "पशु चिकित्सक उपलब्ध हैं",
     "webcall.no_vet_now": "अभी कोई पशु चिकित्सक उपलब्ध नहीं है",
+    "webcall.checking_availability": "उपलब्धता जाँची जा रही है…", "webcall.availability_check_failed": "उपलब्धता जाँच नहीं हो सकी",
+    "webcall.availability_helpline_hint": "यदि समस्या बनी रहे तो हेल्पलाइन {number} पर कॉल करें।", "webcall.signaling_label": "सिग्नलिंग",
     "webcall.no_vet_online": "{language} के लिए अभी कोई पशु चिकित्सक ऑनलाइन नहीं है। दूसरी भाषा चुनें या हेल्पलाइन पर कॉल करें।",
     "webcall.vet_online": "एक पशु चिकित्सक अभी ऑनलाइन है।",
     "webcall.matched_vet": "चुने गए पशु चिकित्सक",
@@ -911,6 +935,12 @@ const I18N = {
     "farmer.verify_and_login": "ధృవీకరించి లాగిన్ చేయండి", "farmer.verifying_otp": "ధృవీకరిస్తోంది…",
     "farmer.resend_otp": "OTP మళ్లీ పంపండి", "farmer.resending_otp": "మళ్లీ పంపుతోంది…",
     "farmer.resend_in": "{seconds} సెకన్లలో మళ్లీ పంపండి", "farmer.resend_ready": "OTP రాలేదా?",
+    "farmer.livestock_overview": "మీ పశువుల అవలోకనం — {animals} · {cases}", "farmer.quick_report": "త్వరిత నివేదిక",
+    "farmer.print": "ప్రింట్", "farmer.print_list": "జాబితా ప్రింట్ చేయండి", "farmer.export_csv": "CSV ఎగుమతి చేయండి",
+    "farmer.checking_availability": "లభ్యత తనిఖీ అవుతోంది…", "farmer.availability_check_failed": "లభ్యతను తనిఖీ చేయలేకపోయాం",
+    "farmer.animals_count": "{n} పశువులు", "farmer.active_cases_count": "{n} క్రియాశీల కేసులు",
+    "farmer.no_herd_alerts": "ఈ మందకు ఎటువంటి చురుకైన హెచ్చరికలు లేవు.",
+    "farmer.availability_helpline_hint": "ఇది కొనసాగితే హెల్ప్‌లైన్ {number}కి కాల్ చేయండి.",
     "farmer.change_mobile": "మొబైల్ నంబరు మార్చండి",
     "farmer.otp_sent": "+91 {mobile} పశుమిత్రలో నమోదై ఉంటే, OTP పంపబడింది. ఇది 5 నిమిషాల పాటు చెల్లుతుంది.",
     "farmer.otp_resent": "+91 {mobile} నమోదై ఉంటే, కొత్త OTP పంపబడింది. ఇది 5 నిమిషాల పాటు చెల్లుతుంది.",
@@ -968,6 +998,8 @@ const I18N = {
     "webcall.retry_signaling": "కనెక్షన్ మళ్లీ ప్రయత్నించండి",
     "webcall.vet_available_now": "పశువైద్యుడు అందుబాటులో ఉన్నారు",
     "webcall.no_vet_now": "ప్రస్తుతం పశువైద్యుడు అందుబాటులో లేరు",
+    "webcall.checking_availability": "లభ్యత తనిఖీ అవుతోంది…", "webcall.availability_check_failed": "లభ్యతను తనిఖీ చేయలేకపోయాం",
+    "webcall.availability_helpline_hint": "ఇది కొనసాగితే హెల్ప్‌లైన్ {number}కి కాల్ చేయండి.", "webcall.signaling_label": "సిగ్నలింగ్",
     "webcall.no_vet_online": "{language} కోసం ప్రస్తుతం పశువైద్యుడు ఆన్లైన్లో లేరు. మరొక భాష ప్రయత్నించండి లేదా హెల్ప్లైన్కు కాల్ చేయండి.",
     "webcall.vet_online": "ఒక పశువైద్యుడు ఇప్పుడు ఆన్లైన్లో ఉన్నారు.",
     "webcall.matched_vet": "ఎంపిక చేసిన పశువైద్యుడు",
@@ -1106,7 +1138,13 @@ window.setLang = async function (lang) {
   const scrollY = window.scrollY;
   state.lang = lang;
   localStorage.setItem("pm_lang", lang);
+  localStorage.setItem("lang", lang);
   document.documentElement.lang = lang;
+  // Keep the global shell (utility bar, header, nav, footer) in the SAME
+  // language: re-render its chrome and re-sync the language selects.
+  if (window.PashuShell && typeof window.PashuShell.syncAppLanguage === "function") {
+    window.PashuShell.syncAppLanguage(lang);
+  }
   await router();
   const nextForms = Array.from(document.querySelectorAll("#app form"));
   formState.forEach((saved) => {
@@ -1645,6 +1683,10 @@ function route(path, handler, roles) { routes[path] = { handler, roles }; }
 
 function isPublic(path) {
   if (path === "#/" || path.startsWith("#/login") || path.startsWith("#/register")) return true;
+  // Officer Access: the staff role-selection page in the top header. Public so
+  // an unauthenticated officer can reach it; a logged-in user is bounced to
+  // their own dashboard by the router (no re-auth loop).
+  if (path === "#/officer-access") return true;
   // GIGW Q09-Q14/Q18/Q31: the information pages (About, Contact, Feedback,
   // Help, Site Map, Search, Policies) must be reachable without logging in.
   // GIGW A31 (WCAG 2.4.5 "Multiple Ways") depends on search + sitemap being
@@ -2571,6 +2613,75 @@ function registerForm(role) {
 }
 
 route("#/", () => renderRoleSelect());
+
+// ================================================== OFFICER ACCESS ========
+// The top header's "Officer Access" entry point. This is a ROUTING page only:
+// it presents the three staff roles and sends the officer to the EXISTING
+// authentication flow for that role (#/login/vet|govt|lab -> renderAuth).
+// It never authenticates anyone by itself and never touches credentials.
+route("#/officer-access", () => renderOfficerAccess());
+
+function renderOfficerAccess() {
+  const roles = [
+    { id: "vet",  icon: "🩺", bg: "#EAF1FE", title: "Veterinarian",
+      desc: "Clinical case management, prescriptions, vaccination and teleconsultation" },
+    { id: "govt", icon: "🏛️", bg: "#F3EAFB", title: "Government Officer",
+      desc: "State surveillance, GIS risk map, district analytics and reports" },
+    { id: "lab",  icon: "🔬", bg: "#E6F6F8", title: "Laboratory Staff",
+      desc: "Sample receiving, diagnostic testing and pathology reports" },
+  ];
+  const officerT = (lang) => ({
+    hi: { kicker: "कर्मचारी / अधिकारी प्रवेश", title: "Officer Access",
+          sub: "पशु चिकित्सा, प्रशासनिक एवं प्रयोगशाला कर्मियों हेतु प्रवेश", choose: "Choose access type",
+          secure: "प्रवेश के लिए आपके विभाग द्वारा जारी क्रेडेंशियल्स आवश्यक हैं।" },
+    mr: { kicker: "कर्मचारी / अधिकारी प्रवेश", title: "Officer Access",
+          sub: "पशुचिकित्सक, प्रशासकीय व प्रयोगशाळा कर्मचाऱ्यांसाठी प्रवेश", choose: "Choose access type",
+          secure: "प्रवेशासाठी तुमच्या विभागाकडून दिलेली ओळखपत्रे आवश्यक आहेत." },
+    te: { kicker: "సిబ్బంది / అధికారి ప్రవేశం", title: "Officer Access",
+          sub: "పశువైద్య, పరిపాలన మరియు ప్రయోగశాల సిబ్బంది కోసం ప్రవేశం", choose: "Choose access type",
+          secure: "ప్రవేశానికి మీ శాఖ జారీ చేసిన గుర్తింపు వివరాలు అవసరం." },
+    en: { kicker: "Staff & Officer Services", title: "Officer Access",
+          sub: "Sign-in for veterinarians, government officers and laboratory staff", choose: "Choose access type",
+          secure: "You will need the credentials issued by your department. Your session and role are verified on the server." },
+  })[lang || state.lang || "en"];
+  const tx = officerT();
+  render(`
+    <div class="pm-officer-wrap">
+      <div class="pm-officer-card">
+        <div class="pm-officer-saffron" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="pm-officer-head">
+          <div class="pm-officer-emblem" aria-hidden="true">🏛️</div>
+          <h2>${tx.title}</h2>
+          <p>${escapeHtml(tx.kicker)} · ${escapeHtml(tx.sub)}</p>
+        </div>
+        <div class="pm-officer-body">
+          <div class="section-title" style="text-align:center;margin:0 0 4px">${escapeHtml(tx.choose)}</div>
+          <div class="pm-officer-list" role="list">
+            ${roles.map(r => `
+              <button type="button" class="pm-officer-role" role="listitem"
+                onclick="location.hash='#/login/${r.id}'"
+                aria-label="${escapeHtml(r.title)} — open sign-in">
+                <span class="pm-officer-icon" style="background:${r.bg}" aria-hidden="true">${r.icon}</span>
+                <span>
+                  <span class="pm-officer-name">${escapeHtml(r.title)}</span>
+                  <span class="pm-officer-desc" style="display:block">${escapeHtml(r.desc)}</span>
+                </span>
+                <span class="pm-officer-go" aria-hidden="true">→</span>
+              </button>`).join("")}
+          </div>
+          <p class="pm-officer-note">🔒 ${escapeHtml(tx.secure)}</p>
+          <div class="auth-switch" style="text-align:center;margin-top:6px">
+            <a onclick="location.hash='#/'">← ${t("auth.choose", "Choose your portal")}</a>
+          </div>
+        </div>
+      </div>
+    </div>`);
+  if (window.PashuShell) window.PashuShell.setPageMeta({
+    title: tx.title,
+    description: "Officer Access — veterinarian, government officer and laboratory staff sign-in for the Pashu-Mitra animal health portal.",
+  });
+}
+
 route("#/login/:role", ({ role }) => renderAuth("login", role));
 // Legacy bookmark: the farmer password screen no longer exists. Send it to the
 // OTP screen (never to a password form) and staff to their own login.
@@ -2700,7 +2811,7 @@ async function ownerDashboard() {
     <div class="hello-banner owner-hello">
       <div>${ft("welcome_back")}</div>
       <div class="owner-name">${escapeHtml(state.user.full_name)} 👋</div>
-      <div class="pm-small" style="margin-top:6px;color:rgba(255,255,255,0.9)">Your livestock overview — ${livestockCount} animal${livestockCount!==1?'s':''} · ${activeCases} active case${activeCases!==1?'s':''}</div>
+      <div class="pm-small" style="margin-top:6px;color:rgba(255,255,255,0.9)">${ft("livestock_overview", { animals: `${livestockCount} ${ft("animals_count", { n: livestockCount })}`, cases: `${activeCases} ${ft("active_cases_count", { n: activeCases })}` })}</div>
     </div>
     <div class="section-card owner-home-card pm-card-elevated">
       <h2 class="pm-h2" style="margin:0 0 14px">${ft("home_prompt")}</h2>
@@ -2711,7 +2822,7 @@ async function ownerDashboard() {
         </button>
         <button class="owner-action-card" onclick="location.hash='#/owner/report'" aria-label="${ft("report_problem")}" style="border-color:var(--pm-primary-light);background:#f8f9ff">
           <span class="action-icon" aria-hidden="true">📋</span><span>${ft("report_problem")}</span>
-          <span class="pm-caption" style="margin-top:4px">Quick report</span>
+          <span class="pm-caption" style="margin-top:4px">${ft("quick_report")}</span>
         </button>
         <button class="owner-action-card" onclick="location.hash='#/owner/prescriptions'" aria-label="${ft("health_treatment")}">
           <span class="action-icon" aria-hidden="true">💊</span><span>${ft("health_treatment")}</span>
@@ -3347,17 +3458,34 @@ route("#/govt/analytics", async () => {
 let gisState = { geo: [], locations: [], outline: null, disease: "All", risks: ["High Risk", "Moderate Risk", "Low Risk"], map: null, layer: null, showClusters: false, clusters: [] };
 
 route("#/govt/gis", async () => {
-  render(`${header("GIS Risk Map", { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading map & live district data…</div>`);
-  const [geo, locations, outline, clusterData] = await Promise.all([
-    api("/govt/geo"),
-    fetch("/maharashtra_locations.json").then(r => r.json()).catch(() => []),
-    fetch("/maharashtra_state.geojson").then(r => r.json()).catch(() => null),
-    api("/govt/clusters").catch(() => ({ clusters: [] })),
-  ]);
+  render(`${header(t("nav.gis"), { back: true })}<div class="loading" role="status" aria-live="polite" aria-busy="true">Loading map & live district data…</div>`);
+  let geo, locations, outline, clusterData;
+  try {
+    [geo, locations, outline, clusterData] = await Promise.all([
+      api("/govt/geo"),
+      fetch("/maharashtra_locations.json").then(r => r.json()).catch(() => []),
+      fetch("/maharashtra_state.geojson").then(r => r.json()).catch(() => null),
+      api("/govt/clusters").catch(() => ({ clusters: [] })),
+    ]);
+  } catch (err) {
+    // The map API failed: an explicit, honest error panel — never a blank
+    // white box and never a fake map.
+    render(`
+      ${header(t("nav.gis"), { back: true })}
+      <div class="section-card gis-error-panel" role="alert">
+        <h2 class="pm-h3">⚠️ Risk map could not be loaded.</h2>
+        <p class="meta">${escapeHtml(err && err.message ? err.message : "The live district data service did not respond.")}</p>
+        <div class="btn-row">
+          <button class="btn btn-primary btn-sm" onclick="location.reload()">🔄 Retry</button>
+          <button class="btn btn-ghost btn-sm" onclick="location.hash='#/govt/dashboard'">Back to dashboard</button>
+        </div>
+      </div>${bottomNav("#/govt/gis")}`);
+    return;
+  }
   gisState = { ...gisState, geo, locations, outline, clusters: clusterData.clusters || [], map: null, layer: null };
   const diseases = ["All", ...Array.from(new Set(geo.flatMap(d => d.diseases.map(x => x.label))))];
   render(`
-    ${header("GIS Risk Map", { back: true })}
+    ${header(t("nav.gis"), { back: true })}
     <div class="gis-status ${navigator.onLine ? "online" : "offline"}">
       ${navigator.onLine ? "🟢 ONLINE / LIVE DATA — synchronized with central server." : "🟠 OFFLINE MODE — showing cached boundaries."}
     </div>
@@ -3372,13 +3500,26 @@ route("#/govt/gis", async () => {
           <label class="risk-chip"><input type="checkbox" id="gisClusterToggle" ${gisState.showClusters ? "checked" : ""} /> <b>📍 DBSCAN Clusters</b></label>
         </div>
       </div>
+      <div class="gis-legend" role="img" aria-label="Map legend: red circle High Risk, orange circle Moderate Risk, green circle Low Risk, dashed purple circle disease cluster. Risk is also printed as text on every marker popup and in the table below.">
+        <span class="pm-legend-title">Legend:</span>
+        <span class="pm-legend-item"><span class="pm-legend-swatch sw-red" aria-hidden="true"></span>High Risk</span>
+        <span class="pm-legend-item"><span class="pm-legend-swatch sw-orange" aria-hidden="true"></span>Moderate Risk</span>
+        <span class="pm-legend-item"><span class="pm-legend-swatch sw-green" aria-hidden="true"></span>Low Risk</span>
+        <span class="pm-legend-item"><span class="pm-legend-swatch sw-cluster" aria-hidden="true"></span>Cluster</span>
+      </div>
     </div>
     <div class="section-card" style="padding:0;overflow:hidden">
-      <div id="gisMap" class="gis-map"></div>
+      <div id="gisUnmappedWarn" class="pm-map-warn" role="status" hidden></div>
+      <div id="gisMap" class="gis-map" tabindex="0" aria-label="Interactive district disease risk map. The same data is available in the Disease Risk Summary table below."></div>
     </div>
     <div class="section-card">
       <div class="section-title">🚨 Risk Summary (filtered)</div>
       <div id="gisSummary"></div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">📋 Disease Risk Summary</div>
+      <div class="pm-small" style="margin-bottom:8px">The table below contains the same live data as the map — district, disease, case count, mortality and risk level.</div>
+      <div id="gisTable" role="region" aria-label="Disease Risk Summary table" tabindex="0"></div>
     </div>
     <div class="section-card">
       <div class="section-title">📍 Top Affected Districts</div>
@@ -3397,10 +3538,49 @@ route("#/govt/gis", async () => {
     }));
 }, ["govt", "vet"]);
 
+function gisCoordsFor(district) {
+  // Marker coordinates come from the live /govt/geo payload (public district
+  // centroids, documented in the endpoint). The static JSON file is only a
+  // fallback for older backend deployments that do not send coordinates.
+  const row = (gisState.geo || []).find(g => g.district === district && (g.latitude != null && g.longitude != null));
+  if (row) return [row.latitude, row.longitude];
+  const loc = (gisState.locations || []).find(l => l.district.toLowerCase() === district.toLowerCase());
+  return loc ? [loc.lat, loc.lng] : null;
+}
+
+function gisSemanticRisk(row) {
+  // Semantic risk level (LOW/MODERATE/HIGH/CRITICAL) so colour is never the
+  // only signal. The backend computes it; older deployments fall back to the
+  // legacy risk_level string.
+  if (row.risk) return row.risk;
+  return { "High Risk": "HIGH", "Moderate Risk": "MODERATE", "Low Risk": "LOW" }[row.risk_level] || "LOW";
+}
+
+function gisPopupHtml(d) {
+  const level = gisSemanticRisk(d);
+  const levelStyle = { LOW: "#1a7f37", MODERATE: "#b45309", HIGH: "#c2410c", CRITICAL: "#b91c1c" }[level] || "#444";
+  const diseaseList = (d.diseases || []).map(x => x.label).join(", ") || "—";
+  const updated = d.updated_at ? fmtDate(d.updated_at) : "—";
+  return `<div class="pm-gis-popup" role="figure" aria-label="District risk popup">
+    <div class="pm-gis-popup-title">${escapeHtml(d.district)} District</div>
+    <div class="pm-gis-popup-risk" style="color:${levelStyle};font-weight:800">
+      <span aria-hidden="true">${level === "CRITICAL" ? "🔴" : level === "HIGH" ? "🟠" : level === "MODERATE" ? "🟡" : "🟢"}</span>
+      Risk: ${escapeHtml(level)} (${escapeHtml(d.risk_level || "")})
+    </div>
+    <div class="pm-gis-popup-row"><b>Disease:</b> ${escapeHtml(diseaseList)}</div>
+    <div class="pm-gis-popup-row"><b>Active cases:</b> ${escapeHtml(d.active)} of ${escapeHtml(d.cases)} total</div>
+    <div class="pm-gis-popup-row"><b>Mortality:</b> ${escapeHtml(d.mortality ?? 0)}</div>
+    <div class="pm-gis-popup-row"><b>Affected animals:</b> ${escapeHtml(d.affected_animals)}</div>
+    <div class="pm-gis-popup-row"><b>High severity:</b> ${escapeHtml(d.high_severity)}</div>
+    <div class="pm-gis-popup-row"><b>Last updated:</b> ${escapeHtml(updated)}</div>
+  </div>`;
+}
+
 function initGisMap() {
+  const mapEl = document.getElementById("gisMap");
   if (typeof L === "undefined") {
-    document.getElementById("gisMap").innerHTML = `
-      ${emptyState("Map library failed to load.")}
+    mapEl.innerHTML = `
+      ${emptyState("Risk map could not be loaded.")}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="location.hash='#/govt/gis'">🔄 Retry</button>`;
     return;
   }
@@ -3409,21 +3589,20 @@ function initGisMap() {
     const warning = document.createElement("div");
     warning.style.cssText = "background:#fff3cd;padding:8px 12px;font-size:12px;border-radius:8px;margin-bottom:8px";
     warning.innerHTML = "⚠️ Map boundary data unavailable. Using district centroids. <button class='btn btn-ghost btn-sm' onclick='location.hash=\"#/govt/gis\"'>Retry</button>";
-    const mapEl = document.getElementById("gisMap");
     if (mapEl && mapEl.parentNode) mapEl.parentNode.insertBefore(warning, mapEl);
   }
-  if (!gisState.locations || !gisState.locations.length) {
-    const warning2 = document.createElement("div");
-    warning2.style.cssText = "background:#fff3cd;padding:8px 12px;font-size:12px;border-radius:8px;margin-bottom:8px";
-    warning2.innerHTML = "⚠️ Location data unavailable — using district centroids.";
-    const mapEl2 = document.getElementById("gisMap");
-    if (mapEl2 && mapEl2.parentNode) mapEl2.parentNode.insertBefore(warning2, mapEl2);
-  }
-  const map = L.map("gisMap").setView([19.7515, 75.7139], 7);
+  const map = L.map("gisMap", { keyboard: true }).setView([19.7515, 75.7139], 7);
   if (navigator.onLine) {
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 18,
     }).addTo(map);
+  } else {
+    // Offline: keep the map interactive (pan/zoom works on the plain canvas)
+    // and say so — an empty grey rectangle must never be mistaken for live data.
+    const note = document.createElement("div");
+    note.className = "pm-map-offline-note";
+    note.textContent = "Map tiles need an internet connection. District risk data below is still live.";
+    if (mapEl && mapEl.parentNode) mapEl.parentNode.insertBefore(note, mapEl);
   }
   if (gisState.outline) {
     L.geoJSON(gisState.outline, { style: { color: "#3b82f6", weight: 2, fillOpacity: 0.04, fillColor: "#3b82f6" } }).addTo(map);
@@ -3435,7 +3614,7 @@ function initGisMap() {
 }
 
 function drawGis() {
-  const { map, layer, geo, locations, disease, risks, showClusters, clusters } = gisState;
+  const { map, layer, geo, disease, risks, showClusters, clusters } = gisState;
   if (!map || !layer) return;
   layer.clearLayers();
   const colorFor = r => r === "High Risk" ? "#e2483f" : r === "Moderate Risk" ? "#e08a1e" : "#1fa971";
@@ -3445,18 +3624,23 @@ function drawGis() {
     return true;
   });
 
+  const unmapped = [];
   filtered.forEach(d => {
-    const loc = locations.find(l => l.district.toLowerCase() === d.district.toLowerCase());
-    if (!loc) return;
+    const coords = gisCoordsFor(d.district);
+    if (!coords) { unmapped.push(d.district); return; }
+    const level = gisSemanticRisk(d);
     const radius = d.risk_level === "High Risk" ? 20 : d.risk_level === "Moderate Risk" ? 15 : 10;
-    L.circleMarker([loc.lat, loc.lng], { radius, color: colorFor(d.risk_level), fillColor: colorFor(d.risk_level), fillOpacity: 0.6 })
+    L.circleMarker(coords, { radius, color: colorFor(d.risk_level), fillColor: colorFor(d.risk_level), fillOpacity: 0.6, title: d.district })
       .bindTooltip(`<div style="font-weight:700">${escapeHtml(d.district)}</div>
-        <div style="color:${escapeHtml(colorFor(d.risk_level))};font-weight:700;font-size:12px">${escapeHtml(d.risk_level)}</div>
-        <div style="font-size:12px">Cases: ${escapeHtml(d.cases)} · Active: ${escapeHtml(d.active)}</div>
-        <div style="font-size:12px">Affected animals: ${escapeHtml(d.affected_animals)}</div>
-        <div style="font-size:12px">Diseases: ${escapeHtml(d.diseases.map(x => x.label).join(", ") || "—")}</div>`)
+        <div style="color:${escapeHtml(colorFor(d.risk_level))};font-weight:700;font-size:12px">${escapeHtml(d.risk_level)} · Risk: ${escapeHtml(level)}</div>
+        <div style="font-size:12px">Cases: ${escapeHtml(d.cases)} · Active: ${escapeHtml(d.active)} · Mortality: ${escapeHtml(d.mortality ?? 0)}</div>`)
+      .bindPopup(gisPopupHtml(d), { maxWidth: 280 })
       .addTo(layer);
   });
+  if (unmapped.length) {
+    const warn = document.getElementById("gisUnmappedWarn");
+    if (warn) warn.hidden = false, warn.textContent = "⚠️ No public coordinates available for: " + unmapped.join(", ") + ". These districts appear in the table below.";
+  }
 
   // FEATURE GROUP 17: REAL SPATIOTEMPORAL DBSCAN CLUSTERS
   if (showClusters && clusters && clusters.length) {
@@ -3474,24 +3658,62 @@ function drawGis() {
         <div style="font-size:12px"><b>Cases:</b> ${escapeHtml(c.cases)} active</div>
         <div style="font-size:12px"><b>Diseases:</b> ${escapeHtml(c.diseases ? c.diseases.join(", ") : "HS")}</div>
         <div style="font-size:11px;color:#666">Method: ${escapeHtml(c.method || "DBSCAN (haversine)")}</div>
-      `).addTo(layer);
+      `).bindPopup(`
+        <div class="pm-gis-popup">
+          <div class="pm-gis-popup-title" style="color:#8e24aa">📍 Cluster ${escapeHtml(c.cluster_id)}</div>
+          <div class="pm-gis-popup-row"><b>District:</b> ${escapeHtml(c.district)}</div>
+          <div class="pm-gis-popup-row"><b>Active cases:</b> ${escapeHtml(c.cases)}</div>
+          <div class="pm-gis-popup-row"><b>Diseases:</b> ${escapeHtml(c.diseases ? c.diseases.join(", ") : "HS")}</div>
+          <div class="pm-gis-popup-row"><b>Latest case:</b> ${escapeHtml(c.latest_case || "—")}</div>
+          <div class="pm-gis-popup-row"><b>Method:</b> ${escapeHtml(c.method || "DBSCAN (haversine)")}</div>
+        </div>`).addTo(layer);
     });
   }
 
   const high = filtered.filter(d => d.risk_level === "High Risk").length;
   const mod = filtered.filter(d => d.risk_level === "Moderate Risk").length;
   const low = filtered.filter(d => d.risk_level === "Low Risk").length;
-  document.getElementById("gisSummary").innerHTML = `
+  const summary = document.getElementById("gisSummary");
+  if (summary) summary.innerHTML = `
     <div class="stat-grid" style="margin:0">
       ${statCard(high, "🔴 High Risk")}
       ${statCard(mod, "🟠 Moderate")}
       ${statCard(low, "🟢 Low Risk")}
     </div>`;
+
+  // Accessible alternative to the map: the SAME data as a table
+  // (District | Disease | Cases | Mortality | Risk), WCAG 1.1.1.
+  const tableHost = document.getElementById("gisTable");
+  if (tableHost) {
+    if (!filtered.length) {
+      tableHost.innerHTML = emptyState("No matching districts for the current filter.");
+    } else {
+      tableHost.innerHTML = `
+        <table class="pm-data-table">
+          <caption class="sr-only">Disease risk by district — the same data shown on the map</caption>
+          <thead><tr><th scope="col">District</th><th scope="col">Disease</th><th scope="col">Cases</th><th scope="col">Active</th><th scope="col">Mortality</th><th scope="col">Risk</th><th scope="col">Last updated</th></tr></thead>
+          <tbody>
+            ${[...filtered].sort((a, b) => b.cases - a.cases).map(d => `
+              <tr>
+                <th scope="row">${escapeHtml(d.district)}</th>
+                <td>${escapeHtml((d.diseases || []).map(x => x.label).join(", ") || "—")}</td>
+                <td class="pm-num">${escapeHtml(d.cases)}</td>
+                <td class="pm-num">${escapeHtml(d.active)}</td>
+                <td class="pm-num">${escapeHtml(d.mortality ?? 0)}</td>
+                <td><span class="badge ${riskBadgeClass(d.risk_level)}">${escapeHtml(gisSemanticRisk(d))}</span> ${escapeHtml(d.risk_level || "")}</td>
+                <td>${escapeHtml(d.updated_at ? fmtDate(d.updated_at) : "—")}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>`;
+    }
+  }
+
   const top = [...filtered].sort((a, b) => b.affected_animals - a.affected_animals).slice(0, 5);
-  document.getElementById("gisTop").innerHTML = top.length === 0 ? emptyState("No matching districts.") :
+  const topHost = document.getElementById("gisTop");
+  if (topHost) topHost.innerHTML = top.length === 0 ? emptyState("No matching districts.") :
     top.map(d => `<div class="list-card" style="cursor:default">
       <div class="row1"><span class="title">${escapeHtml(d.district)}</span><span class="badge ${riskBadgeClass(d.risk_level)}">${escapeHtml(d.risk_level)}</span></div>
-      <div class="meta">${escapeHtml(d.affected_animals)} affected · ${escapeHtml(d.cases)} cases · ${escapeHtml(d.high_severity)} high-severity</div>
+      <div class="meta">${escapeHtml(d.affected_animals)} affected · ${escapeHtml(d.cases)} cases · ${escapeHtml(d.high_severity)} high-severity · ${escapeHtml(d.mortality ?? 0)} mortality</div>
     </div>`).join("");
 }
 
@@ -4053,7 +4275,7 @@ async function herdDetailView(role, id) {
     </div>
     <div class="section-card">
       <div class="subheading">🚨 Herd Alerts (${hi.alerts.length})</div>
-      ${hi.alerts.length === 0 ? emptyState("No active alerts for this herd.") : hi.alerts.map(a => `
+      ${hi.alerts.length === 0 ? emptyState(farmer ? ft("no_herd_alerts") : "No active alerts for this herd.") : hi.alerts.map(a => `
         <div class="list-card" style="cursor:default">
           <div class="row1"><span class="title">${escapeHtml(a.disease)}</span><span class="badge ${riskBadgeClass(a.risk_level)}">${escapeHtml(a.risk_level)}</span></div>
           <div class="meta">${escapeHtml(a.trigger_reason)}</div>
@@ -4591,7 +4813,7 @@ function casesListView(role) {
         ${header(ft("my_cases"), { back: true })}
         <div class="section-card" id="casesListSection">
           <button class="btn btn-primary farmer-primary-action" style="margin-bottom:14px" onclick="location.hash='#/owner/report'">＋ ${ft("report_problem")}</button>
-          <div class="btn-row no-print" style="margin-bottom:8px"><button class="btn btn-outline btn-sm" onclick="pmPrintSection('casesListSection')">🖨️ Print</button><button class="btn btn-outline btn-sm" onclick="pmExportCsv('cases.csv', ${JSON.stringify([]).replace(/"/g,'&quot;')}, ['case_no','status'])">Export placeholder</button></div>
+          <div class="btn-row no-print" style="margin-bottom:8px"><button class="btn btn-outline btn-sm" onclick="pmPrintSection('casesListSection')">🖨️ ${ft("print")}</button></div>
           ${pageItems.length ? pageItems.map(c => `
             <div class="list-card farmer-list-card" role="button" tabindex="0" onclick="location.hash='#/owner/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/owner/cases/${safeId(c.id)}'}">
               <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${ownerCaseStatus(c.status)}</span></div>
@@ -4600,7 +4822,7 @@ function casesListView(role) {
               <div class="meta">${ft("reported")}: ${fmtDate(c.created_at)}</div>
             </div>`).join("") : emptyState(ft("no_cases_home"))}
           ${pmPaginationHtml(total, page, pageSize, `goCasesPage_${role}`)}
-          <div class="btn-row no-print" style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="pmPrintSection('casesListSection')">🖨️ Print list</button><button class="btn btn-ghost btn-sm" onclick="window.__exportCases && window.__exportCases()">📥 Export CSV</button></div>
+          <div class="btn-row no-print" style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="pmPrintSection('casesListSection')">🖨️ ${ft("print_list")}</button><button class="btn btn-ghost btn-sm" onclick="window.__exportCases && window.__exportCases()">📥 ${ft("export_csv")}</button></div>
         </div>
         ${bottomNav("#/owner/cases")}
       `);

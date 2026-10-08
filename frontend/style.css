@@ -1999,3 +1999,197 @@ html.pm-reduced-motion *, html.pm-reduced-motion *::before, html.pm-reduced-moti
   .pm-brand-logo { height: 32px; }
   .pm-logo-img { height: 32px; }
 }
+
+/* ==========================================================================
+ * Government GIS Risk Map — real Leaflet map styles
+ * --------------------------------------------------------------------------
+ * The map container MUST have an explicit height: Leaflet cannot size itself
+ * from a parent with auto height (a 0 px container is invisible — this was
+ * the "map area opens but shows nothing" defect).
+ * ========================================================================== */
+.gis-map {
+  height: 420px;
+  min-height: 420px;
+  width: 100%;
+  background: #e8edf5;
+  z-index: 0; /* never overlay the app header/bottom nav */
+}
+/* Leaflet controls must be keyboard-reachable and not hidden behind the
+ * app header; keep the map stacking context flat. */
+.gis-map .leaflet-pane { z-index: 1; }
+.gis-map .leaflet-top,
+.gis-map .leaflet-bottom { z-index: 500; }
+.gis-map:focus-visible {
+  outline: 3px solid var(--pm-accent, #FF9933);
+  outline-offset: -3px;
+}
+@media (max-width: 480px) {
+  .gis-map { height: 320px; min-height: 320px; }
+}
+
+.gis-status {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 8px; margin-bottom: 12px;
+  font-size: 13px; font-weight: 600; border: 1px solid transparent;
+}
+.gis-status.online  { background: #ECFDF5; color: #065F46; border-color: #A7F3D0; }
+.gis-status.offline { background: #FFF7ED; color: #9A3412; border-color: #FED7AA; }
+
+.gis-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.gis-controls .field { flex: 1 1 200px; min-width: 170px; max-width: 320px; margin: 0; }
+.gis-risk-toggles { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.risk-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid #D5DBE3; border-radius: 999px;
+  padding: 6px 12px; background: #FFFFFF; font-size: 13px; cursor: pointer;
+}
+.risk-chip input { accent-color: #102A6B; width: 16px; height: 16px; }
+.risk-chip .dot-red    { width: 10px; height: 10px; border-radius: 50%; background: #E2483F; display: inline-block; }
+.risk-chip .dot-orange { width: 10px; height: 10px; border-radius: 50%; background: #E08A1E; display: inline-block; }
+.risk-chip .dot-green  { width: 10px; height: 10px; border-radius: 50%; background: #1FA971; display: inline-block; }
+
+.gis-legend {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid #EDF0F4;
+  font-size: 12.5px; color: #47536B;
+}
+.pm-legend-title { font-weight: 700; color: #102A6B; }
+.pm-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.pm-legend-swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,.2); }
+.pm-legend-swatch.sw-red     { background: #E2483F; }
+.pm-legend-swatch.sw-orange  { background: #E08A1E; }
+.pm-legend-swatch.sw-green   { background: #1FA971; }
+.pm-legend-swatch.sw-cluster { background: #E1BEE7; border: 2px dashed #8E24AA; }
+
+.pm-map-warn {
+  background: #FFF7ED; color: #9A3412; border-bottom: 1px solid #FED7AA;
+  font-size: 12.5px; padding: 8px 12px;
+}
+.pm-map-offline-note {
+  background: #FFF7ED; color: #9A3412; border-bottom: 1px solid #FED7AA;
+  font-size: 12.5px; padding: 8px 12px;
+}
+.gis-error-panel { border-left: 4px solid #E2483F; }
+
+/* Marker popups (click/tap on a marker) */
+.leaflet-popup-content-wrapper { border-radius: 10px; box-shadow: 0 6px 24px rgba(16,42,107,.18); }
+.pm-gis-popup { font: 13px/1.5 'Noto Sans', system-ui, sans-serif; min-width: 190px; }
+.pm-gis-popup-title { font-weight: 800; font-size: 14px; color: #102A6B; margin-bottom: 2px; }
+.pm-gis-popup-risk  { font-size: 13px; margin-bottom: 6px; }
+.pm-gis-popup-row   { margin: 1px 0; color: #1F2937; }
+.pm-gis-popup-row b { color: #47536B; font-weight: 600; }
+
+/* Accessible data table (the map's text alternative) */
+.pm-data-table {
+  width: 100%; border-collapse: collapse; font-size: 13px; background: #FFFFFF;
+}
+.pm-data-table th, .pm-data-table td {
+  border: 1px solid #E3E7EE; padding: 8px 10px; text-align: left; vertical-align: top;
+}
+.pm-data-table thead th { background: #F3F5F9; color: #102A6B; font-weight: 700; white-space: nowrap; }
+.pm-data-table tbody tr:nth-child(even) { background: #FAFBFD; }
+.pm-data-table td.pm-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pm-table-scroll { overflow-x: auto; }
+.pm-data-table, .pm-table-scroll table { min-width: 480px; }
+@media (max-width: 480px) {
+  .pm-data-table th, .pm-data-table td { padding: 6px 7px; font-size: 12px; }
+}
+
+/* Officer Access — role selection (professional administrative panel) */
+.pm-officer-wrap { max-width: 560px; margin: 0 auto; padding: 18px 0 40px; }
+.pm-officer-card {
+  background: #FFFFFF; border: 1px solid #E3E7EE; border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(16,42,107,.06); overflow: hidden;
+}
+.pm-officer-head {
+  background: linear-gradient(180deg, #102A6B 0%, #16357F 100%);
+  color: #FFFFFF; padding: 22px 22px 18px; text-align: center;
+}
+.pm-officer-head .pm-officer-emblem { font-size: 30px; line-height: 1; }
+.pm-officer-head h2 { margin: 8px 0 4px; font-size: 20px; font-weight: 800; letter-spacing: .2px; }
+.pm-officer-head p { margin: 0; font-size: 13px; color: rgba(255,255,255,.85); }
+.pm-officer-body { padding: 18px 22px 22px; }
+.pm-officer-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; }
+.pm-officer-role {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+  background: #FFFFFF; border: 1px solid #D5DBE3; border-radius: 12px;
+  padding: 13px 16px; cursor: pointer; font: inherit; min-height: 64px;
+  transition: border-color .15s ease, background .15s ease;
+}
+.pm-officer-role:hover, .pm-officer-role:focus-visible {
+  border-color: #102A6B; background: #F6F8FC; outline: none;
+  box-shadow: 0 0 0 3px rgba(16,42,107,.12);
+}
+.pm-officer-role .pm-officer-icon {
+  font-size: 24px; width: 46px; height: 46px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; flex: 0 0 46px;
+}
+.pm-officer-role .pm-officer-name { font-weight: 700; color: #102A6B; font-size: 15px; }
+.pm-officer-role .pm-officer-desc { font-size: 12.5px; color: #5A6478; margin-top: 2px; }
+.pm-officer-role .pm-officer-go { margin-left: auto; color: #98A2B3; font-size: 18px; }
+.pm-officer-note { font-size: 12px; color: #5A6478; margin-top: 12px; }
+.pm-officer-saffron {
+  height: 3px; display: flex; flex-direction: column;
+}
+.pm-officer-saffron span { flex: 1; }
+.pm-officer-saffron span:nth-child(1) { background: #FF9933; }
+.pm-officer-saffron span:nth-child(2) { background: #FFFFFF; }
+.pm-officer-saffron span:nth-child(3) { background: #138808; }
+
+/* ==========================================================================
+ * Responsive refinements — header CTAs, touch targets, language clipping
+ * --------------------------------------------------------------------------
+ * Regional-language strings (Hindi/Telugu/Marathi) are frequently longer than
+ * their English equivalents: every control below wraps or shrinks instead of
+ * forcing horizontal page scroll at 320-390px. Interactive targets keep the
+ * 44px minimum touch size (WCAG 2.5.5 / GIGW).
+ * ========================================================================== */
+.pm-lang-select {
+  max-width: 130px;
+  text-overflow: ellipsis;
+}
+.farmer-language-control select {
+  max-width: 132px;
+}
+.pm-header-auth-actions .pm-auth-cta-farmer,
+.pm-header-auth-actions .pm-auth-cta-staff,
+.pm-header-search-btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.pm-header-logout-btn,
+.pm-header-icon-btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+@media (max-width: 480px) {
+  .pm-site-header-inner { gap: 8px; padding: 8px 12px; }
+  .pm-brand { gap: 10px; min-height: 40px; }
+  .pm-brand-name { font-size: 18px; }
+  .pm-brand-tag { font-size: 11px; max-width: 210px; }
+  .pm-header-actions { gap: 6px; width: 100%; justify-content: flex-start; }
+  .pm-header-auth-actions { width: 100%; flex-wrap: wrap; gap: 6px; }
+  .pm-header-auth-actions .pm-auth-cta-farmer,
+  .pm-header-auth-actions .pm-auth-cta-staff {
+    flex: 1 1 auto; justify-content: center;
+    padding: 10px 10px; font-size: 12.5px; min-height: 44px;
+    white-space: nowrap;
+  }
+  .pm-header-search-btn { padding: 8px 10px; font-size: 12.5px; }
+  .pm-util-identity { flex-wrap: wrap; gap: 4px; }
+  .pm-util-sub { border-left: 0; padding-left: 0; }
+  /* Officer Access role rows: keep readable at 320px without clipping. */
+  .pm-officer-role { padding: 12px; gap: 10px; }
+  .pm-officer-head h2 { font-size: 18px; }
+}
+@media (max-width: 360px) {
+  .pm-header-auth-actions .pm-auth-cta-farmer,
+  .pm-header-auth-actions .pm-auth-cta-staff { font-size: 11.5px; padding: 10px 6px; }
+  .pm-lang-select { max-width: 108px; }
+}
+
+/* Web Call (and all compact buttons) on touch screens: 44px minimum target */
+@media (pointer: coarse) {
+  .btn-sm { min-height: 44px; }
+}

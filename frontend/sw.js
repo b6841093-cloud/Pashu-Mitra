@@ -14,7 +14,7 @@
    keyboard operable cards, form error handling, live regions, etc.
    ================================================================= */
 
-const CACHE_NAME = "pashu-mitra-v9";  // bumped: a11y.js + global shell + GIGW info pages
+const CACHE_NAME = "pashu-mitra-v10";  // bumped: vendored Leaflet for the offline GIS map
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -26,6 +26,11 @@ const STATIC_ASSETS = [
   "/info-pages.js",
   "/call.js",
   "/vendor/socket.io.min.js",
+  "/vendor/leaflet.min.js",
+  "/vendor/leaflet.css",
+  "/vendor/leaflet-images/marker-icon.png",
+  "/vendor/leaflet-images/marker-shadow.png",
+  "/vendor/leaflet-images/layers.png",
   "/maharashtra_locations.json",
   "/maharashtra_state.geojson",
 ];

@@ -77,7 +77,7 @@
     if (scaleOut) {
       const pct = Math.round(SCALES[prefs.scaleIndex] * 100);
       scaleOut.textContent = prefs.scaleIndex === DEFAULT_SCALE_INDEX
-        ? "Normal (100%)"
+        ? shellT("textNormal")
         : pct + "%";
     }
   }
@@ -86,9 +86,9 @@
     prefs.scaleIndex = Math.min(SCALES.length - 1, Math.max(0, i));
     savePrefs();
     applyPrefs();
-    const msg = "Text size " + (prefs.scaleIndex === DEFAULT_SCALE_INDEX
-      ? "reset to normal"
-      : "set to " + Math.round(SCALES[prefs.scaleIndex] * 100) + "%");
+    const msg = prefs.scaleIndex === DEFAULT_SCALE_INDEX
+      ? shellT("textReset")
+      : shellT("textSet") + Math.round(SCALES[prefs.scaleIndex] * 100) + "%";
     announce(msg);
   }
 
@@ -97,10 +97,10 @@
     savePrefs();
     applyPrefs();
     if (key === "highContrast") {
-      announce(prefs[key] ? "High contrast mode on" : "High contrast mode off");
+      announce(prefs[key] ? shellT("highContrastOn") : shellT("highContrastOff"));
     }
     if (key === "reducedMotion") {
-      announce(prefs[key] ? "Animations reduced" : "Animations enabled");
+      announce(prefs[key] ? shellT("reduceMotionOn") : shellT("reduceMotionOff"));
     }
   }
 
@@ -110,6 +110,9 @@
     savePrefs();
     if (window.state) {
       window.state.lang = lang;
+      // app.js reads "pm_lang" at boot; the shell select must update the SAME
+      // key or the app would silently reset to English on the next reload.
+      try { localStorage.setItem("pm_lang", lang); } catch (_) {}
       try { localStorage.setItem("lang", lang); } catch (_) {}
     }
     document.documentElement.lang = lang;
@@ -122,8 +125,22 @@
       window.router();
     }
     updateNavigation();
-    const langNames = { en: "English", hi: "Hindi", mr: "Marathi", te: "Telugu" };
-    announce("Language changed to " + (langNames[lang] || lang));
+    const langNames = shellT("langNames") || { en: "English", hi: "Hindi", mr: "Marathi", te: "Telugu" };
+    announce(shellT("langChanged") + (langNames[lang] || lang));
+  }
+
+  /**
+   * Called by app.js setLang(): the app changed its own language state, so the
+   * shell re-renders every translated string and re-syncs its controls.
+   */
+  function syncAppLanguage(lang) {
+    if (!["en", "hi", "mr", "te"].includes(lang)) return;
+    prefs.lang = lang;
+    savePrefs();
+    document.documentElement.lang = lang;
+    updateNavigation();
+    const footerHost = document.getElementById("pmFooterHost");
+    if (footerHost) footerHost.innerHTML = renderFooter();
   }
 
   /* ------------------------------------------------- screen-reader announcer
@@ -185,26 +202,16 @@
   }
 
   /* ---------------------------------------------------------- breadcrumbs */
-  const CRUMB_LABELS = {
-    "#/": "Home",
-    "#/about": "About Us",
-    "#/contact": "Contact Us",
-    "#/feedback": "Feedback",
-    "#/help": "Help",
-    "#/sitemap": "Site Map",
-    "#/search": "Search",
-    "#/policies": "Policies",
-    owner: "Animal Owner",
-    vet: "Veterinarian",
-    govt: "Government",
-    lab: "Laboratory",
-  };
+  function crumbLabelFor(key) {
+    const map = { "#/": "crumbHome", "#/about": "fAboutUs", "#/contact": "contact", "#/feedback": "fFeedback", "#/help": "help", "#/sitemap": "fSiteMap", "#/search": "search", "#/policies": "fPolicies", owner: "crumbOwner", vet: "crumbVet", govt: "crumbGovt", lab: "crumbLab" };
+    return map[key] || null;
+  }
 
   function breadcrumbTrail(routePath, extraLabel) {
     const parts = String(routePath || "").split("/").filter(Boolean);
-    const trail = [{ href: "#/", label: "Home" }];
-    if (parts[0] && CRUMB_LABELS[parts[0]]) {
-      trail.push({ href: "#/", label: CRUMB_LABELS[parts[0]] });
+    const trail = [{ href: "#/", label: shellT("crumbHome") }];
+    if (parts[0] && crumbLabelFor(parts[0])) {
+      trail.push({ href: "#/", label: shellT(crumbLabelFor(parts[0])) });
     }
     if (extraLabel) trail.push({ href: null, label: extraLabel });
     else if (parts[1]) trail.push({ href: null, label: titleCase(parts[1].replace(/[-_]/g, " ")) });
@@ -222,6 +229,304 @@
 
   function titleCase(s) {
     return s.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
+  /* ================================================================= i18n ==
+   * The global shell (utility bar, header, primary navigation, footer) is
+   * part of the Farmer-facing interface, so every visible string is
+   * translated for all four portal languages. The product name "Pashu-Mitra"
+   * is a BRAND NAME and is deliberately never translated.
+   */
+  const SHELL_I18N = {
+    en: {
+      identityTitle: "Animal Health & Livestock Services",
+      identitySub: "पशु स्वास्थ्य एवं पशुधन सेवा",
+      skipToMain: "Skip to Main Content",
+      textSize: "Text size",
+      decreaseText: "Decrease text size",
+      resetText: "Reset text size to normal",
+      increaseText: "Increase text size",
+      textNormal: "Normal (100%)",
+      textReset: "Text size reset to normal",
+      textSet: "Text size set to ",
+      highContrast: "High contrast",
+      highContrastOn: "High contrast mode is on",
+      highContrastOff: "High contrast mode off",
+      reduceMotion: "Reduce motion",
+      reduceMotionOn: "Animations reduced",
+      reduceMotionOff: "Animations enabled",
+      help: "Help",
+      contact: "Contact",
+      search: "Search",
+      portalLang: "Portal Language",
+      langChanged: "Language changed to ",
+      searchLabel: "Search",
+      searchAria: "Search animal health portal",
+      farmerOtpLogin: "Farmer OTP Login",
+      officerAccess: "Officer Access",
+      signOut: "Sign out",
+      signOutAria: "Sign out of Pashu-Mitra",
+      notificationsAria: "View notifications",
+      goHomeAria: "go to the home page",
+      roleOwner: "Farmer",
+      roleVet: "Veterinarian",
+      roleGovt: "Government Officer",
+      roleLab: "Laboratory Diagnostician",
+      nav: {
+        owner: [["#/owner/dashboard", "Home", "🏠"], ["#/owner/livestock", "My Livestock", "🐄"], ["#/owner/cases", "Cases", "📋"], ["#/owner/prescriptions", "Health & Treatment", "💊"], ["#/owner/webcall", "Web Call", "📞"], ["#/owner/notifications", "Notifications", "🔔"], ["#/owner/profile", "Profile", "👤"]],
+        vet: [["#/vet/dashboard", "Dashboard", "📊"], ["#/vet/cases", "Cases", "🩺"], ["#/vet/calls", "Web Calls", "📞"], ["#/vet/advisories", "Advisories", "📢"], ["#/vet/search", "Livestock", "🔍"], ["#/vet/campaigns", "Campaigns", "💉"], ["#/vet/reports", "Reports", "📋"], ["#/vet/profile", "Profile", "👤"]],
+        govt: [["#/govt/dashboard", "Dashboard", "📊"], ["#/govt/surveillance", "Surveillance", "🌐"], ["#/govt/blocks", "Districts", "🏘️"], ["#/govt/trends", "Trends", "📈"], ["#/govt/gis", "GIS Map", "🗺️"], ["#/govt/ai", "AI Outbreak", "🧠"], ["#/govt/export", "Reports & Export", "📥"], ["#/govt/profile", "Profile", "👤"]],
+        lab: [["#/lab/dashboard", "Dashboard", "📊"], ["#/lab/queue", "Sample Queue", "🧪"], ["#/scan", "QR Scanner", "📷"], ["#/lab/lab-reports", "Reports", "📋"], ["#/lab/notifications", "Alerts", "🔔"], ["#/lab/profile", "Profile", "👤"]],
+        public: [["#/", "Home", "🏛️"], ["#/login/owner", "Farmer Portal", "🧑‍🌾"], ["#/login/vet", "Veterinary Officer", "🩺"], ["#/login/govt", "Government Official", "🏛️"], ["#/login/lab", "Diagnostic Laboratory", "🧪"], ["#/about", "About Us", "ℹ️"], ["#/contact", "Contact", "📞"], ["#/help", "Help", "❓"]],
+      },
+      fAbout: "About this service",
+      fContact: "Contact",
+      fUse: "Using this site",
+      fPolicies: "Policies",
+      fEmail: "Email: ",
+      fHelpline: "Emergency Animal Helpline: ",
+      fHours: "Hours: ",
+      fDirectory: "Full contact directory",
+      fOwnership: "Ownership:",
+      fPending: "placeholder pending confirmation by the owning organisation",
+      fAboutUs: "About Us",
+      fFeedback: "Feedback",
+      fSiteMap: "Site Map",
+      fLastReviewed: "Last reviewed / updated: ",
+      fAccessibility: "Accessibility Statement",
+      fPrivacy: "Privacy",
+      fTerms: "Terms",
+      fCopyright: "Copyright",
+      fGrievance: "Grievance",
+      fContentNote: "Content on this platform is provided for animal-health service delivery. Policy pages are templates pending approval by the owning organisation.",
+      extNewWindow: "(external site, opens in a new window)",
+      extSite: "(external site)",
+      crumbHome: "Home",
+      crumbOwner: "Animal Owner",
+      crumbVet: "Veterinarian",
+      crumbGovt: "Government",
+      crumbLab: "Laboratory",
+      langNames: { en: "English", hi: "Hindi", mr: "Marathi", te: "Telugu" },
+    },
+    hi: {
+      identityTitle: "पशु स्वास्थ्य एवं पशुधन सेवा",
+      identitySub: "Animal Health & Livestock Services",
+      skipToMain: "मुख्य सामग्री पर जाएँ",
+      textSize: "पाठ आकार",
+      decreaseText: "पाठ आकार घटाएँ",
+      resetText: "पाठ आकार सामान्य करें",
+      increaseText: "पाठ आकार बढ़ाएँ",
+      textNormal: "सामान्य (100%)",
+      textReset: "पाठ आकार सामान्य किया गया",
+      textSet: "पाठ आकार सेट: ",
+      highContrast: "उच्च कंट्रास्ट",
+      highContrastOn: "उच्च कंट्रास्ट मोड चालू",
+      highContrastOff: "उच्च कंट्रास्ट मोड बंद",
+      reduceMotion: "एनिमेशन कम करें",
+      reduceMotionOn: "एनिमेशन कम किए गए",
+      reduceMotionOff: "एनिमेशन चालू",
+      help: "सहायता",
+      contact: "संपर्क",
+      search: "खोज",
+      portalLang: "पोर्टल भाषा",
+      langChanged: "भाषा बदली गई: ",
+      searchLabel: "खोज",
+      searchAria: "पशु स्वास्थ्य पोर्टल खोजें",
+      farmerOtpLogin: "किसान OTP लॉगिन",
+      officerAccess: "अधिकारी प्रवेश",
+      signOut: "लॉग आउट",
+      signOutAria: "Pashu-Mitra से लॉग आउट करें",
+      notificationsAria: "सूचनाएँ देखें",
+      goHomeAria: "मुख्य पृष्ठ पर जाएँ",
+      roleOwner: "किसान",
+      roleVet: "पशु चिकित्सक",
+      roleGovt: "सरकारी अधिकारी",
+      roleLab: "प्रयोगशाला विशेषज्ञ",
+      nav: {
+        owner: [["#/owner/dashboard", "होम", "🏠"], ["#/owner/livestock", "मेरा पशुधन", "🐄"], ["#/owner/cases", "मामले", "📋"], ["#/owner/prescriptions", "स्वास्थ्य व उपचार", "💊"], ["#/owner/webcall", "वेब कॉल", "📞"], ["#/owner/notifications", "सूचनाएँ", "🔔"], ["#/owner/profile", "प्रोफ़ाइल", "👤"]],
+        vet: [["#/vet/dashboard", "डैशबोर्ड", "📊"], ["#/vet/cases", "मामले", "🩺"], ["#/vet/calls", "वेब कॉल", "📞"], ["#/vet/advisories", "सलाह", "📢"], ["#/vet/search", "पशुधन", "🔍"], ["#/vet/campaigns", "अभियान", "💉"], ["#/vet/reports", "रिपोर्ट", "📋"], ["#/vet/profile", "प्रोफ़ाइल", "👤"]],
+        govt: [["#/govt/dashboard", "डैशबोर्ड", "📊"], ["#/govt/surveillance", "निगरानी", "🌐"], ["#/govt/blocks", "ज़िले", "🏘️"], ["#/govt/trends", "प्रवृत्तियाँ", "📈"], ["#/govt/gis", "जीआईएस नक्शा", "🗺️"], ["#/govt/ai", "एआई प्रकोप", "🧠"], ["#/govt/export", "रिपोर्ट व निर्यात", "📥"], ["#/govt/profile", "प्रोफ़ाइल", "👤"]],
+        lab: [["#/lab/dashboard", "डैशबोर्ड", "📊"], ["#/lab/queue", "नमूना कतार", "🧪"], ["#/scan", "क्यूआर स्कैन", "📷"], ["#/lab/lab-reports", "रिपोर्ट", "📋"], ["#/lab/notifications", "अलर्ट", "🔔"], ["#/lab/profile", "प्रोफ़ाइल", "👤"]],
+        public: [["#/", "होम", "🏛️"], ["#/login/owner", "किसान पोर्टल", "🧑‍🌾"], ["#/login/vet", "पशु चिकित्सा अधिकारी", "🩺"], ["#/login/govt", "सरकारी अधिकारी", "🏛️"], ["#/login/lab", "नैदानिक प्रयोगशाला", "🧪"], ["#/about", "हमारे बारे में", "ℹ️"], ["#/contact", "संपर्क", "📞"], ["#/help", "सहायता", "❓"]],
+      },
+      fAbout: "इस सेवा के बारे में",
+      fContact: "संपर्क",
+      fUse: "इस साइट का उपयोग",
+      fPolicies: "नीतियाँ",
+      fEmail: "ईमेल: ",
+      fHelpline: "आपातकालीन पशु हेल्पलाइन: ",
+      fHours: "समय: ",
+      fDirectory: "पूर्ण संपर्क निर्देशिका",
+      fOwnership: "स्वामित्व:",
+      fPending: "स्वामी संगठन द्वारा पुष्टि हेतु लंबित",
+      fAboutUs: "हमारे बारे में",
+      fFeedback: "प्रतिक्रिया",
+      fSiteMap: "साइट मैप",
+      fLastReviewed: "अंतिम समीक्षा / अद्यतन: ",
+      fAccessibility: "सुगम्यता विवरण",
+      fPrivacy: "गोपनीयता",
+      fTerms: "शर्तें",
+      fCopyright: "कॉपीराइट",
+      fGrievance: "शिकायत",
+      fContentNote: "इस प्लेटफ़ॉर्म पर दी गई सामग्री पशु स्वास्थ्य सेवा हेतु है। नीति पृष्ठ स्वामी संगठन की स्वीकृति हेतु लंबित हैं।",
+      extNewWindow: "(बाहरी साइट, नई विंडो में खुलती है)",
+      extSite: "(बाहरी साइट)",
+      crumbHome: "होम",
+      crumbOwner: "पशु स्वामी",
+      crumbVet: "पशु चिकित्सक",
+      crumbGovt: "सरकार",
+      crumbLab: "प्रयोगशाला",
+      langNames: { en: "English", hi: "हिन्दी", mr: "मराठी", te: "తెలుగు" },
+    },
+    mr: {
+      identityTitle: "पशु आरोग्य व पशुधन सेवा",
+      identitySub: "Animal Health & Livestock Services",
+      skipToMain: "मुख्य मजकुराकडे जा",
+      textSize: "मजकूराचा आकार",
+      decreaseText: "मजकूराचा आकार कमी करा",
+      resetText: "मजकूराचा आकार सामान्य करा",
+      increaseText: "मजकूराचा आकार वाढवा",
+      textNormal: "सामान्य (100%)",
+      textReset: "मजकूराचा आकार सामान्य केला",
+      textSet: "मजकूराचा आकार सेट: ",
+      highContrast: "जास्त कॉन्ट्रास्ट",
+      highContrastOn: "जास्त कॉन्ट्रास्ट मोड सुरू",
+      highContrastOff: "जास्त कॉन्ट्रास्ट मोड बंद",
+      reduceMotion: "ॲनिमेशन कमी करा",
+      reduceMotionOn: "ॲनिमेशन कमी केले",
+      reduceMotionOff: "ॲनिमेशन सुरू",
+      help: "मदत",
+      contact: "संपर्क",
+      search: "शोध",
+      portalLang: "पोर्टल भाषा",
+      langChanged: "भाषा बदलली: ",
+      searchLabel: "शोध",
+      searchAria: "पशु आरोग्य पोर्टल शोधा",
+      farmerOtpLogin: "शेतकरी OTP लॉगिन",
+      officerAccess: "अधिकारी प्रवेश",
+      signOut: "बाहेर पडा",
+      signOutAria: "Pashu-Mitra मधून बाहेर पडा",
+      notificationsAria: "सूचना पहा",
+      goHomeAria: "मुख्य पृष्ठावर जा",
+      roleOwner: "शेतकरी",
+      roleVet: "पशुवैद्यक",
+      roleGovt: "शासकीय अधिकारी",
+      roleLab: "प्रयोगशाळा तज्ज्ञ",
+      nav: {
+        owner: [["#/owner/dashboard", "मुख्यपृष्ठ", "🏠"], ["#/owner/livestock", "माझे पशुधन", "🐄"], ["#/owner/cases", "प्रकरणे", "📋"], ["#/owner/prescriptions", "आरोग्य व उपचार", "💊"], ["#/owner/webcall", "वेब कॉल", "📞"], ["#/owner/notifications", "सूचना", "🔔"], ["#/owner/profile", "प्रोफाइल", "👤"]],
+        vet: [["#/vet/dashboard", "डॅशबोर्ड", "📊"], ["#/vet/cases", "प्रकरणे", "🩺"], ["#/vet/calls", "वेब कॉल", "📞"], ["#/vet/advisories", "सल्ला", "📢"], ["#/vet/search", "पशुधन", "🔍"], ["#/vet/campaigns", "मोहीम", "💉"], ["#/vet/reports", "अहवाल", "📋"], ["#/vet/profile", "प्रोफाइल", "👤"]],
+        govt: [["#/govt/dashboard", "डॅशबोर्ड", "📊"], ["#/govt/surveillance", "संसर्ग नियंत्रण", "🌐"], ["#/govt/blocks", "जिल्हे", "🏘️"], ["#/govt/trends", "कल", "📈"], ["#/govt/gis", "जीआयएस नकाशा", "🗺️"], ["#/govt/ai", "एआय उत्पात", "🧠"], ["#/govt/export", "अहवाल व निर्यात", "📥"], ["#/govt/profile", "प्रोफाइल", "👤"]],
+        lab: [["#/lab/dashboard", "डॅशबोर्ड", "📊"], ["#/lab/queue", "नमुना रांग", "🧪"], ["#/scan", "क्यूआर स्कॅन", "📷"], ["#/lab/lab-reports", "अहवाल", "📋"], ["#/lab/notifications", "सूचना", "🔔"], ["#/lab/profile", "प्रोफाइल", "👤"]],
+        public: [["#/", "मुख्यपृष्ठ", "🏛️"], ["#/login/owner", "शेतकरी पोर्टल", "🧑‍🌾"], ["#/login/vet", "पशुवैद्यक अधिकारी", "🩺"], ["#/login/govt", "शासकीय अधिकारी", "🏛️"], ["#/login/lab", "निदान प्रयोगशाळा", "🧪"], ["#/about", "आमच्याविषयी", "ℹ️"], ["#/contact", "संपर्क", "📞"], ["#/help", "मदत", "❓"]],
+      },
+      fAbout: "या सेवेविषयी",
+      fContact: "संपर्क",
+      fUse: "या संकेतस्थळाचा वापर",
+      fPolicies: "धोरणे",
+      fEmail: "ईमेल: ",
+      fHelpline: "आपत्कालीन पशु हेल्पलाइन: ",
+      fHours: "वेळ: ",
+      fDirectory: "संपूर्ण संपर्क नोंदणी",
+      fOwnership: "मालकी:",
+      fPending: "मालक संस्थेच्या पुष्टीसाठी प्रलंबित",
+      fAboutUs: "आमच्याविषयी",
+      fFeedback: "अभिप्राय",
+      fSiteMap: "साइट नकाशा",
+      fLastReviewed: "शेवटचे पुनरावलोकन / अद्ययावत: ",
+      fAccessibility: "सुलभता विधान",
+      fPrivacy: "गोपनीयता",
+      fTerms: "अटी",
+      fCopyright: "कॉपिराइट",
+      fGrievance: "तक्रार",
+      fContentNote: "या व्यासपीठावरील मजकूर पशुआरोग्य सेवेसाठी आहे. धोरण पृष्ठे मालक संस्थेच्या मान्यतेसाठी प्रलंबित आहेत.",
+      extNewWindow: "(बाह्य संकेतस्थळ, नवीन विंडोमध्ये उघडते)",
+      extSite: "(बाह्य संकेतस्थळ)",
+      crumbHome: "मुख्यपृष्ठ",
+      crumbOwner: "पशुमालक",
+      crumbVet: "पशुवैद्यक",
+      crumbGovt: "शासन",
+      crumbLab: "प्रयोगशाळा",
+      langNames: { en: "English", hi: "हिन्दी", mr: "मराठी", te: "తెలుగు" },
+    },
+    te: {
+      identityTitle: "పశు ఆరోగ్య & పశుసంపద సేవలు",
+      identitySub: "Animal Health & Livestock Services",
+      skipToMain: "ముఖ్య కంటెంట్‌కు వెళ్లండి",
+      textSize: "టెక్స్ట్ పరిమాణం",
+      decreaseText: "టెక్స్ట్ పరిమాణం తగ్గించండి",
+      resetText: "టెక్స్ట్ పరిమాణాన్ని సాధారణం చేయండి",
+      increaseText: "టెక్స్ట్ పరిమాణం పెంచండి",
+      textNormal: "సాధారణం (100%)",
+      textReset: "టెక్స్ట్ పరిమాణం సాధారణం చేయబడింది",
+      textSet: "టెక్స్ట్ పరిమాణం సెట్: ",
+      highContrast: "అధిక కాంట్రాస్ట్",
+      highContrastOn: "అధిక కాంట్రాస్ట్ మోడ్ ఆన్",
+      highContrastOff: "అధిక కాంట్రాస్ట్ మోడ్ ఆఫ్",
+      reduceMotion: "యానిమేషన్ తక్కువ చేయండి",
+      reduceMotionOn: "యానిమేషన్ తగ్గించబడింది",
+      reduceMotionOff: "యానిమేషన్ ఆన్",
+      help: "సహాయం",
+      contact: "సంప్రదించండి",
+      search: "వెతుకు",
+      portalLang: "పోర్టల్ భాష",
+      langChanged: "భాష మార్చబడింది: ",
+      searchLabel: "వెతుకు",
+      searchAria: "పశు ఆరోగ్య పోర్టల్‌ను వెతకండి",
+      farmerOtpLogin: "రైతు OTP లాగిన్",
+      officerAccess: "అధికారి ప్రవేశం",
+      signOut: "సైన్ అవుట్",
+      signOutAria: "Pashu-Mitra నుండి సైన్ అవుట్",
+      notificationsAria: "నోటిఫికేషన్లు చూడండి",
+      goHomeAria: "హోమ్ పేజీకి వెళ్లండి",
+      roleOwner: "రైతు",
+      roleVet: "పశువైద్యుడు",
+      roleGovt: "ప్రభుత్వ అధికారి",
+      roleLab: "ప్రయోగశాల నిపుణుడు",
+      nav: {
+        owner: [["#/owner/dashboard", "హోమ్", "🏠"], ["#/owner/livestock", "నా పశువులు", "🐄"], ["#/owner/cases", "కేసులు", "📋"], ["#/owner/prescriptions", "ఆరోగ్యం & చికిత్స", "💊"], ["#/owner/webcall", "వెబ్ కాల్", "📞"], ["#/owner/notifications", "నోటిఫికేషన్లు", "🔔"], ["#/owner/profile", "ప్రొఫైల్", "👤"]],
+        vet: [["#/vet/dashboard", "డాష్‌బోర్డ్", "📊"], ["#/vet/cases", "కేసులు", "🩺"], ["#/vet/calls", "వెబ్ కాల్స్", "📞"], ["#/vet/advisories", "సలహాలు", "📢"], ["#/vet/search", "పశుసంపద", "🔍"], ["#/vet/campaigns", "క్యాంపెయిన్లు", "💉"], ["#/vet/reports", "నివేదికలు", "📋"], ["#/vet/profile", "ప్రొఫైల్", "👤"]],
+        govt: [["#/govt/dashboard", "డాష్‌బోర్డ్", "📊"], ["#/govt/surveillance", "పర్యవేక్షణ", "🌐"], ["#/govt/blocks", "జిల్లాలు", "🏘️"], ["#/govt/trends", "ధోరణలు", "📈"], ["#/govt/gis", "జిఐఎస్ మ్యాప్", "🗺️"], ["#/govt/ai", "ఏఐ వ్యాధివ్యాప్తి", "🧠"], ["#/govt/export", "నివేదికలు & ఎగుమతి", "📥"], ["#/govt/profile", "ప్రొఫైల్", "👤"]],
+        lab: [["#/lab/dashboard", "డాష్‌బోర్డ్", "📊"], ["#/lab/queue", "నమూనా క్యూ", "🧪"], ["#/scan", "క్యూఆర్ స్కాన్", "📷"], ["#/lab/lab-reports", "నివేదికలు", "📋"], ["#/lab/notifications", "హెచ్చరికలు", "🔔"], ["#/lab/profile", "ప్రొఫైల్", "👤"]],
+        public: [["#/", "హోమ్", "🏛️"], ["#/login/owner", "రైతు పోర్టల్", "🧑‍🌾"], ["#/login/vet", "పశువైద్య అధికారి", "🩺"], ["#/login/govt", "ప్రభుత్వ అధికారి", "🏛️"], ["#/login/lab", "రోగనిర్ధారణ ప్రయోగశాల", "🧪"], ["#/about", "మా గురించి", "ℹ️"], ["#/contact", "సంప్రదించండి", "📞"], ["#/help", "సహాయం", "❓"]],
+      },
+      fAbout: "ఈ సేవ గురించి",
+      fContact: "సంప్రదింపు",
+      fUse: "ఈ సైట్ వాడకం",
+      fPolicies: "విధానాలు",
+      fEmail: "ఇమెయిల్: ",
+      fHelpline: "అత్యవసర పశు హెల్ప్‌లైన్: ",
+      fHours: "సమయం: ",
+      fDirectory: "పూర్తి సంప్రదింపు డైరెక్టరీ",
+      fOwnership: "యాజమాన్యం:",
+      fPending: "యజమాని సంస్థ ఆమోదం కోసం పెండింగ్",
+      fAboutUs: "మా గురించి",
+      fFeedback: "అభిప్రాయం",
+      fSiteMap: "సైట్ మ్యాప్",
+      fLastReviewed: "చివరి సమీక్ష / నవీకరణ: ",
+      fAccessibility: "ప్రవేశపెట్టుకోగలిగిన ప్రకటన",
+      fPrivacy: "గోప్యత",
+      fTerms: "నిబంధనలు",
+      fCopyright: "కాపీరైట్",
+      fGrievance: "ఫిర్యాదు",
+      fContentNote: "ఈ ప్లాట్‌ఫారమ్‌లోని కంటెంట్ పశు ఆరోగ్య సేవ కోసం అందించబడింది. విధాన పేజీలు యజమాని సంస్థ ఆమోదం కోసం పెండింగ్‌లో ఉన్నాయి.",
+      crumbHome: "హోమ్",
+      crumbOwner: "పశువుల యజమాని",
+      crumbVet: "పశువైద్యుడు",
+      crumbGovt: "ప్రభుత్వం",
+      crumbLab: "ప్రయోగశాల",
+      langNames: { en: "English", hi: "हिन्दी", mr: "मराठी", te: "తెలుగు" },
+    },
+  };
+
+  function shellLang() {
+    if (window.state && typeof window.state.lang === "string") return window.state.lang;
+    if (prefs.lang) return prefs.lang;
+    return "en";
+  }
+
+  function shellT(key) {
+    const dict = SHELL_I18N[shellLang()] || SHELL_I18N.en;
+    return Object.prototype.hasOwnProperty.call(dict, key) ? dict[key] : SHELL_I18N.en[key];
   }
 
   function escapeHtml(s) {
@@ -243,7 +548,7 @@
       ' aria-describedby="' + id + '">' + escapeHtml(label) +
       '<span class="pm-ext-icon" aria-hidden="true">↗</span></a>' +
       '<span id="' + id + '" class="sr-only">' +
-      (newWin ? "(external site, opens in a new window)" : "(external site)") +
+      (newWin ? shellT("extNewWindow") : shellT("extSite")) +
       "</span>";
   }
 
@@ -252,15 +557,16 @@
     const org = window.ORG || {};
     const owner = org.owner || {};
     const pending = !org.approved;
+    const ft = shellT;
 
     const policyLinks = (org.policies || []).map(function (p) {
       return '<li><a href="#/policies/' + p.id + '">' + escapeHtml(p.label) +
-        (p.approved === false ? ' <span class="pm-pending">pending approval</span>' : "") +
+        (p.approved === false ? ' <span class="pm-pending">' + escapeHtml(ft("fPending")) + "</span>" : "") +
         "</a></li>";
     }).join("");
 
     const lastReviewed = org.lastReviewed
-      ? '<p class="pm-footer-line">Last reviewed / updated: <time datetime="' +
+      ? '<p class="pm-footer-line">' + escapeHtml(ft("fLastReviewed")) + '<time datetime="' +
         escapeHtml(org.lastReviewed) + '">' + escapeHtml(org.lastReviewed) + "</time></p>"
       : "";
 
@@ -268,38 +574,38 @@
       '<footer class="pm-footer" id="site-footer" role="contentinfo">' +
         '<div class="pm-footer-inner">' +
           '<section class="pm-footer-col" aria-labelledby="pm-f-about">' +
-            '<h2 id="pm-f-about" class="pm-footer-h">About this service</h2>' +
+            '<h2 id="pm-f-about" class="pm-footer-h">' + escapeHtml(ft("fAbout")) + '</h2>' +
             '<p class="pm-org-name">' + escapeHtml(org.appName || "Pashu-Mitra") + "</p>" +
             '<p class="pm-footer-text">' + escapeHtml(org.tagline || "Animal Health & Livestock Services Platform") + "</p>" +
             (pending
-              ? '<p class="pm-owner-note"><strong>Ownership:</strong> ' + escapeHtml(owner.name || "") +
-                ' — <em>placeholder pending confirmation by the owning organisation</em></p>'
+              ? '<p class="pm-owner-note"><strong>' + escapeHtml(ft("fOwnership")) + '</strong> ' + escapeHtml(owner.name || "") +
+                ' — <em>' + escapeHtml(ft("fPending")) + "</em></p>"
               : '<p class="pm-footer-text">' + escapeHtml(owner.name || "") + "</p>") +
           "</section>" +
 
           '<section class="pm-footer-col" aria-labelledby="pm-f-contact">' +
-            '<h2 id="pm-f-contact" class="pm-footer-h">Contact</h2>' +
+            '<h2 id="pm-f-contact" class="pm-footer-h">' + escapeHtml(ft("fContact")) + '</h2>' +
             '<p class="pm-footer-text">' + escapeHtml(owner.address || "") + "</p>" +
-            '<p class="pm-footer-text">Email: ' + escapeHtml(owner.email || "") + "</p>" +
-            '<p class="pm-footer-text">Emergency Animal Helpline: <strong>7382210251</strong></p>' +
-            '<p class="pm-footer-text">Hours: ' + escapeHtml(owner.workingHours || "Mon–Sat 09:00–18:00 IST") + "</p>" +
-            '<p class="pm-footer-text"><a href="#/contact">Full contact directory</a></p>' +
+            '<p class="pm-footer-text">' + escapeHtml(ft("fEmail")) + escapeHtml(owner.email || "") + "</p>" +
+            '<p class="pm-footer-text">' + escapeHtml(ft("fHelpline")) + "<strong>7382210251</strong></p>" +
+            '<p class="pm-footer-text">' + escapeHtml(ft("fHours")) + escapeHtml(owner.workingHours || "Mon–Sat 09:00–18:00 IST") + "</p>" +
+            '<p class="pm-footer-text"><a href="#/contact">' + escapeHtml(ft("fDirectory")) + "</a></p>" +
           "</section>" +
 
           '<section class="pm-footer-col" aria-labelledby="pm-f-use">' +
-            '<h2 id="pm-f-use" class="pm-footer-h">Using this site</h2>' +
+            '<h2 id="pm-f-use" class="pm-footer-h">' + escapeHtml(ft("fUse")) + '</h2>' +
             '<ul class="pm-footer-list">' +
-              '<li><a href="#/about">About Us</a></li>' +
-              '<li><a href="#/help">Help</a></li>' +
-              '<li><a href="#/feedback">Feedback</a></li>' +
-              '<li><a href="#/sitemap">Site Map</a></li>' +
-              '<li><a href="#/search">Search</a></li>' +
-              '<li><a href="#/policies">Policies</a></li>' +
+              '<li><a href="#/about">' + escapeHtml(ft("fAboutUs")) + "</a></li>" +
+              '<li><a href="#/help">' + escapeHtml(ft("help")) + "</a></li>" +
+              '<li><a href="#/feedback">' + escapeHtml(ft("fFeedback")) + "</a></li>" +
+              '<li><a href="#/sitemap">' + escapeHtml(ft("fSiteMap")) + "</a></li>" +
+              '<li><a href="#/search">' + escapeHtml(ft("search")) + "</a></li>" +
+              '<li><a href="#/policies">' + escapeHtml(ft("fPolicies")) + "</a></li>" +
             "</ul>" +
           "</section>" +
 
           '<section class="pm-footer-col" aria-labelledby="pm-f-policies">' +
-            '<h2 id="pm-f-policies" class="pm-footer-h">Policies</h2>' +
+            '<h2 id="pm-f-policies" class="pm-footer-h">' + escapeHtml(ft("fPolicies")) + '</h2>' +
             '<ul class="pm-footer-list">' + policyLinks + "</ul>" +
           "</section>" +
         "</div>" +
@@ -309,16 +615,14 @@
             (org.nationalPortal
               ? externalLink(org.nationalPortal.url, org.nationalPortal.label) + " · "
               : "") +
-            '<a href="#/policies/accessibility">Accessibility Statement</a> · ' +
-            '<a href="#/policies/privacy">Privacy</a> · ' +
-            '<a href="#/policies/terms">Terms</a> · ' +
-            '<a href="#/policies/copyright">Copyright</a> · ' +
-            '<a href="#/policies/grievance">Grievance</a>' +
+            '<a href="#/policies/accessibility">' + escapeHtml(ft("fAccessibility")) + "</a> · " +
+            '<a href="#/policies/privacy">' + escapeHtml(ft("fPrivacy")) + "</a> · " +
+            '<a href="#/policies/terms">' + escapeHtml(ft("fTerms")) + "</a> · " +
+            '<a href="#/policies/copyright">' + escapeHtml(ft("fCopyright")) + "</a> · " +
+            '<a href="#/policies/grievance">' + escapeHtml(ft("fGrievance")) + "</a>" +
           "</p>" +
           lastReviewed +
-          '<p class="pm-footer-line">Content on this platform is provided for animal-health ' +
-            "service delivery. Policy pages are templates pending approval by the owning " +
-            "organisation.</p>" +
+          '<p class="pm-footer-line">' + escapeHtml(ft("fContentNote")) + "</p>" +
         "</div>" +
       "</footer>";
   }
@@ -329,48 +633,49 @@
    * Right: Skip link, Font resizer (A-/A/A+), High contrast, Reduce motion, Language, Help, Contact, Search
    */
   function renderA11yBar() {
-    const currentLang = (window.state && window.state.lang) || prefs.lang || "en";
+    const currentLang = shellLang();
+    const T = shellT;
     return '' +
       '<div class="pm-a11y-bar" id="pmA11yBar">' +
         '<div class="pm-flag-stripe" aria-hidden="true"></div>' +
         '<div class="pm-a11y-inner">' +
           '<div class="pm-util-identity">' +
-            '<span class="pm-util-title">Animal Health &amp; Livestock Services</span>' +
-            '<span class="pm-util-sub" lang="hi">पशु स्वास्थ्य एवं पशुधन सेवा</span>' +
+            '<span class="pm-util-title">' + escapeHtml(T("identityTitle")) + '</span>' +
+            '<span class="pm-util-sub" lang="' + (currentLang === "hi" ? "en" : "hi") + '">' + escapeHtml(T("identitySub")) + '</span>' +
           "</div>" +
           '<div class="pm-util-tools">' +
-            '<a class="pm-skip-link-inline" href="#main-content">Skip to Main Content</a>' +
-            '<div class="pm-a11y-group" role="group" aria-label="Text size">' +
-              '<span class="pm-a11y-label" id="pmScaleLabel">Text size</span>' +
+            '<a class="pm-skip-link-inline" href="#main-content">' + escapeHtml(T("skipToMain")) + '</a>' +
+            '<div class="pm-a11y-group" role="group" aria-label="' + escapeHtml(T("textSize")) + '">' +
+              '<span class="pm-a11y-label" id="pmScaleLabel">' + escapeHtml(T("textSize")) + '</span>' +
               '<button type="button" class="pm-a11y-btn" onclick="PashuShell.setScaleIndex(PashuShell.getScaleIndex()-1)" ' +
-                'aria-label="Decrease text size">A<span class="pm-a11y-smaller">-</span></button>' +
+                'aria-label="' + escapeHtml(T("decreaseText")) + '">A<span class="pm-a11y-smaller">-</span></button>' +
               '<button type="button" class="pm-a11y-btn" onclick="PashuShell.setScaleIndex(1)" ' +
-                'aria-label="Reset text size to normal">A</button>' +
+                'aria-label="' + escapeHtml(T("resetText")) + '">A</button>' +
               '<button type="button" class="pm-a11y-btn" onclick="PashuShell.setScaleIndex(PashuShell.getScaleIndex()+1)" ' +
-                'aria-label="Increase text size">A<span class="pm-a11y-bigger">+</span></button>' +
-              '<span class="pm-a11y-value" id="pmScaleValue">Normal (100%)</span>' +
+                'aria-label="' + escapeHtml(T("increaseText")) + '">A<span class="pm-a11y-bigger">+</span></button>' +
+              '<span class="pm-a11y-value" id="pmScaleValue">' + escapeHtml(T("textNormal")) + '</span>' +
             "</div>" +
 
             '<div class="pm-a11y-group">' +
               '<button type="button" class="pm-a11y-btn pm-a11y-wide" data-a11y-toggle="highContrast" ' +
-                'data-a11y-label="High contrast mode" data-a11y-label-on="High contrast mode is on" ' +
+                'data-a11y-label="' + escapeHtml(T("highContrast")) + '" data-a11y-label-on="' + escapeHtml(T("highContrastOn")) + '" ' +
                 'aria-pressed="false" onclick="PashuShell.togglePref(\'highContrast\')">' +
-                '<span aria-hidden="true">◐</span> High contrast</button>' +
+                '<span aria-hidden="true">◐</span> ' + escapeHtml(T("highContrast")) + '</button>' +
               '<button type="button" class="pm-a11y-btn pm-a11y-wide" data-a11y-toggle="reducedMotion" ' +
-                'data-a11y-label="Reduce animation" data-a11y-label-on="Animation is reduced" ' +
+                'data-a11y-label="' + escapeHtml(T("reduceMotion")) + '" data-a11y-label-on="' + escapeHtml(T("reduceMotionOn")) + '" ' +
                 'aria-pressed="false" onclick="PashuShell.togglePref(\'reducedMotion\')">' +
-                '<span aria-hidden="true">⏸</span> Reduce motion</button>' +
+                '<span aria-hidden="true">⏸</span> ' + escapeHtml(T("reduceMotion")) + '</button>' +
             "</div>" +
 
             '<div class="pm-util-links">' +
-              '<a href="#/help" class="pm-util-link">Help</a>' +
-              '<a href="#/contact" class="pm-util-link">Contact</a>' +
-              '<a href="#/search" class="pm-util-link">Search</a>' +
+              '<a href="#/help" class="pm-util-link">' + escapeHtml(T("help")) + '</a>' +
+              '<a href="#/contact" class="pm-util-link">' + escapeHtml(T("contact")) + '</a>' +
+              '<a href="#/search" class="pm-util-link">' + escapeHtml(T("search")) + '</a>' +
             "</div>" +
 
             '<div class="pm-util-lang">' +
-              '<label for="pmGlobalLangSelect" class="sr-only">Portal Language</label>' +
-              '<select id="pmGlobalLangSelect" class="pm-lang-select" onchange="PashuShell.setLanguage(this.value)" aria-label="Portal Language">' +
+              '<label for="pmGlobalLangSelect" class="sr-only">' + escapeHtml(T("portalLang")) + '</label>' +
+              '<select id="pmGlobalLangSelect" class="pm-lang-select" onchange="PashuShell.setLanguage(this.value)" aria-label="' + escapeHtml(T("portalLang")) + '">' +
                 '<option value="en"' + (currentLang === "en" ? ' selected' : '') + '>English</option>' +
                 '<option value="hi"' + (currentLang === "hi" ? ' selected' : '') + '>हिन्दी</option>' +
                 '<option value="mr"' + (currentLang === "mr" ? ' selected' : '') + '>मराठी</option>' +
@@ -397,62 +702,14 @@
   }
 
   function getNavItemsForRole(role) {
-    if (role === "owner") {
-      return [
-        { href: "#/owner/dashboard", label: "Home", icon: "🏠" },
-        { href: "#/owner/livestock", label: "My Livestock", icon: "🐄" },
-        { href: "#/owner/cases", label: "Cases", icon: "📋" },
-        { href: "#/owner/prescriptions", label: "Health & Treatment", icon: "💊" },
-        { href: "#/owner/webcall", label: "Web Call", icon: "📞" },
-        { href: "#/owner/notifications", label: "Notifications", icon: "🔔" },
-        { href: "#/owner/profile", label: "Profile", icon: "👤" },
-      ];
-    }
-    if (role === "vet") {
-      return [
-        { href: "#/vet/dashboard", label: "Dashboard", icon: "📊" },
-        { href: "#/vet/cases", label: "Cases", icon: "🩺" },
-        { href: "#/vet/calls", label: "Web Calls", icon: "📞" },
-        { href: "#/vet/advisories", label: "Advisories", icon: "📢" },
-        { href: "#/vet/search", label: "Livestock", icon: "🔍" },
-        { href: "#/vet/campaigns", label: "Campaigns", icon: "💉" },
-        { href: "#/vet/reports", label: "Reports", icon: "📋" },
-        { href: "#/vet/profile", label: "Profile", icon: "👤" },
-      ];
-    }
-    if (role === "govt") {
-      return [
-        { href: "#/govt/dashboard", label: "Dashboard", icon: "📊" },
-        { href: "#/govt/surveillance", label: "Surveillance", icon: "🌐" },
-        { href: "#/govt/blocks", label: "Districts", icon: "🏘️" },
-        { href: "#/govt/trends", label: "Trends", icon: "📈" },
-        { href: "#/govt/gis", label: "GIS Map", icon: "🗺️" },
-        { href: "#/govt/ai", label: "AI Outbreak", icon: "🧠" },
-        { href: "#/govt/export", label: "Reports & Export", icon: "📥" },
-        { href: "#/govt/profile", label: "Profile", icon: "👤" },
-      ];
-    }
-    if (role === "lab") {
-      return [
-        { href: "#/lab/dashboard", label: "Dashboard", icon: "📊" },
-        { href: "#/lab/queue", label: "Sample Queue", icon: "🧪" },
-        { href: "#/scan", label: "QR Scanner", icon: "📷" },
-        { href: "#/lab/lab-reports", label: "Reports", icon: "📋" },
-        { href: "#/lab/notifications", label: "Alerts", icon: "🔔" },
-        { href: "#/lab/profile", label: "Profile", icon: "👤" },
-      ];
-    }
-    // Public / Visitor navigation
-    return [
-      { href: "#/", label: "Home", icon: "🏛️" },
-      { href: "#/login/owner", label: "Farmer Portal", icon: "🧑‍🌾" },
-      { href: "#/login/vet", label: "Veterinary Officer", icon: "🩺" },
-      { href: "#/login/govt", label: "Government Official", icon: "🏛️" },
-      { href: "#/login/lab", label: "Diagnostic Laboratory", icon: "🧪" },
-      { href: "#/about", label: "About Us", icon: "ℹ️" },
-      { href: "#/contact", label: "Contact", icon: "📞" },
-      { href: "#/help", label: "Help", icon: "❓" },
-    ];
+    // Translated navigation (the labels come from the shell i18n dictionary;
+    // routes are unchanged).
+    const nav = shellT("nav") || SHELL_I18N.en.nav;
+    const key = role === "owner" ? "owner" : role === "vet" ? "vet" : role === "govt" ? "govt" : role === "lab" ? "lab" : "public";
+    const items = nav[key] || SHELL_I18N.en.nav[key] || [];
+    return items.map(function (item) {
+      return { href: item[0], label: item[1], icon: item[2] };
+    });
   }
 
   function renderPrimaryNavigation() {
@@ -500,27 +757,27 @@
     let userSection = "";
     if (user) {
       const roleBadge = {
-        owner: "Farmer",
-        vet: "Veterinarian",
-        govt: "Government Officer",
-        lab: "Laboratory Diagnostician"
+        owner: shellT("roleOwner"),
+        vet: shellT("roleVet"),
+        govt: shellT("roleGovt"),
+        lab: shellT("roleLab")
       }[role] || role;
       const notifHref = "#/" + role + "/notifications";
       userSection = (
         '<div class="pm-header-user-panel">' +
-          '<a href="' + notifHref + '" class="pm-header-icon-btn" aria-label="View notifications">🔔</a>' +
+          '<a href="' + notifHref + '" class="pm-header-icon-btn" aria-label="' + escapeHtml(shellT("notificationsAria")) + '">🔔</a>' +
           '<div class="pm-user-badge-wrap">' +
             '<span class="pm-user-role-chip">' + escapeHtml(roleBadge) + '</span>' +
             '<span class="pm-user-name-text">' + escapeHtml(user.full_name || "") + '</span>' +
           '</div>' +
-          '<button type="button" class="pm-header-logout-btn" onclick="logout()" aria-label="Sign out of Pashu-Mitra">Sign out</button>' +
+          '<button type="button" class="pm-header-logout-btn" onclick="logout()" aria-label="' + escapeHtml(shellT("signOutAria")) + '">' + escapeHtml(shellT("signOut")) + '</button>' +
         '</div>'
       );
     } else {
       userSection = (
         '<div class="pm-header-auth-actions">' +
-          '<a href="#/login/owner" class="pm-auth-cta-farmer">Farmer OTP Login</a>' +
-          '<a href="#/" class="pm-auth-cta-staff">Officer Access</a>' +
+          '<a href="#/login/owner" class="pm-auth-cta-farmer">' + shellT("farmerOtpLogin") + '</a>' +
+          '<a href="#/officer-access" class="pm-auth-cta-staff">' + shellT("officerAccess") + '</a>' +
         '</div>'
       );
     }
@@ -529,15 +786,15 @@
       '<header class="pm-site-header" id="site-header" role="banner">' +
         '<div class="pm-site-header-inner">' +
           '<a class="pm-brand" href="' + escapeHtml(logo.href || "#/") + '" ' +
-            'aria-label="' + escapeHtml((org.appName || "Pashu-Mitra") + " — go to the home page") + '">' +
+            'aria-label="' + escapeHtml((org.appName || "Pashu-Mitra") + " — " + shellT("goHomeAria")) + '">' +
             logoInner +
             '<span class="pm-brand-text">' +
               '<span class="pm-brand-name">' + escapeHtml(org.appName || "Pashu-Mitra") + "</span>" +
-              '<span class="pm-brand-tag">' + escapeHtml(org.tagline || "Animal Health & Livestock Services") + "</span>" +
+              '<span class="pm-brand-tag">' + escapeHtml(shellLang() === "en" ? (org.tagline || "Animal Health & Livestock Services") : shellT("identityTitle")) + "</span>" +
             "</span>" +
           "</a>" +
           '<div class="pm-header-actions">' +
-            '<button type="button" class="pm-header-search-btn" onclick="location.hash=\'#/search\'" aria-label="Search animal health portal">🔍 <span class="pm-search-label">Search</span></button>' +
+            '<button type="button" class="pm-header-search-btn" onclick="location.hash=\'#/search\'" aria-label="' + escapeHtml(shellT("searchAria")) + '">🔍 <span class="pm-search-label">' + escapeHtml(shellT("searchLabel")) + '</span></button>' +
             userSection +
           "</div>" +
           '<p class="pm-owner">' +
@@ -550,6 +807,8 @@
   }
 
   function updateNavigation() {
+    const barHost = document.getElementById("pmA11yBarHost");
+    if (barHost) barHost.innerHTML = renderA11yBar();
     const headerHost = document.getElementById("pmSiteHeaderHost");
     if (headerHost) {
       headerHost.innerHTML = renderSiteHeader();
@@ -596,9 +855,15 @@
     getScaleIndex: function () { return prefs.scaleIndex; },
     togglePref: togglePref,
     setLanguage: setLanguage,
+    syncAppLanguage: syncAppLanguage,
     updateNavigation: updateNavigation,
     prefs: prefs,
     renderFooter: renderFooter,
+    // Renderers exposed for tests and for hosts that need to re-render a
+    // single piece of chrome without a full navigation.
+    renderSiteHeader: renderSiteHeader,
+    renderA11yBar: renderA11yBar,
+    renderPrimaryNavigation: renderPrimaryNavigation,
   };
 
   if (document.readyState === "loading") {

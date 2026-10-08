@@ -3346,6 +3346,17 @@ def delete_campaign(campaign_id):
 @app.get("/api/govt/geo")
 @auth_required(roles=["govt", "vet"])
 def govt_geo():
+    """District aggregation that feeds the Government GIS Risk Map.
+
+    This is the portal's risk-map endpoint (the equivalent of a
+    ``/api/govt/gis/risk-map`` route, kept at the existing REST path so the
+    architecture is unchanged). Every value is computed from the live
+    database; the only non-database values are the district marker
+    coordinates, which are *public administrative district centroids*
+    (Survey-of-India-style district headquarters coordinates, already used
+    elsewhere in the product by ``weather.DISTRICT_COORDS``). No individual
+    animal or farmer coordinate is ever exposed here.
+    """
     conn = get_db()
     rows = conn.execute(
         """
@@ -3354,7 +3365,9 @@ def govt_geo():
                SUM(CASE WHEN c.status NOT IN ('CLOSED','RECOVERED') THEN 1 ELSE 0 END) AS active,
                SUM(CASE WHEN LOWER(COALESCE(c.severity,'')) IN ('high','critical') THEN 1 ELSE 0 END) AS high_severity,
                SUM(CASE WHEN c.reported_through IN ('HELPLINE','IVR') THEN 1 ELSE 0 END) AS helpline_cases,
-               COUNT(DISTINCT c.animal_id) AS affected_animals
+               COUNT(DISTINCT c.animal_id) AS affected_animals,
+               COALESCE(SUM(c.deaths), 0) AS mortality,
+               MAX(c.created_at) AS last_case_at
         FROM animals a LEFT JOIN cases c ON c.animal_id = a.id
         GROUP BY LOWER(district)
         ORDER BY cases DESC
@@ -3364,6 +3377,11 @@ def govt_geo():
         "SELECT COALESCE(NULLIF(TRIM(district),''), 'Unknown') d, COUNT(*) c FROM animals GROUP BY LOWER(d)"
     ).fetchall()
     pop = {r["d"].title(): r["c"] for r in animals_by_district}
+    deceased_by_district = conn.execute(
+        "SELECT COALESCE(NULLIF(TRIM(district),''), 'Unknown') d, COUNT(*) c "
+        "FROM animals WHERE status='Deceased' GROUP BY LOWER(d)"
+    ).fetchall()
+    deceased = {r["d"].title(): r["c"] for r in deceased_by_district}
     diseases_by_district = conn.execute(
         """
         SELECT COALESCE(NULLIF(TRIM(a.district),''), 'Unknown') district,
@@ -3389,15 +3407,28 @@ def govt_geo():
             risk = "Moderate Risk"
         else:
             risk = "Low Risk"
+        # Map to the semantic risk vocabulary (colour is never the only signal;
+        # the marker popup and the summary table always print the level too).
+        risk_level = {"High Risk": "CRITICAL" if (r["mortality"] or 0) > 0 and high > 0 else "HIGH",
+                      "Moderate Risk": "MODERATE",
+                      "Low Risk": "LOW"}[risk]
+        coords = weather.get_coords_for_district(name) or weather.get_coords_for_district(r["district"])
         out.append({
             "district": name,
+            # Public district centroid (never an animal/farmer location).
+            "latitude": coords[0] if coords else None,
+            "longitude": coords[1] if coords else None,
             "cases": cases,
             "active": r["active"] or 0,
             "high_severity": high,
             "helpline_cases": r["helpline_cases"] or 0,
             "affected_animals": affected,
             "animal_population": pop.get(name, 0),
+            "mortality": (r["mortality"] or 0) + (deceased.get(name, 0)),
             "risk_level": risk,
+            "severity": "HIGH" if high > 0 else ("MODERATE" if cases > 0 else "NONE"),
+            "risk": risk_level,
+            "updated_at": r["last_case_at"],
             "diseases": dmap.get(name, []),
         })
     return jsonify(out)
