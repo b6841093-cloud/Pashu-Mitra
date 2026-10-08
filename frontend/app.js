@@ -66,7 +66,7 @@ const I18N = {
     "role.lab.desc": "Sample intake, verification, biological testing, result entry & verified lab reports",
     "btn.login": "Login", "btn.register": "Register", "btn.logout": "Logout",
     "btn.save": "Save", "btn.submit": "Submit", "btn.create": "Create",
-    "home.access_label": "Sign in:", "home.access_farmer": "Farmer OTP Login", "home.access_officer": "Officer Access", "auth.choose": "Choose your portal", "auth.newHere": "New here?",
+    "auth.choose": "Choose your portal", "auth.newHere": "New here?",
     "auth.haveAccount": "Already registered?", "auth.createAccount": "Create an account",
     "lang.label": "Language",
     "farmer.app_name": "Pashu-Mitra",
@@ -311,7 +311,7 @@ const I18N = {
     "role.lab.desc": "नमुना स्वीकृती, पडताळणी, जैविक चाचण्या, निकाल नोंदणी आणि अहवाल",
     "btn.login": "लॉगिन", "btn.register": "नोंदणी", "btn.logout": "बाहेर पडा",
     "btn.save": "जतन करा", "btn.submit": "सादर करा", "btn.create": "तयार करा",
-    "home.access_label": "लॉगिन:", "home.access_farmer": "शेतकरी OTP लॉगिन", "home.access_officer": "अधिकारी प्रवेश", "auth.choose": "तुमचे पोर्टल निवडा", "auth.newHere": "नवीन आहात?",
+    "auth.choose": "तुमचे पोर्टल निवडा", "auth.newHere": "नवीन आहात?",
     "auth.haveAccount": "आधीच नोंदणी केली आहे?", "auth.createAccount": "खाते तयार करा",
     "lang.label": "भाषा",
     "farmer.app_name": "पशुमित्र",
@@ -552,7 +552,7 @@ const I18N = {
     "role.lab.desc": "नमूना प्राप्ति, सत्यापन, जैविक परीक्षण, परिणाम प्रविष्टि और रिपोर्ट",
     "btn.login": "लॉगिन", "btn.register": "पंजीकरण", "btn.logout": "लॉगआउट",
     "btn.save": "सहेजें", "btn.submit": "जमा करें", "btn.create": "बनाएं",
-    "home.access_label": "लॉगिन करें:", "home.access_farmer": "किसान OTP लॉगिन", "home.access_officer": "अधिकारी प्रवेश", "auth.choose": "अपना पोर्टल चुनें", "auth.newHere": "यहां नए हैं?",
+    "auth.choose": "अपना पोर्टल चुनें", "auth.newHere": "यहां नए हैं?",
     "auth.haveAccount": "पहले से पंजीकृत?", "auth.createAccount": "खाता बनाएं",
     "lang.label": "भाषा",
     "farmer.app_name": "पशु-मित्र",
@@ -793,7 +793,7 @@ const I18N = {
     "role.lab.desc": "నమూనా స్వీకరణ, ధృవీకరణ, జైవిక పరీక్షలు, ఫలితాల నమోదు & నివేదికలు",
     "btn.login": "లాగిన్", "btn.register": "నమోదు", "btn.logout": "లాగౌట్",
     "btn.save": "సేవ్ చేయండి", "btn.submit": "సమర్పించండి", "btn.create": "సృష్టించండి",
-    "home.access_label": "లాగిన్:", "home.access_farmer": "రైతు OTP లాగిన్", "home.access_officer": "అధికారి ప్రవేశం", "auth.choose": "మీ పోర్టల్ ఎంచుకోండి", "auth.newHere": "కొత్తగా వచ్చారా?",
+    "auth.choose": "మీ పోర్టల్ ఎంచుకోండి", "auth.newHere": "కొత్తగా వచ్చారా?",
     "auth.haveAccount": "ఇప్పటికే నమోదు చేసుకున్నారా?", "auth.createAccount": "ఖాతా సృష్టించండి",
     "lang.label": "భాష",
     "farmer.app_name": "పశు-మిత్ర",
@@ -1791,7 +1791,7 @@ function brandLogoHtml(options) {
 
 function renderRoleSelect() {
   render(`
-  <div class="pm-landing-grid pm-landing-solo">
+  <div class="pm-landing-grid">
     <div class="pm-landing-hero">
       <div class="pm-portal-badge">Digital Animal Health Portal · पशु स्वास्थ्य सेवा</div>
       <h1 class="pm-landing-title">Integrated Livestock Healthcare & Surveillance Network</h1>
@@ -1840,11 +1840,6 @@ function renderRoleSelect() {
       </div>
     </div>
 
-    <div class="pm-landing-access-note">
-      <span>${t("home.access_label")}</span>
-      <a class="pm-access-link pm-access-link-farmer" href="#/login/owner">${t("home.access_farmer")}</a>
-      <a class="pm-access-link pm-access-link-staff" href="#/officer-access">${t("home.access_officer")}</a>
-    </div>
   </div>`);
 }
 
