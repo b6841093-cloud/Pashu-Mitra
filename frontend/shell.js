@@ -203,13 +203,13 @@
 
   /* ---------------------------------------------------------- breadcrumbs */
   function crumbLabelFor(key) {
-    const map = { "#/": "crumbHome", "#/about": "fAboutUs", "#/contact": "contact", "#/feedback": "fFeedback", "#/help": "help", "#/sitemap": "fSiteMap", "#/search": "search", "#/policies": "fPolicies", owner: "crumbOwner", vet: "crumbVet", govt: "crumbGovt", lab: "crumbLab" };
+    const map = { "#/": "crumbHome", "#/home": "crumbHome", "#/about": "fAboutUs", "#/contact": "contact", "#/feedback": "fFeedback", "#/help": "help", "#/sitemap": "fSiteMap", "#/search": "search", "#/policies": "fPolicies", owner: "crumbOwner", vet: "crumbVet", govt: "crumbGovt", lab: "crumbLab" };
     return map[key] || null;
   }
 
   function breadcrumbTrail(routePath, extraLabel) {
     const parts = String(routePath || "").split("/").filter(Boolean);
-    const trail = [{ href: "#/", label: shellT("crumbHome") }];
+    const trail = [{ href: "#/home", label: shellT("crumbHome") }];
     if (parts[0] && crumbLabelFor(parts[0])) {
       trail.push({ href: "#/", label: shellT(crumbLabelFor(parts[0])) });
     }
@@ -277,7 +277,7 @@
         vet: [["#/vet/dashboard", "Dashboard", "📊"], ["#/vet/cases", "Cases", "🩺"], ["#/vet/calls", "Web Calls", "📞"], ["#/vet/advisories", "Advisories", "📢"], ["#/vet/search", "Livestock", "🔍"], ["#/vet/campaigns", "Campaigns", "💉"], ["#/vet/reports", "Reports", "📋"], ["#/vet/profile", "Profile", "👤"]],
         govt: [["#/govt/dashboard", "Dashboard", "📊"], ["#/govt/surveillance", "Surveillance", "🌐"], ["#/govt/blocks", "Districts", "🏘️"], ["#/govt/trends", "Trends", "📈"], ["#/govt/gis", "GIS Map", "🗺️"], ["#/govt/ai", "AI Outbreak", "🧠"], ["#/govt/export", "Reports & Export", "📥"], ["#/govt/profile", "Profile", "👤"]],
         lab: [["#/lab/dashboard", "Dashboard", "📊"], ["#/lab/queue", "Sample Queue", "🧪"], ["#/scan", "QR Scanner", "📷"], ["#/lab/lab-reports", "Reports", "📋"], ["#/lab/notifications", "Alerts", "🔔"], ["#/lab/profile", "Profile", "👤"]],
-        public: [["#/", "Home", "🏛️"], ["#/login/owner", "Farmer Portal", "🧑‍🌾"], ["#/login/vet", "Veterinary Officer", "🩺"], ["#/login/govt", "Government Official", "🏛️"], ["#/login/lab", "Diagnostic Laboratory", "🧪"], ["#/about", "About Us", "ℹ️"], ["#/contact", "Contact", "📞"], ["#/help", "Help", "❓"]],
+        public: [["#/home", "Home", "🏛️"], ["#/login/owner", "Farmer Portal", "🧑‍🌾"], ["#/login/vet", "Veterinary Portal", "🩺"], ["#/login/govt", "Government Portal", "🏛️"], ["#/login/lab", "Laboratory Portal", "🧪"], ["#/about", "About Us", "ℹ️"], ["#/contact", "Contact", "📞"], ["#/help", "Help", "❓"]],
       },
       fAbout: "About this service",
       fContact: "Contact",
@@ -347,7 +347,7 @@
         vet: [["#/vet/dashboard", "डैशबोर्ड", "📊"], ["#/vet/cases", "मामले", "🩺"], ["#/vet/calls", "वेब कॉल", "📞"], ["#/vet/advisories", "सलाह", "📢"], ["#/vet/search", "पशुधन", "🔍"], ["#/vet/campaigns", "अभियान", "💉"], ["#/vet/reports", "रिपोर्ट", "📋"], ["#/vet/profile", "प्रोफ़ाइल", "👤"]],
         govt: [["#/govt/dashboard", "डैशबोर्ड", "📊"], ["#/govt/surveillance", "निगरानी", "🌐"], ["#/govt/blocks", "ज़िले", "🏘️"], ["#/govt/trends", "प्रवृत्तियाँ", "📈"], ["#/govt/gis", "जीआईएस नक्शा", "🗺️"], ["#/govt/ai", "एआई प्रकोप", "🧠"], ["#/govt/export", "रिपोर्ट व निर्यात", "📥"], ["#/govt/profile", "प्रोफ़ाइल", "👤"]],
         lab: [["#/lab/dashboard", "डैशबोर्ड", "📊"], ["#/lab/queue", "नमूना कतार", "🧪"], ["#/scan", "क्यूआर स्कैन", "📷"], ["#/lab/lab-reports", "रिपोर्ट", "📋"], ["#/lab/notifications", "अलर्ट", "🔔"], ["#/lab/profile", "प्रोफ़ाइल", "👤"]],
-        public: [["#/", "होम", "🏛️"], ["#/login/owner", "किसान पोर्टल", "🧑‍🌾"], ["#/login/vet", "पशु चिकित्सा अधिकारी", "🩺"], ["#/login/govt", "सरकारी अधिकारी", "🏛️"], ["#/login/lab", "नैदानिक प्रयोगशाला", "🧪"], ["#/about", "हमारे बारे में", "ℹ️"], ["#/contact", "संपर्क", "📞"], ["#/help", "सहायता", "❓"]],
+        public: [["#/home", "होम", "🏛️"], ["#/login/owner", "किसान पोर्टल", "🧑‍🌾"], ["#/login/vet", "पशु चिकित्सा पोर्टल", "🩺"], ["#/login/govt", "सरकारी पोर्टल", "🏛️"], ["#/login/lab", "प्रयोगशाला पोर्टल", "🧪"], ["#/about", "हमारे बारे में", "ℹ️"], ["#/contact", "संपर्क", "📞"], ["#/help", "सहायता", "❓"]],
       },
       fAbout: "इस सेवा के बारे में",
       fContact: "संपर्क",
@@ -417,7 +417,7 @@
         vet: [["#/vet/dashboard", "डॅशबोर्ड", "📊"], ["#/vet/cases", "प्रकरणे", "🩺"], ["#/vet/calls", "वेब कॉल", "📞"], ["#/vet/advisories", "सल्ला", "📢"], ["#/vet/search", "पशुधन", "🔍"], ["#/vet/campaigns", "मोहीम", "💉"], ["#/vet/reports", "अहवाल", "📋"], ["#/vet/profile", "प्रोफाइल", "👤"]],
         govt: [["#/govt/dashboard", "डॅशबोर्ड", "📊"], ["#/govt/surveillance", "संसर्ग नियंत्रण", "🌐"], ["#/govt/blocks", "जिल्हे", "🏘️"], ["#/govt/trends", "कल", "📈"], ["#/govt/gis", "जीआयएस नकाशा", "🗺️"], ["#/govt/ai", "एआय उत्पात", "🧠"], ["#/govt/export", "अहवाल व निर्यात", "📥"], ["#/govt/profile", "प्रोफाइल", "👤"]],
         lab: [["#/lab/dashboard", "डॅशबोर्ड", "📊"], ["#/lab/queue", "नमुना रांग", "🧪"], ["#/scan", "क्यूआर स्कॅन", "📷"], ["#/lab/lab-reports", "अहवाल", "📋"], ["#/lab/notifications", "सूचना", "🔔"], ["#/lab/profile", "प्रोफाइल", "👤"]],
-        public: [["#/", "मुख्यपृष्ठ", "🏛️"], ["#/login/owner", "शेतकरी पोर्टल", "🧑‍🌾"], ["#/login/vet", "पशुवैद्यक अधिकारी", "🩺"], ["#/login/govt", "शासकीय अधिकारी", "🏛️"], ["#/login/lab", "निदान प्रयोगशाळा", "🧪"], ["#/about", "आमच्याविषयी", "ℹ️"], ["#/contact", "संपर्क", "📞"], ["#/help", "मदत", "❓"]],
+        public: [["#/home", "मुख्यपृष्ठ", "🏛️"], ["#/login/owner", "शेतकरी पोर्टल", "🧑‍🌾"], ["#/login/vet", "पशुवैद्यक पोर्टल", "🩺"], ["#/login/govt", "शासकीय पोर्टल", "🏛️"], ["#/login/lab", "प्रयोगशाळा पोर्टल", "🧪"], ["#/about", "आमच्याविषयी", "ℹ️"], ["#/contact", "संपर्क", "📞"], ["#/help", "मदत", "❓"]],
       },
       fAbout: "या सेवेविषयी",
       fContact: "संपर्क",
@@ -487,7 +487,7 @@
         vet: [["#/vet/dashboard", "డాష్‌బోర్డ్", "📊"], ["#/vet/cases", "కేసులు", "🩺"], ["#/vet/calls", "వెబ్ కాల్స్", "📞"], ["#/vet/advisories", "సలహాలు", "📢"], ["#/vet/search", "పశుసంపద", "🔍"], ["#/vet/campaigns", "క్యాంపెయిన్లు", "💉"], ["#/vet/reports", "నివేదికలు", "📋"], ["#/vet/profile", "ప్రొఫైల్", "👤"]],
         govt: [["#/govt/dashboard", "డాష్‌బోర్డ్", "📊"], ["#/govt/surveillance", "పర్యవేక్షణ", "🌐"], ["#/govt/blocks", "జిల్లాలు", "🏘️"], ["#/govt/trends", "ధోరణలు", "📈"], ["#/govt/gis", "జిఐఎస్ మ్యాప్", "🗺️"], ["#/govt/ai", "ఏఐ వ్యాధివ్యాప్తి", "🧠"], ["#/govt/export", "నివేదికలు & ఎగుమతి", "📥"], ["#/govt/profile", "ప్రొఫైల్", "👤"]],
         lab: [["#/lab/dashboard", "డాష్‌బోర్డ్", "📊"], ["#/lab/queue", "నమూనా క్యూ", "🧪"], ["#/scan", "క్యూఆర్ స్కాన్", "📷"], ["#/lab/lab-reports", "నివేదికలు", "📋"], ["#/lab/notifications", "హెచ్చరికలు", "🔔"], ["#/lab/profile", "ప్రొఫైల్", "👤"]],
-        public: [["#/", "హోమ్", "🏛️"], ["#/login/owner", "రైతు పోర్టల్", "🧑‍🌾"], ["#/login/vet", "పశువైద్య అధికారి", "🩺"], ["#/login/govt", "ప్రభుత్వ అధికారి", "🏛️"], ["#/login/lab", "రోగనిర్ధారణ ప్రయోగశాల", "🧪"], ["#/about", "మా గురించి", "ℹ️"], ["#/contact", "సంప్రదించండి", "📞"], ["#/help", "సహాయం", "❓"]],
+        public: [["#/home", "హోమ్", "🏛️"], ["#/login/owner", "రైతు పోర్టల్", "🧑‍🌾"], ["#/login/vet", "పశువైద్య పోర్టల్", "🩺"], ["#/login/govt", "ప్రభుత్వ పోర్టల్", "🏛️"], ["#/login/lab", "ప్రయోగశాల పోర్టల్", "🧪"], ["#/about", "మా గురించి", "ℹ️"], ["#/contact", "సంప్రదించండి", "📞"], ["#/help", "సహాయం", "❓"]],
       },
       fAbout: "ఈ సేవ గురించి",
       fContact: "సంప్రదింపు",
@@ -785,7 +785,7 @@
     return '' +
       '<header class="pm-site-header" id="site-header" role="banner">' +
         '<div class="pm-site-header-inner">' +
-          '<a class="pm-brand" href="' + escapeHtml(logo.href || "#/") + '" ' +
+          '<a class="pm-brand" href="' + escapeHtml(logo.href || "#/home") + '" ' +
             'aria-label="' + escapeHtml((org.appName || "Pashu-Mitra") + " — " + shellT("goHomeAria")) + '">' +
             logoInner +
             '<span class="pm-brand-text">' +

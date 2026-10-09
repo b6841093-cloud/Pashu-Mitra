@@ -47,7 +47,7 @@
       mark: "🐄",                     // last-resort text fallback only
       alt: "Pashu-Mitra — Animal Disease Reporting and Veterinary Care Platform",
       aspectRatio: "auto",            // never force a ratio: the asset keeps its own
-      href: "#/",                     // logo links to the home page (GIGW Q01)
+      href: "#/home",                 // logo links to the home page (GIGW Q01)
     },
 
     // Q02 — Ownership. Placeholder until the owning body supplies it.

@@ -2139,3 +2139,93 @@ html.pm-reduced-motion *, html.pm-reduced-motion *::before, html.pm-reduced-moti
   .btn-sm { min-height: 44px; }
 }
 
+/* ---------- animal QR scanner & medical history (existing design tokens) ---------- */
+.owner-livestock-action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.owner-livestock-action-grid .btn {
+  min-height: 44px;
+}
+.scanner-video-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  background: #0b1e48;
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius-md);
+  overflow: hidden;
+  min-height: 220px;
+}
+.scanner-video-wrap video {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  background: #0b1e48;
+}
+.scanner-reticle {
+  position: absolute;
+  inset: 18%;
+  border: 2px solid #1fa971;
+  border-radius: 8px;
+  box-shadow: 0 0 0 999px rgba(11, 30, 72, 0.25);
+  pointer-events: none;
+}
+.qr-image-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0;
+}
+.qr-image-wrap img {
+  width: 180px;
+  height: 180px;
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius-sm);
+  background: #ffffff;
+}
+.pm-timestamp {
+  color: var(--pm-muted, #64748b);
+}
+.pm-photo-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.pm-photo-thumb {
+  width: 72px;
+  height: 72px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius-sm);
+  overflow: hidden;
+  background: #ffffff;
+  cursor: pointer;
+}
+.pm-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pm-photo-thumb:focus-visible {
+  outline: 3px solid var(--pm-focus, #102a6b);
+  outline-offset: 2px;
+}
+.pm-med-edit {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--pm-surface-alt, #f8fafc);
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius-sm);
+}
+@media (max-width: 480px) {
+  .scanner-video-wrap,
+  .scanner-video-wrap video { min-height: 180px; }
+  .owner-livestock-action-grid .btn { width: 100%; }
+}
+

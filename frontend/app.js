@@ -294,6 +294,39 @@ const I18N = {
     "farmer.enable_push": "Turn on notifications", "farmer.push_unsupported": "Push notifications are not supported on this device.",
     "farmer.push_permission_denied": "Notification permission was not given. Check your device settings.",
     "farmer.push_enabled": "Notifications are turned on.", "farmer.push_failed": "Could not turn on notifications. Please try again.",
+    "farmer.scan_animal_qr": "Scan Animal QR", "farmer.start_scanner": "Start Scanner", "farmer.stop_scanner": "Stop Scanner",
+    "farmer.enter_animal_id": "Enter Animal ID", "farmer.lookup_animal": "Look up",
+    "farmer.upload_qr_photo": "Upload QR photo", "farmer.upload_medical_photo": "Upload Medical Photo",
+    "farmer.medication_history": "Medication History", "farmer.treatment_date": "Treatment Date",
+    "farmer.record_created": "Record Created", "farmer.invalid_qr": "Invalid QR",
+    "farmer.unauthorized_access": "Unauthorized Access",
+    "farmer.upload_success": "Photo uploaded successfully.", "farmer.upload_failure": "Could not upload the photo. Please try again.",
+    "farmer.camera_denied": "Camera permission was denied. Use photo upload or enter the animal ID.",
+    "farmer.camera_unavailable": "No camera is available. Use photo upload or enter the animal ID.",
+    "farmer.camera_failed": "Could not start the camera. Use photo upload or enter the animal ID.",
+    "farmer.camera_idle": "Camera idle.", "farmer.camera_active": "Camera active. Position the QR code inside the square.",
+    "farmer.camera_stopped": "Camera stopped.", "farmer.qr_recognized": "QR code recognized.",
+    "farmer.manual_lookup_help": "If the camera cannot read the tag, enter the Animal ID (for example MH-PUN-000001).",
+    "farmer.scanner_help": "Point the camera at the QR tag on the animal. Private medical data is never stored in the QR code.",
+    "farmer.live_scanner": "Live camera scanner", "farmer.add_medication": "Add medication record",
+    "farmer.medication_name": "Medication or treatment name", "farmer.administration_method": "How it was given",
+    "farmer.reason": "Reason for treatment", "farmer.symptoms_obs": "Symptoms or observations",
+    "farmer.vet_name": "Veterinarian name", "farmer.next_dose": "Next dose",
+    "farmer.save_medication": "Save record", "farmer.edit_medication": "Edit record",
+    "farmer.medication_saved": "Medication record saved.", "farmer.no_medication_history": "No medication history yet.",
+    "farmer.farmer_submitted": "Farmer submitted", "farmer.vet_recorded": "Veterinarian recorded",
+    "farmer.not_vet_diagnosis": "This is farmer-submitted information, not a veterinarian-verified diagnosis.",
+    "farmer.photos": "Photographs", "farmer.view_photo": "View photograph", "farmer.close_photo": "Close photograph",
+    "farmer.created": "Created", "farmer.updated": "Updated", "farmer.treatment_at": "Treatment",
+    "farmer.duplicate_scan": "This QR code was already scanned.",
+    "farmer.sample_qr_not_animal": "That QR code is for a laboratory sample, not an animal.",
+    "farmer.medication_photo_hint": "Upload photos of packaging, prescriptions, treatment documents or bills (JPEG, PNG or WebP).",
+    "farmer.vet_record_locked": "Veterinarian-recorded information cannot be changed here.",
+    "farmer.photo_alt": "Medical photograph for {name}", "farmer.choose_files": "Choose photographs",
+    "farmer.record_author": "Recorded by", "farmer.date_time_treatment": "Date and time of treatment",
+    "farmer.date_time_entered": "Date and time entered", "farmer.looking_up": "Looking up animal…",
+    "ts.created": "Created", "ts.updated": "Updated", "ts.treatment": "Treatment", "ts.recorded": "Record created",
+    "ts.collected": "Collected", "ts.tested": "Tested", "ts.reported": "Reported", "ts.follow_up": "Follow-up",
   },
   mr: {
     "app.tagline": "पशुधन रोग अहवाल आणि पशुवैद्यकीय सेवा — महाराष्ट्र",
@@ -535,6 +568,39 @@ const I18N = {
     "farmer.enable_push": "सूचना सुरू करा", "farmer.push_unsupported": "या उपकरणावर पुश सूचना उपलब्ध नाहीत.",
     "farmer.push_permission_denied": "सूचनांची परवानगी दिली नाही. उपकरणाच्या सेटिंग्ज तपासा.",
     "farmer.push_enabled": "सूचना सुरू झाल्या.", "farmer.push_failed": "सूचना सुरू करता आल्या नाहीत. पुन्हा प्रयत्न करा.",
+    "farmer.scan_animal_qr": "प्राण्याचा QR स्कॅन करा", "farmer.start_scanner": "स्कॅनर सुरू करा", "farmer.stop_scanner": "स्कॅनर थांबवा",
+    "farmer.enter_animal_id": "प्राणी क्रमांक लिहा", "farmer.lookup_animal": "शोधा",
+    "farmer.upload_qr_photo": "QR चा फोटो अपलोड करा", "farmer.upload_medical_photo": "वैद्यकीय फोटो अपलोड करा",
+    "farmer.medication_history": "औषधांचा इतिहास", "farmer.treatment_date": "उपचाराची तारीख",
+    "farmer.record_created": "नोंद तयार झाली", "farmer.invalid_qr": "अवैध QR",
+    "farmer.unauthorized_access": "परवानगी नाही",
+    "farmer.upload_success": "फोटो यशस्वीरीत्या अपलोड झाला.", "farmer.upload_failure": "फोटो अपलोड झाला नाही. पुन्हा प्रयत्न करा.",
+    "farmer.camera_denied": "कॅमेरा परवानगी नाकारली. फोटो अपलोड करा किंवा प्राणी क्रमांक लिहा.",
+    "farmer.camera_unavailable": "कॅमेरा उपलब्ध नाही. फोटो अपलोड करा किंवा प्राणी क्रमांक लिहा.",
+    "farmer.camera_failed": "कॅमेरा सुरू झाला नाही. फोटो अपलोड करा किंवा प्राणी क्रमांक लिहा.",
+    "farmer.camera_idle": "कॅमेरा बंद आहे.", "farmer.camera_active": "कॅमेरा सुरू आहे. QR कोड चौकोनात आणा.",
+    "farmer.camera_stopped": "कॅमेरा थांबवला.", "farmer.qr_recognized": "QR कोड ओळखला.",
+    "farmer.manual_lookup_help": "कॅमेराने टॅग वाचू शकत नसेल तर प्राणी क्रमांक लिहा (उदा. MH-PUN-000001).",
+    "farmer.scanner_help": "प्राण्याच्या QR टॅगवर कॅमेरा रोखा. खाजगी वैद्यकीय माहिती QR मध्ये नसते.",
+    "farmer.live_scanner": "थेट कॅमेरा स्कॅनर", "farmer.add_medication": "औषधाची नोंद जोडा",
+    "farmer.medication_name": "औषध किंवा उपचाराचे नाव", "farmer.administration_method": "कसे दिले",
+    "farmer.reason": "उपचाराचे कारण", "farmer.symptoms_obs": "लक्षणे किंवा निरीक्षणे",
+    "farmer.vet_name": "पशुवैद्यकाचे नाव", "farmer.next_dose": "पुढील मात्रा",
+    "farmer.save_medication": "नोंद जतन करा", "farmer.edit_medication": "नोंद संपादा",
+    "farmer.medication_saved": "औषधाची नोंद जतन झाली.", "farmer.no_medication_history": "औषधांचा इतिहास नाही.",
+    "farmer.farmer_submitted": "शेतकऱ्याने दिलेली माहिती", "farmer.vet_recorded": "पशुवैद्यकाने नोंदवले",
+    "farmer.not_vet_diagnosis": "ही शेतकऱ्याने दिलेली माहिती आहे, पशुवैद्यकाची खात्री केलेली निदान नाही.",
+    "farmer.photos": "छायाचित्रे", "farmer.view_photo": "छायाचित्र पहा", "farmer.close_photo": "छायाचित्र बंद करा",
+    "farmer.created": "तयार", "farmer.updated": "अद्ययावत", "farmer.treatment_at": "उपचार",
+    "farmer.duplicate_scan": "हा QR कोड आधीच स्कॅन झाला आहे.",
+    "farmer.sample_qr_not_animal": "हा QR प्रयोगशाळेच्या नमुन्यासाठी आहे, प्राण्यासाठी नाही.",
+    "farmer.medication_photo_hint": "पॅकिंग, प्रिस्क्रिप्शन, उपचार कागदपत्रे किंवा बिलांचे फोटो अपलोड करा (JPEG, PNG किंवा WebP).",
+    "farmer.vet_record_locked": "पशुवैद्यकाने नोंदवलेली माहिती येथे बदलता येत नाही.",
+    "farmer.photo_alt": "{name} साठी वैद्यकीय छायाचित्र", "farmer.choose_files": "छायाचित्रे निवडा",
+    "farmer.record_author": "नोंद करणारे", "farmer.date_time_treatment": "उपचाराची तारीख आणि वेळ",
+    "farmer.date_time_entered": "नोंद केल्याची तारीख आणि वेळ", "farmer.looking_up": "प्राणी शोधत आहोत…",
+    "ts.created": "तयार", "ts.updated": "अद्ययावत", "ts.treatment": "उपचार", "ts.recorded": "नोंद तयार झाली",
+    "ts.collected": "गोळा केले", "ts.tested": "तपासले", "ts.reported": "कळवले", "ts.follow_up": "पुढील भेट",
   },
   hi: {
     "app.tagline": "पशुधन रोग रिपोर्टिंग और पशु चिकित्सा सेवा — महाराष्ट्र",
@@ -776,6 +842,39 @@ const I18N = {
     "farmer.enable_push": "सूचनाएं चालू करें", "farmer.push_unsupported": "इस डिवाइस पर पुश सूचनाएं उपलब्ध नहीं हैं।",
     "farmer.push_permission_denied": "सूचना की अनुमति नहीं मिली। डिवाइस की सेटिंग जांचें।",
     "farmer.push_enabled": "सूचनाएं चालू हो गई हैं।", "farmer.push_failed": "सूचनाएं चालू नहीं हो पाईं। फिर कोशिश करें।",
+    "farmer.scan_animal_qr": "पशु का QR स्कैन करें", "farmer.start_scanner": "स्कैनर शुरू करें", "farmer.stop_scanner": "स्कैनर रोकें",
+    "farmer.enter_animal_id": "पशु आईडी लिखें", "farmer.lookup_animal": "खोजें",
+    "farmer.upload_qr_photo": "QR फोटो अपलोड करें", "farmer.upload_medical_photo": "मेडिकल फोटो अपलोड करें",
+    "farmer.medication_history": "दवा का इतिहास", "farmer.treatment_date": "इलाज की तारीख",
+    "farmer.record_created": "रिकॉर्ड बनाया गया", "farmer.invalid_qr": "अमान्य QR",
+    "farmer.unauthorized_access": "अनुमति नहीं",
+    "farmer.upload_success": "फोटो सफलतापूर्वक अपलोड हुआ।", "farmer.upload_failure": "फोटो अपलोड नहीं हो सका। फिर कोशिश करें।",
+    "farmer.camera_denied": "कैमरा अनुमति नहीं मिली। फोटो अपलोड करें या पशु आईडी लिखें।",
+    "farmer.camera_unavailable": "कैमरा उपलब्ध नहीं है। फोटो अपलोड करें या पशु आईडी लिखें।",
+    "farmer.camera_failed": "कैमरा शुरू नहीं हो सका। फोटो अपलोड करें या पशु आईडी लिखें।",
+    "farmer.camera_idle": "कैमरा बंद है।", "farmer.camera_active": "कैमरा चालू है। QR कोड को चौकोर में लाएँ।",
+    "farmer.camera_stopped": "कैमरा बंद किया गया।", "farmer.qr_recognized": "QR कोड पहचाना गया।",
+    "farmer.manual_lookup_help": "कैमरा टैग न पढ़ सके तो पशु आईडी लिखें (जैसे MH-PUN-000001)।",
+    "farmer.scanner_help": "पशु के QR टैग पर कैमरा रखें। निजी मेडिकल जानकारी QR में नहीं होती।",
+    "farmer.live_scanner": "लाइव कैमरा स्कैनर", "farmer.add_medication": "दवा का रिकॉर्ड जोड़ें",
+    "farmer.medication_name": "दवा या इलाज का नाम", "farmer.administration_method": "कैसे दी गई",
+    "farmer.reason": "इलाज का कारण", "farmer.symptoms_obs": "लक्षण या निरीक्षण",
+    "farmer.vet_name": "पशु चिकित्सक का नाम", "farmer.next_dose": "अगली खुराक",
+    "farmer.save_medication": "रिकॉर्ड सहेजें", "farmer.edit_medication": "रिकॉर्ड बदलें",
+    "farmer.medication_saved": "दवा का रिकॉर्ड सहेजा गया।", "farmer.no_medication_history": "दवा का इतिहास नहीं है।",
+    "farmer.farmer_submitted": "किसान द्वारा दी गई जानकारी", "farmer.vet_recorded": "पशु चिकित्सक द्वारा दर्ज",
+    "farmer.not_vet_diagnosis": "यह किसान द्वारा दी गई जानकारी है, पशु चिकित्सक द्वारा पुष्टि किया निदान नहीं।",
+    "farmer.photos": "तस्वीरें", "farmer.view_photo": "तस्वीर देखें", "farmer.close_photo": "तस्वीर बंद करें",
+    "farmer.created": "बनाया गया", "farmer.updated": "अपडेट", "farmer.treatment_at": "इलाज",
+    "farmer.duplicate_scan": "यह QR कोड पहले ही स्कैन हो चुका है।",
+    "farmer.sample_qr_not_animal": "यह QR प्रयोगशाला नमूने का है, पशु का नहीं।",
+    "farmer.medication_photo_hint": "पैकिंग, प्रिस्क्रिप्शन, इलाज के कागज़ या बिल की तस्वीरें अपलोड करें (JPEG, PNG या WebP)।",
+    "farmer.vet_record_locked": "पशु चिकित्सक द्वारा दर्ज जानकारी यहाँ नहीं बदली जा सकती।",
+    "farmer.photo_alt": "{name} की मेडिकल तस्वीर", "farmer.choose_files": "तस्वीरें चुनें",
+    "farmer.record_author": "दर्ज करने वाले", "farmer.date_time_treatment": "इलाज की तारीख और समय",
+    "farmer.date_time_entered": "दर्ज करने की तारीख और समय", "farmer.looking_up": "पशु खोजा जा रहा है…",
+    "ts.created": "बनाया गया", "ts.updated": "अपडेट", "ts.treatment": "इलाज", "ts.recorded": "रिकॉर्ड बनाया गया",
+    "ts.collected": "एकत्र", "ts.tested": "जाँच", "ts.reported": "रिपोर्ट", "ts.follow_up": "अगली जाँच",
   },
   te: {
     "app.tagline": "పశువుల వ్యాధి నివేదిక & పశు వైద్య సేవ — మహారాష్ట్ర",
@@ -1017,6 +1116,39 @@ const I18N = {
     "farmer.enable_push": "సూచనలను ప్రారంభించండి", "farmer.push_unsupported": "ఈ పరికరంలో పుష్ సూచనలు అందుబాటులో లేవు.",
     "farmer.push_permission_denied": "సూచనలకు అనుమతి ఇవ్వలేదు. పరికర సెట్టింగ్‌లను చూడండి.",
     "farmer.push_enabled": "సూచనలు ప్రారంభించబడ్డాయి.", "farmer.push_failed": "సూచనలను ప్రారంభించలేకపోయాం. మళ్లీ ప్రయత్నించండి.",
+    "farmer.scan_animal_qr": "జంతువు QR స్కాన్ చేయండి", "farmer.start_scanner": "స్కానర్ ప్రారంభించండి", "farmer.stop_scanner": "స్కానర్ ఆపండి",
+    "farmer.enter_animal_id": "జంతువు సంఖ్య నమోదు చేయండి", "farmer.lookup_animal": "వెతకండి",
+    "farmer.upload_qr_photo": "QR ఫోటో అప్‌లోడ్ చేయండి", "farmer.upload_medical_photo": "వైద్య ఫోటో అప్‌లోడ్ చేయండి",
+    "farmer.medication_history": "మందుల చరిత్ర", "farmer.treatment_date": "చికిత్స తేదీ",
+    "farmer.record_created": "రికార్డు సృష్టించబడింది", "farmer.invalid_qr": "చెల్లని QR",
+    "farmer.unauthorized_access": "అనుమతి లేదు",
+    "farmer.upload_success": "ఫోటో విజయవంతంగా అప్‌లోడ్ అయింది.", "farmer.upload_failure": "ఫోటో అప్‌లోడ్ కాలేదు. మళ్లీ ప్రయత్నించండి.",
+    "farmer.camera_denied": "కెమెరా అనుమతి నిరాకరించబడింది. ఫోటో అప్‌లోడ్ చేయండి లేదా జంతువు సంఖ్య నమోదు చేయండి.",
+    "farmer.camera_unavailable": "కెమెరా అందుబాటులో లేదు. ఫోటో అప్‌లోడ్ చేయండి లేదా జంతువు సంఖ్య నమోదు చేయండి.",
+    "farmer.camera_failed": "కెమెరా ప్రారంభించలేకపోయాం. ఫోటో అప్‌లోడ్ చేయండి లేదా జంతువు సంఖ్య నమోదు చేయండి.",
+    "farmer.camera_idle": "కెమెరా ఆఫ్‌లో ఉంది.", "farmer.camera_active": "కెమెరా ఆన్‌లో ఉంది. QR కోడ్‌ను చతురస్రంలో ఉంచండి.",
+    "farmer.camera_stopped": "కెమెరా ఆపబడింది.", "farmer.qr_recognized": "QR కోడ్ గుర్తించబడింది.",
+    "farmer.manual_lookup_help": "కెమెరా ట్యాగ్ చదవలేకపోతే జంతువు సంఖ్య నమోదు చేయండి (ఉదా. MH-PUN-000001).",
+    "farmer.scanner_help": "జంతువు QR ట్యాగ్‌పై కెమెరా పెట్టండి. వైద్య సమాచారం QRలో ఉండదు.",
+    "farmer.live_scanner": "లైవ్ కెమెరా స్కానర్", "farmer.add_medication": "మందు రికార్డు జోడించండి",
+    "farmer.medication_name": "మందు లేదా చికిత్స పేరు", "farmer.administration_method": "ఎలా ఇచ్చారు",
+    "farmer.reason": "చికిత్స కారణం", "farmer.symptoms_obs": "లక్షణాలు లేదా పరిశీలనలు",
+    "farmer.vet_name": "పశువైద్యుని పేరు", "farmer.next_dose": "తదుపరి మోతాదు",
+    "farmer.save_medication": "రికార్డు భద్రపరచండి", "farmer.edit_medication": "రికార్డు సవరించండి",
+    "farmer.medication_saved": "మందు రికార్డు భద్రపరచబడింది.", "farmer.no_medication_history": "మందుల చరిత్ర లేదు.",
+    "farmer.farmer_submitted": "రైతు సమర్పించిన సమాచారం", "farmer.vet_recorded": "పశువైద్యుడు నమోదు చేసినది",
+    "farmer.not_vet_diagnosis": "ఇది రైతు సమర్పించిన సమాచారం, పశువైద్యుడు ధృవీకరించిన నిర్ధారణ కాదు.",
+    "farmer.photos": "ఫోటోలు", "farmer.view_photo": "ఫోటో చూడండి", "farmer.close_photo": "ఫోటో మూసివేయండి",
+    "farmer.created": "సృష్టించినది", "farmer.updated": "నవీకరించినది", "farmer.treatment_at": "చికిత్స",
+    "farmer.duplicate_scan": "ఈ QR కోడ్ ఇప్పటికే స్కాన్ చేయబడింది.",
+    "farmer.sample_qr_not_animal": "ఈ QR ప్రయోగశాల నమూనాది, జంతువుది కాదు.",
+    "farmer.medication_photo_hint": "ప్యాకేజింగ్, ప్రిస్క్రిప్షన్, చికిత్స పత్రాలు లేదా బిల్లుల ఫోటోలు అప్‌లోడ్ చేయండి (JPEG, PNG లేదా WebP).",
+    "farmer.vet_record_locked": "పశువైద్యుడు నమోదు చేసిన సమాచారాన్ని ఇక్కడ మార్చలేరు.",
+    "farmer.photo_alt": "{name} వైద్య ఫోటో", "farmer.choose_files": "ఫోటోలు ఎంచుకోండి",
+    "farmer.record_author": "నమోదు చేసినవారు", "farmer.date_time_treatment": "చికిత్స తేదీ మరియు సమయం",
+    "farmer.date_time_entered": "నమోదు చేసిన తేదీ మరియు సమయం", "farmer.looking_up": "జంతువును వెతుకుతోంది…",
+    "ts.created": "సృష్టించినది", "ts.updated": "నవీకరించినది", "ts.treatment": "చికిత్స", "ts.recorded": "రికార్డు సృష్టించబడింది",
+    "ts.collected": "సేకరించినది", "ts.tested": "పరీక్షించినది", "ts.reported": "నివేదించినది", "ts.follow_up": "తదుపరి పరీక్ష",
   },
 };
 function t(key, params = {}) {
@@ -1041,7 +1173,11 @@ const FARMER_MESSAGE_KEYS = {
   "Animal type is required": "invalid_animal_type", "animal_id is required": "error_report_animal",
   "Invalid herd ID": "invalid_herd", "Animal not found": "animal_not_found", "Herd not found": "herd_not_found",
   "Could not save this animal. Please check the details and try again.": "save_animal_error",
-  "Not authorized to view this animal": "access_error", "Forbidden for this role": "access_error",
+  "Not authorized to view this animal": "unauthorized_access", "Forbidden for this role": "access_error",
+  "Invalid QR code.": "invalid_qr", "Animal not found.": "animal_not_found",
+  "This QR code is not an animal identity tag.": "sample_qr_not_animal",
+  "Veterinarian-recorded information cannot be changed by a farmer.": "vet_record_locked",
+  "You can only add photographs to your own records.": "vet_record_locked",
   "Missing or invalid Authorization header": "access_error", "Invalid or expired token": "access_error",
   "Offline mode: Operation queued locally for auto-sync.": "offline_queued",
   "Failed to fetch": "connection_error", "NetworkError when attempting to fetch resource.": "connection_error",
@@ -1345,11 +1481,12 @@ function demoAccountBox(role) {
   </div>`;
 }
 
-async function api(path, { method = "GET", body, queueOffline = true } = {}) {
-  const headers = { "Content-Type": "application/json" };
+async function api(path, { method = "GET", body, queueOffline = true, formData } = {}) {
+  const headers = formData ? {} : { "Content-Type": "application/json" };
   if (state.token) headers.Authorization = "Bearer " + state.token;
   try {
-    const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const payload = formData ? formData : (body ? JSON.stringify(body) : undefined);
+    const res = await fetch(API + path, { method, headers, body: payload });
     let data = {};
     try { data = await res.json(); } catch (e) { /* no body */ }
     if (!res.ok) {
@@ -1365,7 +1502,7 @@ async function api(path, { method = "GET", body, queueOffline = true } = {}) {
   } catch (err) {
     // OTP requests must never be queued offline: a queued "send" would claim an
     // SMS that was never actually dispatched. Only safe writes may be queued.
-    if (queueOffline && !navigator.onLine && ["POST", "PUT"].includes(method)) {
+    if (queueOffline && !formData && !navigator.onLine && ["POST", "PUT"].includes(method)) {
       queueOfflineAction(path, method, body);
       toast("Offline mode: Operation queued locally for auto-sync.", false);
       return { ok: true, offline_queued: true };
@@ -1393,11 +1530,59 @@ function logout(silent) {
 }
 window.logout = logout;
 
+function parseTimestamp(value) {
+  if (value == null || value === "") return { date: null, hasTime: false };
+  const raw = String(value).trim();
+  if (!raw) return { date: null, hasTime: false };
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  const hasTime = /T\d{2}:\d{2}| \d{2}:\d{2}/.test(raw);
+  try {
+    if (dateOnly) {
+      const [y, m, day] = raw.split("-").map(Number);
+      return { date: new Date(y, m - 1, day), hasTime: false };
+    }
+    let iso = raw;
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(raw)) {
+      iso = raw.replace(" ", "T");
+      if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(iso)) iso += "Z";
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) {
+      iso = raw + "Z";
+    }
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return { date: null, hasTime: false, raw };
+    return { date: dt, hasTime };
+  } catch (e) {
+    return { date: null, hasTime: false, raw };
+  }
+}
 function fmtDate(d) {
   if (!d) return "—";
+  const parsed = parseTimestamp(d);
+  if (!parsed.date) return parsed.raw || "—";
   const locale = getUserRole() === "owner" ? `${state.lang}-IN` : "en-IN";
-  try { return new Date(d).toLocaleDateString(locale, { day: "2-digit", month: "short", year: "numeric" }); }
-  catch (e) { return d; }
+  try {
+    const opts = { day: "2-digit", month: "short", year: "numeric" };
+    if (parsed.hasTime) {
+      opts.hour = "2-digit";
+      opts.minute = "2-digit";
+      opts.hour12 = true;
+    }
+    return parsed.date.toLocaleString(locale, opts).replace(/\u202f/g, " ");
+  } catch (e) { return String(d); }
+}
+function fmtDateTime(d) { return fmtDate(d); }
+function timestampMeta(record, extra) {
+  if (!record) return "";
+  const farmer = getUserRole() === "owner";
+  const createdLabel = farmer ? ft("created") : t("ts.created");
+  const updatedLabel = farmer ? ft("updated") : t("ts.updated");
+  const parts = [];
+  const created = record.created_at || record.recorded_at;
+  const updated = record.updated_at;
+  if (created) parts.push(`${createdLabel}: ${fmtDate(created)}`);
+  if (updated && updated !== created) parts.push(`${updatedLabel}: ${fmtDate(updated)}`);
+  if (extra) parts.push(extra);
+  return parts.length ? `<div class="meta pm-timestamp">${parts.map(p => escapeHtml(p)).join(" · ")}</div>` : "";
 }
 function statusBadgeClass(status) {
   const s = (status || "").toUpperCase();
@@ -1602,7 +1787,7 @@ function bottomNav(active) {
 
 function render(html) {
   document.getElementById("app").innerHTML = html;
-  const farmerAuth = /^#\/(login|register)\/owner/.test(location.hash);
+  const farmerAuth = location.hash === "#/" || location.hash === "" || /^#\/(login|register)\/owner/.test(location.hash);
   // Leaving the farmer login screen stops the resend countdown.
   if (!farmerAuth) stopFarmerOtpCooldown();
   document.body.classList.toggle("farmer-portal", getUserRole() === "owner" || farmerAuth);
@@ -1682,7 +1867,7 @@ const routes = {};
 function route(path, handler, roles) { routes[path] = { handler, roles }; }
 
 function isPublic(path) {
-  if (path === "#/" || path.startsWith("#/login") || path.startsWith("#/register")) return true;
+  if (path === "#/" || path === "#/home" || path.startsWith("#/login") || path.startsWith("#/register")) return true;
   // Officer Access: the staff role-selection page in the top header. Public so
   // an unauthenticated officer can reach it; a logged-in user is bounced to
   // their own dashboard by the router (no re-auth loop).
@@ -1707,11 +1892,14 @@ const PUBLIC_INFO_ROUTES = [
 ];
 
 async function router() {
+  if (typeof window.stopCameraScanner === "function") {
+    try { window.stopCameraScanner(); } catch (_) {}
+  }
   const hash = location.hash || "#/";
   const [path, query] = hash.split("?");
   const params = Object.fromEntries(new URLSearchParams(query || ""));
 
-  // Not logged in -> only public routes allowed
+  // Not logged in -> only public routes allowed. Root (#/) is Farmer OTP Login.
   if (!state.token && !isPublic(path)) { location.hash = "#/"; return; }
   // Logged in -> bounce away from public routes to the correct role dashboard
   if (state.token && isPublic(path)) { location.hash = homeFor(getUserRole() || "owner"); return; }
@@ -2592,7 +2780,10 @@ function registerForm(role) {
   </form>`;
 }
 
-route("#/", () => renderRoleSelect());
+// Root URL presents Farmer OTP Login. The existing homepage remains at #/home
+// so the Home navigation item still works. Deep links and session bounce are unchanged.
+route("#/", () => renderAuth("login", "owner"));
+route("#/home", () => renderRoleSelect());
 
 // ================================================== OFFICER ACCESS ========
 // The top header's "Officer Access" entry point. This is a ROUTING page only:
@@ -2651,7 +2842,7 @@ function renderOfficerAccess() {
           </div>
           <p class="pm-officer-note">🔒 ${escapeHtml(tx.secure)}</p>
           <div class="auth-switch" style="text-align:center;margin-top:6px">
-            <a onclick="location.hash='#/'">← ${t("auth.choose", "Choose your portal")}</a>
+            <a onclick="location.hash='#/home'">← ${t("auth.choose", "Choose your portal")}</a>
           </div>
         </div>
       </div>
@@ -2716,7 +2907,7 @@ function renderResetPassword() {
         <div class="field"><label for="rp_new">New password</label><input id="rp_new" name="new_password" type="password" minlength="6" required autocomplete="new-password" /></div>
         <div class="field"><label for="rp_confirm">Confirm password</label><input id="rp_confirm" name="confirm_password" type="password" minlength="6" required autocomplete="new-password" /></div>
         <button class="btn btn-primary" type="submit">Reset password</button>
-        <div class="auth-switch"><a onclick="location.hash='#/'">Back to home</a></div>
+        <div class="auth-switch"><a onclick="location.hash='#/home'">Back to home</a></div>
       </form>
     </div>
   `);
@@ -2835,6 +3026,7 @@ async function ownerLivestockView() {
         <div class="owner-livestock-action-grid">
           <button class="btn btn-primary" onclick="location.hash='#/owner/animals/new'">＋ ${ft("add_animal")}</button>
           <button class="btn btn-ghost" onclick="location.hash='#/owner/herds/new'">＋ ${ft("add_herd")}</button>
+          <button class="btn btn-ghost" onclick="location.hash='#/owner/scan'">📷 ${ft("scan_animal_qr")}</button>
         </div>
       </div>
       <div class="section-card">
@@ -2848,6 +3040,7 @@ async function ownerLivestockView() {
             <div class="meta">${ft("animal_id")}: ${escapeHtml(a.animal_code)}</div>
             <div class="meta">${ft("animal_type")}: ${ownerAnimalType(a.animal_type || a.species)} · ${ft("breed")}: ${escapeHtml(a.breed || ft("unknown"))}</div>
             <div class="meta">${ft("age")}: ${escapeHtml(a.age ?? a.age_years ?? ft("unknown"))}${(a.age ?? a.age_years) !== null && (a.age ?? a.age_years) !== undefined && (a.age ?? a.age_years) !== "" ? ` ${ft("years")}` : ""}</div>
+            ${a.created_at ? `<div class="meta pm-timestamp">${ft("created")}: ${fmtDate(a.created_at)}</div>` : ""}
           </div>`).join("") : emptyState(ft("no_animals") + ". " + ft("no_animals_hint"))}
       </div>
       <div class="section-card">
@@ -2857,6 +3050,7 @@ async function ownerLivestockView() {
             <div class="row1"><span class="title">${ft("herd_name")} ${escapeHtml(h.herd_code)}</span><span class="badge badge-blue">${escapeHtml(h.animal_count || 0)} ${ft("animal_count")}</span></div>
             <div class="meta">${ft("location")}: ${escapeHtml([h.village, h.block, h.district].filter(Boolean).join(", ") || ft("unknown"))}</div>
             <div class="meta ${escapeHtml(h.active_cases ? "farmer-health-warning" : "farmer-health-ok")}">${h.active_cases ? `${ft("active_cases")}: ${escapeHtml(h.active_cases)}` : ft("no_active_cases")}</div>
+            ${h.created_at ? `<div class="meta pm-timestamp">${ft("created")}: ${fmtDate(h.created_at)}</div>` : ""}
           </div>`).join("") : emptyState(ft("no_herds") + ". " + ft("no_herds_hint"))}
       </div>
       ${bottomNav("#/owner/livestock")}
@@ -2922,7 +3116,6 @@ async function vetDashboard() {
         ${iconItem("📍", "Local Advisory", "#/vet/advisories")}
         ${iconItem("🚨", "Farm Alerts", "#/vet/farm-alerts")}
         ${iconItem("💊", "Prescriptions", "#/vet/prescriptions")}
-        ${iconItem("📖", "Disease Info", "#/vet/diseases")}
         ${iconItem("🔔", "Notifications", "#/vet/notifications")}
       </div>
     </div>
@@ -3244,70 +3437,154 @@ window.labVerify = async function(sampleId) {
 // ======================================================== UNIVERSAL QR SCANNER ==
 let cameraStream = null;
 let cameraTimer = null;
+let scanLock = false;
+let lastScannedPayload = "";
+let scannerAnimalOnly = false;
+
+function scannerStatusMessage(text) {
+  const status = document.getElementById("scanStatus");
+  if (status) status.textContent = text;
+}
+
+function renderOwnerScanner() {
+  scannerAnimalOnly = true;
+  scanLock = false;
+  lastScannedPayload = "";
+  render(`
+    ${header(ft("scan_animal_qr"), { back: true })}
+    <div class="section-card">
+      <div class="section-title">📷 ${ft("live_scanner")}</div>
+      <p class="meta" style="margin-bottom:12px">${ft("scanner_help")}</p>
+      <div class="scanner-video-wrap">
+        <video id="scanVideo" playsinline autoplay muted aria-label="${escapeAttr(ft("live_scanner"))}"></video>
+        <div class="scanner-reticle" aria-hidden="true"></div>
+      </div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-primary" type="button" id="btnStartScan" onclick="startCameraScanner()">${ft("start_scanner")}</button>
+        <button class="btn btn-ghost" type="button" id="btnStopScan" onclick="stopCameraScanner()">${ft("stop_scanner")}</button>
+      </div>
+      <div id="scanStatus" class="meta" style="margin-top:8px" role="status" aria-live="polite">${ft("camera_idle")}</div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">📁 ${ft("upload_qr_photo")}</div>
+      <div class="field">
+        <label for="qrFileInput">${ft("upload_qr_photo")}</label>
+        <input type="file" id="qrFileInput" accept="image/jpeg,image/png,image/webp" capture="environment" onchange="handleFileScan(this)" />
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">⌨️ ${ft("enter_animal_id")}</div>
+      <p class="meta" style="margin-bottom:8px">${ft("manual_lookup_help")}</p>
+      <form id="manualAnimalLookup" class="form-row" onsubmit="event.preventDefault();handleManualLookup();">
+        <div class="field" style="margin:0;flex:1">
+          <label class="sr-only" for="manualLookupInput">${ft("enter_animal_id")}</label>
+          <input id="manualLookupInput" name="animal_id" autocomplete="off" placeholder="MH-PUN-000001" />
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:auto">${ft("lookup_animal")}</button>
+      </form>
+    </div>
+    ${bottomNav("#/owner/livestock")}
+  `);
+}
+route("#/owner/scan", () => renderOwnerScanner(), ["owner"]);
 
 function renderScanner() {
   const role = getUserRole() || "owner";
+  scannerAnimalOnly = role === "owner";
+  scanLock = false;
+  lastScannedPayload = "";
+  const farmer = role === "owner";
   render(`
-    ${header("Scan QR Identity", { back: true })}
+    ${header(farmer ? ft("scan_animal_qr") : "Scan QR Identity", { back: true })}
     <div class="section-card">
-      <div class="section-title">📷 Live Camera Scanner</div>
-      <div class="meta" style="margin-bottom:12px">Point device camera at Animal Passport QR or Biological Sample QR:</div>
+      <div class="section-title">📷 ${farmer ? ft("live_scanner") : "Live Camera Scanner"}</div>
+      <div class="meta" style="margin-bottom:12px">${farmer ? ft("scanner_help") : "Point device camera at Animal Passport QR or Biological Sample QR:"}</div>
       <div class="scanner-video-wrap">
         <video id="scanVideo" playsinline autoplay muted></video>
-        <div class="scanner-reticle"></div>
+        <div class="scanner-reticle" aria-hidden="true"></div>
       </div>
       <div class="btn-row" style="margin-top:14px">
-        <button class="btn btn-primary btn-sm" id="btnStartScan" onclick="startCameraScanner()">Start Camera</button>
-        <button class="btn btn-outline btn-sm" id="btnStopScan" onclick="stopCameraScanner()">Stop Camera</button>
+        <button class="btn btn-primary btn-sm" id="btnStartScan" type="button" onclick="startCameraScanner()">${farmer ? ft("start_scanner") : "Start Camera"}</button>
+        <button class="btn btn-outline btn-sm" id="btnStopScan" type="button" onclick="stopCameraScanner()">${farmer ? ft("stop_scanner") : "Stop Camera"}</button>
       </div>
-      <div id="scanStatus" class="meta" style="margin-top:8px">Camera idle.</div>
+      <div id="scanStatus" class="meta" style="margin-top:8px" role="status" aria-live="polite">${farmer ? ft("camera_idle") : "Camera idle."}</div>
     </div>
     <div class="section-card">
-      <div class="section-title">📁 Upload QR Code Photo</div>
+      <div class="section-title">📁 ${farmer ? ft("upload_qr_photo") : "Upload QR Code Photo"}</div>
       <div class="field">
+        <label for="qrFileInput">${farmer ? ft("upload_qr_photo") : "QR image"}</label>
         <input type="file" id="qrFileInput" accept="image/*" capture="environment" onchange="handleFileScan(this)" />
       </div>
     </div>
     <div class="section-card">
-      <div class="section-title">⌨️ Manual Identifier Fallback</div>
-      <div class="meta" style="margin-bottom:8px">Enter Animal Code (e.g. MH-PUN-000001) or Sample ID (e.g. SMP-MH-PUN-000101):</div>
+      <div class="section-title">⌨️ ${farmer ? ft("enter_animal_id") : "Manual Identifier Fallback"}</div>
+      <div class="meta" style="margin-bottom:8px">${farmer ? ft("manual_lookup_help") : "Enter Animal Code (e.g. MH-PUN-000001) or Sample ID (e.g. SMP-MH-PUN-000101):"}</div>
       <div class="form-row">
         <div class="field" style="margin:0"><input id="manualLookupInput" placeholder="e.g. MH-PUN-000001" /></div>
-        <button class="btn btn-primary btn-sm" style="width:auto" onclick="handleManualLookup()">Lookup</button>
+        <button class="btn btn-primary btn-sm" type="button" style="width:auto" onclick="handleManualLookup()">${farmer ? ft("lookup_animal") : "Lookup"}</button>
       </div>
     </div>
-    ${bottomNav(homeFor(role))}
+    ${bottomNav(farmer ? "#/owner/livestock" : homeFor(role))}
   `);
 }
 route("#/scan", () => renderScanner());
 
 window.handleManualLookup = function() {
+  const farmer = getUserRole() === "owner";
   const input = (document.getElementById("manualLookupInput")?.value || "").trim();
-  if (!input) return toast("Please enter an identifier", true);
+  if (!input) return toast(farmer ? ft("enter_animal_id") : "Please enter an identifier", true);
   resolveScannedPayload(input);
 };
 
 window.resolveScannedPayload = async function(payload) {
   const role = getUserRole() || "owner";
-  toast(`Looking up: ${payload.slice(0, 24)}…`);
+  const farmer = role === "owner";
+  const trimmed = String(payload || "").trim();
+  if (!trimmed) {
+    toast(farmer ? ft("invalid_qr") : "Invalid QR code", true);
+    scanLock = false;
+    return;
+  }
+  if (scanLock && lastScannedPayload === trimmed) {
+    toast(farmer ? ft("duplicate_scan") : "Already scanned", true);
+    return;
+  }
+  scanLock = true;
+  lastScannedPayload = trimmed;
+  toast(farmer ? ft("looking_up") : `Looking up: ${trimmed.slice(0, 24)}…`);
   try {
-    if (payload.includes("SAMPLE:") || payload.startsWith("SMP-")) {
-      const s = await api(`/samples/lookup-qr?payload=${encodeURIComponent(payload)}`);
+    if (!scannerAnimalOnly && (trimmed.includes("SAMPLE:") || trimmed.startsWith("SMP-"))) {
+      const s = await api(`/samples/lookup-qr?payload=${encodeURIComponent(trimmed)}`);
       if (role === "lab") {
         location.hash = `#/lab/samples/${safeId(s.id)}`;
       } else {
         location.hash = `#/${role}/cases/${safeId(s.case_id)}`;
       }
-    } else {
-      const a = await api(`/animals/lookup-qr?payload=${encodeURIComponent(payload)}`);
-      location.hash = `#/${role}/animals/${safeId(a.id)}`;
+      return;
     }
+    if (farmer && (trimmed.includes("SAMPLE:") || trimmed.startsWith("SMP-") || trimmed.startsWith("PASHU:SAMPLE:"))) {
+      toast(ft("sample_qr_not_animal"), true);
+      scanLock = false;
+      return;
+    }
+    const a = await api(`/animals/lookup-qr?payload=${encodeURIComponent(trimmed)}`);
+    location.hash = `#/${role}/animals/${safeId(a.id)}`;
   } catch (e) {
-    toast(e.message, true);
+    scanLock = false;
+    const code = e.data && e.data.code;
+    if (farmer) {
+      if (code === "INVALID_QR") toast(ft("invalid_qr"), true);
+      else if (code === "ANIMAL_NOT_FOUND") toast(ft("animal_not_found"), true);
+      else if (code === "UNAUTHORIZED") toast(ft("unauthorized_access"), true);
+      else toast(e.message, true);
+    } else {
+      toast(e.message, true);
+    }
   }
 };
 
 window.handleFileScan = function(input) {
+  const farmer = getUserRole() === "owner";
   const file = input.files && input.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -3316,32 +3593,39 @@ window.handleFileScan = function(input) {
     try {
       const res = await api("/qr/decode", { method: "POST", body: { image: b64 } });
       if (res.decoded && res.payload) {
-        toast("QR code recognized!");
+        toast(farmer ? ft("qr_recognized") : "QR code recognized!");
         resolveScannedPayload(res.payload);
       } else {
-        toast("No readable QR code found in photo", true);
+        toast(farmer ? ft("invalid_qr") : "No readable QR code found in photo", true);
       }
-    } catch (err) { toast(err.message, true); }
+    } catch (err) { toast(farmer ? (err.data && err.data.code === "INVALID_QR" ? ft("invalid_qr") : err.message) : err.message, true); }
   };
   reader.readAsDataURL(file);
 };
 
 window.startCameraScanner = async function() {
   const video = document.getElementById("scanVideo");
-  const status = document.getElementById("scanStatus");
+  const farmer = getUserRole() === "owner";
   if (!video) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    scannerStatusMessage("⚠️ " + (farmer ? ft("camera_unavailable") : "No camera available. Use image upload or manual lookup."));
+    return;
+  }
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     video.srcObject = cameraStream;
-    status.textContent = "🟢 Camera active. Position QR within the green square.";
+    scannerStatusMessage(farmer ? ft("camera_active") : "🟢 Camera active. Position QR within the green square.");
+    scanLock = false;
     
     if ("BarcodeDetector" in window) {
       const detector = new BarcodeDetector({ formats: ["qr_code"] });
       cameraTimer = setInterval(async () => {
+        if (scanLock) return;
         try {
           const barcodes = await detector.detect(video);
           if (barcodes.length > 0) {
             const raw = barcodes[0].rawValue;
+            scanLock = true;
             stopCameraScanner();
             resolveScannedPayload(raw);
           }
@@ -3351,13 +3635,14 @@ window.startCameraScanner = async function() {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
       cameraTimer = setInterval(async () => {
-        if (!video.videoWidth) return;
+        if (scanLock || !video.videoWidth) return;
         canvas.width = 300; canvas.height = 300;
         ctx.drawImage(video, 0, 0, 300, 300);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
         try {
           const res = await api("/qr/decode", { method: "POST", body: { image: dataUrl } });
           if (res.decoded && res.payload) {
+            scanLock = true;
             stopCameraScanner();
             resolveScannedPayload(res.payload);
           }
@@ -3365,18 +3650,25 @@ window.startCameraScanner = async function() {
       }, 1500);
     }
   } catch (err) {
-    status.textContent = "⚠️ Camera permission denied or not available. Please use image upload or manual lookup.";
+    const denied = err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError");
+    const msg = denied
+      ? (farmer ? ft("camera_denied") : "Camera permission denied. Use image upload or manual lookup.")
+      : (farmer ? ft("camera_failed") : "Could not start the camera. Use image upload or manual lookup.");
+    scannerStatusMessage("⚠️ " + msg);
   }
 };
 
 window.stopCameraScanner = function() {
-  if (cameraTimer) clearInterval(cameraTimer);
+  if (cameraTimer) { clearInterval(cameraTimer); cameraTimer = null; }
   if (cameraStream) {
     cameraStream.getTracks().forEach(t => t.stop());
     cameraStream = null;
   }
+  const video = document.getElementById("scanVideo");
+  if (video) video.srcObject = null;
+  const farmer = getUserRole() === "owner";
   const status = document.getElementById("scanStatus");
-  if (status) status.textContent = "Camera stopped.";
+  if (status) status.textContent = farmer ? ft("camera_stopped") : "Camera stopped.";
 };
 
 // ==================================================== GOVT: ANALYTICS ====
@@ -4308,6 +4600,7 @@ function animalsListView(role) {
           <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/animals/${safeId(a.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/animals/${safeId(a.id)}'}">
             <div class="row1"><span class="title">${escapeHtml(a.animal_code)}</span><span class="badge ${escapeHtml(a.status === 'Healthy' ? 'badge-green' : 'badge-orange')}">${escapeHtml(a.status)}</span></div>
             <div class="meta">${escapeHtml(a.animal_name || "—")} · ${escapeHtml(a.animal_type || a.species || "—")} · ${escapeHtml(a.breed || "—")} · ${escapeHtml((a.gender || a.sex || "—"))} · ${escapeHtml((a.age || a.age_years) ? (a.age || a.age_years) + " yrs" : "—")}</div>
+            ${a.created_at ? `<div class="meta pm-timestamp">${t("ts.created")}: ${fmtDate(a.created_at)}</div>` : ""}
             ${role === "owner" ? `<div style="margin-top:8px;display:flex;gap:8px">
               <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();location.hash='#/owner/report?animal=${safeId(a.id)}'">Report Issue</button>
               <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();deleteAnimal(${safeId(a.id)},'${escapeJsStr(a.animal_code)}')"> Delete</button>
@@ -4361,6 +4654,174 @@ route("#/owner/animals/new", async () => {
   });
 }, ["owner"]);
 
+function medicationPhotoThumbs(animalId, med) {
+  const photos = med.photos || [];
+  if (!photos.length) return "";
+  return `<div class="pm-photo-thumbs" role="list">${photos.map((p, i) => `
+    <button type="button" class="pm-photo-thumb" role="listitem" data-med-photo="${safeId(p.id)}"
+      aria-label="${escapeAttr(ft("view_photo"))}"
+      onclick="openMedicationPhoto(${safeId(animalId)}, ${safeId(med.id)}, ${safeId(p.id)}, '${escapeJsStr(ft("photo_alt", { name: med.medication_name || "" }))}')">
+      <img alt="${escapeAttr(ft("photo_alt", { name: med.medication_name || "" }))}" data-auth-src="/animals/${safeId(animalId)}/medications/${safeId(med.id)}/photos/${safeId(p.id)}" />
+    </button>`).join("")}</div>`;
+}
+
+function medicationHistoryCard(a) {
+  const meds = a.medications || [];
+  const rows = meds.length ? meds.map(m => {
+    const vetRecord = m.is_veterinarian_record || m.source === "vet";
+    const canEdit = !vetRecord && m.farmer_editable !== false;
+    const eventAt = m.event_at || m.administered_at || m.start_date;
+    const createdAt = m.recorded_at || m.created_at;
+    const author = m.author_label || m.recorded_by_name || m.prescribed_by_name || m.veterinarian_name || ft("unknown");
+    return `
+      <div class="list-card" style="cursor:default">
+        <div class="row1">
+          <span class="title">${escapeHtml(m.medication_name || ft("medicine"))}</span>
+          <span class="badge ${vetRecord ? "badge-blue" : "badge-orange"}">${vetRecord ? ft("vet_recorded") : ft("farmer_submitted")}</span>
+        </div>
+        ${eventAt ? `<div class="meta pm-timestamp">${ft("treatment_date")}: ${fmtDate(eventAt)}</div>` : ""}
+        ${createdAt ? `<div class="meta pm-timestamp">${ft("record_created")}: ${fmtDate(createdAt)}</div>` : ""}
+        ${m.dosage || m.frequency ? `<div class="meta">${[m.dosage, m.frequency, m.administration_method].filter(Boolean).map(escapeHtml).join(" · ")}</div>` : ""}
+        ${m.reason ? `<div class="meta">${ft("reason")}: ${escapeHtml(m.reason)}</div>` : ""}
+        ${m.symptoms ? `<div class="meta">${ft("symptoms_obs")}: ${escapeHtml(m.symptoms)}</div>` : ""}
+        ${m.notes ? `<div class="meta">${ft("notes")}: ${escapeHtml(m.notes)}</div>` : ""}
+        ${(m.next_dose_at || m.follow_up_at) ? `<div class="meta">${ft("follow_up")}: ${fmtDate(m.next_dose_at || m.follow_up_at)}</div>` : ""}
+        <div class="meta">${ft("record_author")}: ${escapeHtml(author)}</div>
+        ${vetRecord ? "" : `<div class="meta">${ft("not_vet_diagnosis")}</div>`}
+        ${medicationPhotoThumbs(a.id, m)}
+        ${canEdit ? `<div class="btn-row" style="margin-top:8px"><button class="btn btn-ghost btn-sm" type="button" onclick="toggleMedicationEdit(${safeId(m.id)})">${ft("edit_medication")}</button></div>
+          <form id="medEdit-${safeId(m.id)}" class="pm-med-edit" style="display:none" data-animal="${safeId(a.id)}" data-med="${safeId(m.id)}">
+            <div class="field"><label for="medEditName-${safeId(m.id)}">${ft("medication_name")}</label><input id="medEditName-${safeId(m.id)}" name="medication_name" value="${escapeAttr(m.medication_name || "")}" required /></div>
+            <div class="field"><label for="medEditNotes-${safeId(m.id)}">${ft("notes")}</label><textarea id="medEditNotes-${safeId(m.id)}" name="notes">${escapeHtml(m.notes || "")}</textarea></div>
+            <div class="field"><label for="medEditPhotos-${safeId(m.id)}">${ft("upload_medical_photo")}</label><input id="medEditPhotos-${safeId(m.id)}" name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple /></div>
+            <button class="btn btn-primary btn-sm" type="submit">${ft("save_medication")}</button>
+          </form>` : ""}
+      </div>`;
+  }).join("") : emptyState(ft("no_medication_history"));
+  return `
+    <div class="section-card" id="medicationHistory">
+      <div class="section-title">💊 ${ft("medication_history")}</div>
+      ${rows}
+      <button class="btn btn-primary" type="button" style="margin-top:12px" onclick="document.getElementById('medCreateWrap').style.display='block'">＋ ${ft("add_medication")}</button>
+      <div id="medCreateWrap" style="display:none;margin-top:12px;background:var(--pm-surface-alt);padding:12px;border-radius:12px;border:1px solid var(--pm-border)">
+        <form id="medCreateForm">
+          <div class="field"><label for="medName">${ft("medication_name")}</label><input id="medName" name="medication_name" required /></div>
+          <div class="form-row">
+            <div class="field"><label for="medDose">${ft("dosage")}</label><input id="medDose" name="dosage" /></div>
+            <div class="field"><label for="medFreq">${ft("frequency")}</label><input id="medFreq" name="frequency" /></div>
+          </div>
+          <div class="field"><label for="medMethod">${ft("administration_method")}</label><input id="medMethod" name="administration_method" /></div>
+          <div class="field"><label for="medReason">${ft("reason")}</label><input id="medReason" name="reason" /></div>
+          <div class="field"><label for="medSymptoms">${ft("symptoms_obs")}</label><input id="medSymptoms" name="symptoms" /></div>
+          <div class="form-row">
+            <div class="field"><label for="medEvent">${ft("date_time_treatment")}</label><input id="medEvent" name="administered_at" type="datetime-local" /></div>
+            <div class="field"><label for="medFollow">${ft("follow_up")}</label><input id="medFollow" name="follow_up_at" type="datetime-local" /></div>
+          </div>
+          <div class="field"><label for="medNext">${ft("next_dose")}</label><input id="medNext" name="next_dose_at" type="datetime-local" /></div>
+          <div class="field"><label for="medVet">${ft("vet_name")}</label><input id="medVet" name="veterinarian_name" /></div>
+          <div class="field"><label for="medNotes">${ft("notes")}</label><textarea id="medNotes" name="notes"></textarea></div>
+          <div class="field">
+            <label for="medPhotos">${ft("upload_medical_photo")}</label>
+            <input id="medPhotos" name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+            <div class="meta">${ft("medication_photo_hint")}</div>
+          </div>
+          <button class="btn btn-primary" type="submit">${ft("save_medication")}</button>
+        </form>
+      </div>
+    </div>`;
+}
+
+window.toggleMedicationEdit = function(id) {
+  const form = document.getElementById("medEdit-" + id);
+  if (form) form.style.display = form.style.display === "none" ? "block" : "none";
+};
+
+window.openMedicationPhoto = async function(animalId, medId, photoId, alt) {
+  try {
+    const res = await fetch(API + `/animals/${animalId}/medications/${medId}/photos/${photoId}`, {
+      headers: state.token ? { Authorization: "Bearer " + state.token } : {},
+    });
+    if (!res.ok) throw new Error(ft("upload_failure"));
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const old = document.getElementById("medPhotoModal");
+    if (old) old.remove();
+    const div = document.createElement("div");
+    div.id = "medPhotoModal";
+    div.className = "qr-modal";
+    div.setAttribute("role", "dialog");
+    div.setAttribute("aria-modal", "true");
+    div.setAttribute("aria-label", ft("view_photo"));
+    div.innerHTML = `
+      <div class="qr-modal-content">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <b>${escapeHtml(ft("view_photo"))}</b>
+          <button type="button" aria-label="${escapeAttr(ft("close_photo"))}" data-close-modal style="border:none;background:none;font-size:20px;cursor:pointer;min-width:44px;min-height:44px">✕</button>
+        </div>
+        <img src="${url}" alt="${escapeAttr(alt || ft("view_photo"))}" style="width:100%;border-radius:8px;border:1px solid var(--pm-border)" />
+      </div>`;
+    document.body.appendChild(div);
+    const close = () => { try { URL.revokeObjectURL(url); div.remove(); } catch (_) {} };
+    div.querySelector("[data-close-modal]").addEventListener("click", close);
+    div.addEventListener("click", (ev) => { if (ev.target === div) close(); });
+    if (window.PMA11y) window.PMA11y.showAccessibleDialog(div, { announce: ft("view_photo"), onClose: close });
+  } catch (e) { toast(e.message, true); }
+};
+
+async function hydrateAuthImages(root) {
+  const imgs = (root || document).querySelectorAll("img[data-auth-src]");
+  for (const img of imgs) {
+    const path = img.getAttribute("data-auth-src");
+    if (!path) continue;
+    try {
+      const res = await fetch(API + path, { headers: state.token ? { Authorization: "Bearer " + state.token } : {} });
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      img.src = URL.createObjectURL(blob);
+    } catch (_) {}
+  }
+}
+
+function collectMedicationForm(form) {
+  const fd = new FormData(form);
+  const files = form.querySelector('input[type="file"]');
+  const hasFiles = files && files.files && files.files.length;
+  if (hasFiles) return { formData: fd };
+  const body = {};
+  fd.forEach((value, key) => { if (key !== "photos") body[key] = value; });
+  return { body };
+}
+
+function wireMedicationHistory(a) {
+  hydrateAuthImages(document.getElementById("medicationHistory"));
+  const create = document.getElementById("medCreateForm");
+  if (create) {
+    create.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const payload = collectMedicationForm(create);
+        await api(`/animals/${a.id}/medications`, { method: "POST", ...payload, queueOffline: false });
+        toast(ft("medication_saved"));
+        const fresh = await api(`/animals/${a.id}`);
+        ownerAnimalRecord(fresh);
+      } catch (err) { toast(err.message, true); }
+    });
+  }
+  document.querySelectorAll("form.pm-med-edit").forEach((form) => {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const medId = form.getAttribute("data-med");
+      try {
+        const payload = collectMedicationForm(form);
+        await api(`/animals/${a.id}/medications/${medId}`, { method: "PUT", ...payload, queueOffline: false });
+        toast(ft("medication_saved"));
+        const fresh = await api(`/animals/${a.id}`);
+        ownerAnimalRecord(fresh);
+      } catch (err) { toast(err.message, true); }
+    });
+  });
+}
+
 function ownerAnimalRecord(a) {
   const age = a.age ?? a.age_years;
   const cases = a.cases || [];
@@ -4381,6 +4842,8 @@ function ownerAnimalRecord(a) {
         <div><b>${ft("gender")}</b>${escapeHtml(a.gender === "Female" || a.sex === "Female" ? ft("female") : a.gender === "Male" || a.sex === "Male" ? ft("male") : ft("unknown"))}</div>
         <div><b>${ft("herd")}</b>${escapeHtml(a.herd ? a.herd.herd_code : ft("no_herd"))}</div>
         <div><b>${ft("location")}</b>${escapeHtml([a.village, a.district].filter(Boolean).join(", ") || ft("unknown"))}</div>
+        ${a.created_at ? `<div><b>${ft("created")}</b>${fmtDate(a.created_at)}</div>` : ""}
+        ${a.updated_at ? `<div><b>${ft("updated")}</b>${fmtDate(a.updated_at)}</div>` : ""}
       </div>
       <div class="owner-detail-actions">
         <button class="btn btn-primary" onclick="location.hash='#/owner/report?animal=${safeId(a.id)}'">📋 ${ft("report_problem")}</button>
@@ -4414,8 +4877,10 @@ function ownerAnimalRecord(a) {
         <button class="btn btn-ghost" style="margin-top:8px" onclick="location.hash='#/owner/lab-reports'">🧪 ${ft("test_results")}</button>
       ` : ""}
     </div>
+    ${medicationHistoryCard(a)}
     ${bottomNav("#/owner/livestock")}
   `);
+  wireMedicationHistory(a);
 }
 
 // Animal health record (shared render, role-scoped routes)
@@ -4448,6 +4913,8 @@ function animalRecordView(role) {
           <div><b>Mobile</b>${escapeHtml(a.mobile || "—")}</div>
           <div><b>Herd</b>${escapeHtml(a.herd ? a.herd.herd_code : "—")}</div>
           <div><b>Location</b>${escapeHtml(a.village || "—")}, ${escapeHtml(a.district || "—")}</div>
+          ${a.created_at ? `<div><b>${t("ts.created")}</b>${fmtDate(a.created_at)}</div>` : ""}
+          ${a.updated_at ? `<div><b>${t("ts.updated")}</b>${fmtDate(a.updated_at)}</div>` : ""}
         </div>
         <div style="margin-top:14px">
           <button class="btn btn-ghost btn-sm" onclick="showQrModal(${safeId(a.id)})">🏷️ Digital QR Passport &amp; Printable Tag</button>
@@ -4550,7 +5017,7 @@ function animalRecordView(role) {
         ${a.cases.length === 0 ? emptyState("No cases recorded.") : a.cases.map(c => `
           <div class="list-card" role="button" tabindex="0" onclick="location.hash='#/${role}/cases/${safeId(c.id)}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.hash='#/${role}/cases/${safeId(c.id)}'}">
             <div class="row1"><span class="title">${escapeHtml(c.case_no)}</span><span class="badge ${statusBadgeClass(c.status)}">${escapeHtml(c.status)}</span></div>
-            <div class="meta">${escapeHtml(c.symptoms || "")} · ${fmtDate(c.created_at)}</div>
+            <div class="meta">${escapeHtml(c.symptoms || "")} · ${t("ts.created")}: ${fmtDate(c.created_at)}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
@@ -4558,7 +5025,7 @@ function animalRecordView(role) {
         ${a.vaccinations.length === 0 ? emptyState("No vaccinations recorded.") : a.vaccinations.map(v => `
           <div class="list-card" style="cursor:default">
             <div class="row1"><span class="title">${escapeHtml(v.vaccine)}</span><span class="badge badge-blue">Next: ${fmtDate(v.next_due_date)}</span></div>
-            <div class="meta">Given: ${fmtDate(v.date_given)} · By ${escapeHtml(v.vet_name || "—")}</div>
+            <div class="meta">Given: ${fmtDate(v.date_given)} · By ${escapeHtml(v.vet_name || "—")}${v.created_at ? ` · ${t("ts.recorded")}: ${fmtDate(v.created_at)}` : ""}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
@@ -4566,7 +5033,7 @@ function animalRecordView(role) {
         ${a.lab_reports.length === 0 ? emptyState("No lab reports yet.") : a.lab_reports.map(l => `
           <div class="list-card" style="cursor:default">
             <div class="row1"><span class="title">${escapeHtml(l.report_no)}</span><span class="badge ${escapeHtml(l.result === 'NEGATIVE' ? 'badge-green' : 'badge-red')}">${escapeHtml(l.result || "Pending")}</span></div>
-            <div class="meta">${escapeHtml(l.test_name || "")} · Sample: ${escapeHtml(l.sample || "—")} · ${fmtDate(l.test_date)}</div>
+            <div class="meta">${escapeHtml(l.test_name || "")} · Sample: ${escapeHtml(l.sample || "—")} · ${t("ts.tested")}: ${fmtDate(l.test_date)}${l.created_at ? ` · ${t("ts.created")}: ${fmtDate(l.created_at)}` : ""}</div>
           </div>`).join("")}
       </div>
       <div class="section-card">
@@ -4574,7 +5041,7 @@ function animalRecordView(role) {
         ${a.prescriptions.length === 0 ? emptyState("No prescriptions yet.") : a.prescriptions.map(p => `
           <div class="list-card" style="cursor:default">
             <div class="row1"><span class="title">${escapeHtml(p.medicine)}</span><span class="badge badge-blue">${escapeHtml(p.dosage || "")}</span></div>
-            <div class="meta">${escapeHtml(p.frequency || "")} · ${escapeHtml(p.duration || "")} · By ${escapeHtml(p.vet_name || "—")}</div>
+            <div class="meta">${escapeHtml(p.frequency || "")} · ${escapeHtml(p.duration || "")} · By ${escapeHtml(p.vet_name || "—")}${p.created_at ? ` · ${t("ts.created")}: ${fmtDate(p.created_at)}` : ""}</div>
           </div>`).join("")}
       </div>
       ${bottomNav(role === "owner" ? "#/owner/animals" : `#/${role}/dashboard`)}

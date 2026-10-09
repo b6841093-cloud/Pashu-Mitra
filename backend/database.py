@@ -358,6 +358,30 @@ CREATE TABLE IF NOT EXISTS animal_medications (
     allergy_override INTEGER DEFAULT 0,
     override_reason TEXT,
     notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    administered_at TEXT,
+    recorded_at TEXT,
+    administration_method TEXT,
+    reason TEXT,
+    symptoms TEXT,
+    veterinarian_name TEXT,
+    next_dose_at TEXT,
+    follow_up_at TEXT,
+    source TEXT DEFAULT 'vet',
+    recorded_by INTEGER REFERENCES users(id),
+    author_role TEXT
+);
+
+CREATE TABLE IF NOT EXISTS animal_medication_photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    medication_id INTEGER NOT NULL REFERENCES animal_medications(id) ON DELETE CASCADE,
+    animal_id INTEGER NOT NULL REFERENCES animals(id) ON DELETE CASCADE,
+    stored_name TEXT NOT NULL UNIQUE,
+    original_name TEXT,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER,
+    uploaded_by INTEGER REFERENCES users(id),
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -608,6 +632,8 @@ CREATE INDEX IF NOT EXISTS idx_custody_sample ON sample_custody_events(sample_id
 CREATE INDEX IF NOT EXISTS idx_repro_animal ON animal_reproductive_records(animal_id);
 CREATE INDEX IF NOT EXISTS idx_allergy_animal ON animal_allergies(animal_id);
 CREATE INDEX IF NOT EXISTS idx_medication_animal ON animal_medications(animal_id);
+CREATE INDEX IF NOT EXISTS idx_medication_photos_med ON animal_medication_photos(medication_id);
+CREATE INDEX IF NOT EXISTS idx_medication_photos_animal ON animal_medication_photos(animal_id);
 CREATE INDEX IF NOT EXISTS idx_treatment_case ON treatment_responses(case_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
@@ -850,6 +876,7 @@ def init_db(reset=False):
             ensure_animals_columns(conn)
             migrate_users_role(conn)
             ensure_new_columns(conn)
+            ensure_medication_history_schema(conn)
             ensure_otp_tables(conn)
             ensure_webcall_tables(conn)
             ensure_auth_recovery_tables(conn)
@@ -1109,6 +1136,67 @@ def ensure_new_columns(conn):
     if "deactivation_reason" not in u_cols:
         conn.execute("ALTER TABLE users ADD COLUMN deactivation_reason TEXT")
 
+    conn.commit()
+
+
+def ensure_medication_history_schema(conn):
+    """Additive migration: medication history photos, event vs recorded time, timestamps.
+
+    Never drops or recreates production tables. Existing rows keep their original
+    timestamps; missing historical values stay NULL (never fabricated).
+    """
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS animal_medication_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            medication_id INTEGER NOT NULL REFERENCES animal_medications(id) ON DELETE CASCADE,
+            animal_id INTEGER NOT NULL REFERENCES animals(id) ON DELETE CASCADE,
+            stored_name TEXT NOT NULL UNIQUE,
+            original_name TEXT,
+            mime_type TEXT NOT NULL,
+            size_bytes INTEGER,
+            uploaded_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_medication_photos_med ON animal_medication_photos(medication_id);
+        CREATE INDEX IF NOT EXISTS idx_medication_photos_animal ON animal_medication_photos(animal_id);
+        """
+    )
+
+    def _add_columns(table, needed):
+        try:
+            existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        except sqlite3.Error:
+            return
+        if not existing:
+            return
+        for column, definition in needed.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    _add_columns("animal_medications", {
+        "updated_at": "TEXT",
+        "administered_at": "TEXT",
+        "recorded_at": "TEXT",
+        "administration_method": "TEXT",
+        "reason": "TEXT",
+        "symptoms": "TEXT",
+        "veterinarian_name": "TEXT",
+        "next_dose_at": "TEXT",
+        "follow_up_at": "TEXT",
+        "source": "TEXT DEFAULT 'vet'",
+        "recorded_by": "INTEGER",
+        "author_role": "TEXT",
+    })
+    # Safe timestamp columns used for display. NULL on legacy rows is intentional.
+    _add_columns("animals", {"updated_at": "TEXT"})
+    _add_columns("herds", {"updated_at": "TEXT"})
+    _add_columns("prescriptions", {"updated_at": "TEXT"})
+    _add_columns("vaccinations", {"updated_at": "TEXT"})
+    _add_columns("lab_reports", {"updated_at": "TEXT"})
+    _add_columns("lab_requests", {"updated_at": "TEXT"})
+    _add_columns("notifications", {"updated_at": "TEXT"})
+    _add_columns("users", {"updated_at": "TEXT"})
     conn.commit()
 
 
