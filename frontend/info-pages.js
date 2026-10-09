@@ -521,6 +521,8 @@
   // table so the sitemap and search can never advertise a page that does not
   // exist (GIGW L07 — no broken links).
   const SEARCH_INDEX = [
+    { href: "#/home", title: "Home", section: "Information", keywords: "home landing portal" },
+    { href: "#/", title: "Farmer OTP Login", section: "Information", keywords: "login farmer otp" },
     { href: "#/about", title: "About Us", section: "Information", keywords: "about organisation purpose mission" },
     { href: "#/contact", title: "Contact Us", section: "Information", keywords: "contact phone email address helpline" },
     { href: "#/feedback", title: "Feedback", section: "Information", keywords: "feedback rating comment complaint" },
@@ -530,6 +532,7 @@
     { href: "#/policies", title: "Policies", section: "Information", keywords: "policy privacy terms copyright accessibility" },
     { href: "#/owner/dashboard", title: "Animal owner dashboard", section: "Animal owner", keywords: "farmer home dashboard livestock" },
     { href: "#/owner/livestock", title: "My livestock", section: "Animal owner", keywords: "livestock herd animals cattle" },
+    { href: "#/owner/scan", title: "Scan Animal QR", section: "Animal owner", keywords: "scan qr animal tag camera" },
     { href: "#/owner/cases", title: "Cases", section: "Animal owner", keywords: "case disease report" },
     { href: "#/owner/calls", title: "Call history", section: "Animal owner", keywords: "call vet history" },
     { href: "#/scan", title: "Scan QR code", section: "All roles", keywords: "scan qr code animal sample" },

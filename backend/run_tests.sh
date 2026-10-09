@@ -52,6 +52,7 @@ SUITES=(
   test_clerk_login
   test_helpline
   test_all_features
+  test_animal_qr_medication
   test_ml_service
   test_compliance
 )
